@@ -23,9 +23,9 @@ Execute em ordem. Não pergunte antes de começar cada uma.
 > nem rodado. Este é o risco aberto mais importante do projeto agora.
 
 ### Fase 1 — Espinha de dados
-7. [ ] Modelo canônico: tenant, canal, produto, variação, pedido, item
-8. [ ] Modelo canônico: custo, devolução, conversa, mensagem, cliente
-9. [ ] Migrations reversíveis de tudo acima
+7. [x] Modelo canônico: tenant, canal, produto, variação, pedido, item
+8. [x] Modelo canônico: custo, devolução, conversa, mensagem, cliente
+9. [x] Migrations reversíveis de tudo acima
 10. [ ] Adaptador Mercado Livre contra fixture (mock, sem credencial)
 11. [ ] Adaptador de ERP contra fixture
 12. [ ] Pipeline de ingestão com idempotência
