@@ -2,6 +2,7 @@ package com.plataforma.ingestao;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import com.plataforma.canal.Canal;
 import com.plataforma.canal.CategoriaCanal;
 import com.plataforma.canal.RepositorioCanal;
 import com.plataforma.canal.TipoCanal;
+import com.plataforma.cliente.RepositorioCliente;
 import com.plataforma.comum.tenant.ContextoTenant;
 import com.plataforma.pedido.Pedido;
 import com.plataforma.pedido.RepositorioPedido;
@@ -30,6 +32,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -60,6 +63,9 @@ class ServicoIngestaoTest {
     @Autowired
     private RepositorioEventoIngerido repositorioEventoIngerido;
 
+    @Autowired
+    private RepositorioCliente repositorioCliente;
+
     @AfterEach
     void limparContexto() {
         // Defesa contra vazamento de tenant entre testes, mesmo funcao do
@@ -84,6 +90,13 @@ class ServicoIngestaoTest {
 
             assertEquals(1, repositorioPedido.count(), "reenvio identico nao pode duplicar pedido");
             assertEquals(1, repositorioEventoIngerido.count(), "reenvio identico nao pode duplicar evento");
+            // Antes desta linha, so repositorioPedido.count() era conferido -
+            // se o dedup de CLIENTE (uq_cliente_origem, V007, via
+            // persistirClienteSeNovo) quebrasse, nada acusava. buyer.id
+            // ("987654321") e constante na fixture, entao o segundo
+            // ingerir() teria que reconhecer o MESMO comprador, nunca criar
+            // um segundo.
+            assertEquals(1, repositorioCliente.count(), "reenvio identico nao pode duplicar cliente");
         } finally {
             ContextoTenant.limpar();
         }
@@ -113,6 +126,11 @@ class ServicoIngestaoTest {
 
             assertEquals(1, repositorioPedido.count(), "reprocessar com a mesma chave natural NUNCA duplica pedido");
             assertEquals(1, repositorioEventoIngerido.count(), "mesma chave natural de evento - e um UPDATE, nao um INSERT novo");
+            // Mesmo racional da nota no teste de reenvio identico: sem esta
+            // linha, uma quebra no dedup de cliente (buyer.id continua
+            // "987654321" mesmo no payload alterado, so 'comment' mudou)
+            // passaria despercebida.
+            assertEquals(1, repositorioCliente.count(), "reprocessar com hash diferente e mesma chave natural nao pode duplicar cliente");
         } finally {
             ContextoTenant.limpar();
         }
@@ -142,6 +160,106 @@ class ServicoIngestaoTest {
         } finally {
             ContextoTenant.limpar();
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Canal de outro tenant: rejeitado ANTES de qualquer escrita
+    // ------------------------------------------------------------------
+
+    @Test
+    void ingerirComCanalDeOutroTenantLancaCanalDesconhecidoENadaEhGravado() throws SQLException {
+        UUID tenantA = criarTenant("ingestao-canal-alheio-a");
+        UUID tenantB = criarTenant("ingestao-canal-alheio-b");
+        UUID canalDeB = criarCanalMercadoLivre(tenantB);
+        String idExterno = "id-externo-canal-alheio-" + UUID.randomUUID();
+        String payload = LeitorDeFixture.ler("/fixtures/mercadolivre/pedido-completo.json");
+
+        ContextoTenant.definir(tenantA);
+        try {
+            // A consulta que busca o canal (repositorioCanal.findById, dentro
+            // de ServicoIngestao.ingerir) ja e restrita ao tenant pelo
+            // @TenantId (decisao 0007, camada 3) - por isso um canalId que
+            // existe de verdade, mas pertence a B, precisa "nao ser
+            // encontrado" no contexto de A. Ver Javadoc de
+            // CanalDesconhecidoException sobre por que "nao existe" e "e de
+            // outro tenant" sao a MESMA excecao de proposito.
+            assertThrows(CanalDesconhecidoException.class,
+                    () -> servicoIngestao.ingerir(canalDeB, TipoEvento.PEDIDO, idExterno, payload),
+                    "canal de outro tenant tem que ser tratado como inexistente");
+        } finally {
+            ContextoTenant.limpar();
+        }
+
+        // Confirmado pela conexao de DONO (fora do RLS, fora do @TenantId):
+        // nao basta o app nao ENXERGAR nada no contexto de A - nada pode ter
+        // sido fisicamente gravado em NENHUM lugar do banco. A validacao do
+        // canal acontece antes do upsert de evento_ingerido (comentario de
+        // ServicoIngestao.ingerir: "VALIDACAO DO CANAL ANTES DE QUALQUER
+        // ESCRITA"), entao os dois contadores abaixo tem que ser zero.
+        assertEquals(0, contarEventoIngeridoComoPrivilegiado(canalDeB, idExterno),
+                "nada deveria ter sido gravado em evento_ingerido - a validacao de canal acontece ANTES do upsert");
+        assertEquals(0, contarPedidoComoPrivilegiado(canalDeB, idExterno),
+                "nada deveria ter sido gravado em pedido - a excecao interrompe o fluxo antes de qualquer escrita");
+    }
+
+    // ------------------------------------------------------------------
+    // Backstop de corrida: uq_pedido_origem pega o que o
+    // findByCanalIdAndIdExterno eventualmente deixasse passar
+    // ------------------------------------------------------------------
+
+    /**
+     * Simula (sem concorrencia real) o cenario que o bloco
+     * {@code catch (DataIntegrityViolationException)} de
+     * {@code ServicoIngestao.persistirResultado} existe para segurar:
+     * chegar na hora de inserir o pedido com uma linha JA existente para a
+     * mesma chave natural (tenant_id, canal_id, id_externo).
+     *
+     * LIMITACAO HONESTA, registrada em vez de escondida: pre-inserir a
+     * linha conflitante ANTES de chamar {@code ingerir()} e chamar em
+     * seguida, em sequencia, sem threads reais, faz essa linha estar
+     * COMMITADA E VISIVEL quando {@code persistirResultado} roda o SELECT
+     * de {@code repositorioPedido.findByCanalIdAndIdExterno} (READ
+     * COMMITTED: cada instrucao ve tudo que ja foi commitado antes dela
+     * comecar, nao importa a conexao). Ou seja, o caminho mais provavel
+     * REALMENTE exercitado por este teste e a PRIMEIRA trava (o
+     * {@code if (pedidoExistente.isPresent())}), nao literalmente a linha
+     * do {@code catch} - forcar exatamente o catch exigiria concorrencia
+     * de verdade (duas conexoes, uma com transacao aberta e nao commitada
+     * enquanto a outra tenta inserir e bloqueia na unique index), que a
+     * tarefa que originou este teste marcou como desnecessaria. O que este
+     * teste PROVA com certeza, e que vale independente de qual das duas
+     * travas segurou: reingerir um payload cuja chave natural ja existe
+     * fisicamente no banco nunca propaga excecao e nunca duplica o pedido -
+     * o comportamento OBSERVAVEL que as duas defesas prometem entregar.
+     */
+    @Test
+    void ingerirComPedidoJaExistenteNaChaveNaturalNaoDuplicaNemPropagaExcecao() throws SQLException {
+        UUID tenantId = criarTenant("ingestao-corrida");
+        UUID canalId = criarCanalMercadoLivre(tenantId);
+        String payload = LeitorDeFixture.ler("/fixtures/mercadolivre/pedido-completo.json");
+        // id_externo do PEDIDO propriamente dito - vem do campo "id" do
+        // payload (ver AdaptadorMercadoLivre.traduzirPedido), NAO do
+        // parametro idExterno de ingerir() (que so serve para a chave de
+        // evento_ingerido - as duas coisas sao independentes, por isso
+        // usamos um idExterno de evento diferente abaixo).
+        String idExternoDoPedidoNoPayload = "2000003508649999";
+
+        UUID idPedidoPreExistente = inserirPedidoDiretoComoDono(tenantId, canalId, idExternoDoPedidoNoPayload);
+
+        ContextoTenant.definir(tenantId);
+        ResultadoIngestao resultado;
+        try {
+            resultado = servicoIngestao.ingerir(canalId, TipoEvento.PEDIDO, "evento-corrida-" + UUID.randomUUID(), payload);
+        } finally {
+            ContextoTenant.limpar();
+        }
+
+        assertTrue(resultado.processado());
+        assertEquals(idPedidoPreExistente, resultado.idPedido(),
+                "quando ja existe pedido com a mesma chave natural, o resultado tem que apontar para ELE, "
+                        + "nunca para um pedido novo");
+        assertEquals(1, repositorioPedido.count(),
+                "nao pode ter sido criado um segundo pedido para a mesma chave natural (tenant, canal, id_externo)");
     }
 
     // ------------------------------------------------------------------
@@ -185,6 +303,63 @@ class ServicoIngestaoTest {
             return MAPPER.writeValueAsString(raiz);
         } catch (Exception erro) {
             throw new IllegalStateException("Falha alterando fixture para teste", erro);
+        }
+    }
+
+    /**
+     * Caminho privilegiado, fora do RLS e fora do @TenantId: usado so para
+     * confirmar ausencia de dado em NENHUM lugar do banco apos uma
+     * ingestao que deveria ter sido rejeitada - nunca para testar
+     * isolamento (mesma ressalva do Javadoc de PostgresDeTeste). canal_id +
+     * id_externo bastam como marcador aqui porque cada teste usa um
+     * canalId e/ou idExterno novos (UUID aleatorio).
+     */
+    private long contarEventoIngeridoComoPrivilegiado(UUID canalId, String idExterno) throws SQLException {
+        try (Connection conexao = PostgresDeTeste.novaConexaoDono();
+                PreparedStatement comando = conexao.prepareStatement(
+                        "SELECT count(*) FROM evento_ingerido WHERE canal_id = ? AND id_externo = ?")) {
+            comando.setObject(1, canalId);
+            comando.setString(2, idExterno);
+            try (ResultSet resultado = comando.executeQuery()) {
+                resultado.next();
+                return resultado.getLong(1);
+            }
+        }
+    }
+
+    private long contarPedidoComoPrivilegiado(UUID canalId, String idExterno) throws SQLException {
+        try (Connection conexao = PostgresDeTeste.novaConexaoDono();
+                PreparedStatement comando = conexao.prepareStatement(
+                        "SELECT count(*) FROM pedido WHERE canal_id = ? AND id_externo = ?")) {
+            comando.setObject(1, canalId);
+            comando.setString(2, idExterno);
+            try (ResultSet resultado = comando.executeQuery()) {
+                resultado.next();
+                return resultado.getLong(1);
+            }
+        }
+    }
+
+    /**
+     * Insere um pedido diretamente, por fora da aplicacao (conexao de
+     * dono), com a chave natural (tenant_id, canal_id, id_externo) que o
+     * pipeline de ingestao vai tentar gravar em seguida - simula a linha
+     * "ja existente" que o backstop de corrida precisa encontrar. Ver
+     * Javadoc de {@link #ingerirComPedidoJaExistenteNaChaveNaturalNaoDuplicaNemPropagaExcecao()}
+     * para a ressalva sobre o que isto prova e o que nao prova.
+     */
+    private UUID inserirPedidoDiretoComoDono(UUID tenantId, UUID canalId, String idExterno) throws SQLException {
+        try (Connection conexao = PostgresDeTeste.novaConexaoDono();
+                PreparedStatement comando = conexao.prepareStatement(
+                        "INSERT INTO pedido (tenant_id, canal_id, id_externo, status, feito_em) "
+                                + "VALUES (?, ?, ?, 'PAGO', now()) RETURNING id")) {
+            comando.setObject(1, tenantId);
+            comando.setObject(2, canalId);
+            comando.setString(3, idExterno);
+            try (ResultSet resultado = comando.executeQuery()) {
+                resultado.next();
+                return (UUID) resultado.getObject("id");
+            }
         }
     }
 }
