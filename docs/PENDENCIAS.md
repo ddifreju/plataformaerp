@@ -8,45 +8,31 @@ Revise este arquivo uma vez por dia.
 
 ---
 
-## Ferramentas da máquina (BLOQUEIA validação da Fase 0)
+## Ferramentas da máquina — RESOLVIDO em 12/08/2026
 
-Descoberto em 12/08/2026: **a máquina não tem nenhuma ferramenta de
-desenvolvimento instalada** além do git. Verificado em PowerShell e Git Bash.
+- [x] **JDK 21** — Temurin 21.0.12 instalado
+- [x] **Maven 3.9.9** — instalado. `mvnw` (Maven Wrapper) gerado no `backend/`,
+      então o projeto agora é autossuficiente
+- [x] **make 4.4.1** — instalado
+- [x] **Node 24** — instalado (só necessário na Fase 3)
+- [ ] **Docker Desktop** — **instalado, mas o engine não sobe até reiniciar**
+      ("Virtualization support not detected"). É o único bloqueio de validação
+      que resta. Sem ele não roda: `make dev`, `make migrate` e a parte da
+      suíte que usa Testcontainers.
+      **Ação: reiniciar o computador.** Depois: `make preparar && make test`.
 
-Isso não impediu a Fase 0 de ser **escrita**, mas impede que ela seja
-**executada**. O código está pronto e não foi compilado nem rodado uma vez.
+Estado da validação em 12/08/2026:
+- `mvn test-compile`: **BUILD SUCCESS**, 68 fontes principais + 12 de teste
+- Testes que não dependem de banco: **26 passando, 0 falhas**
+- O que ainda não foi provado: `ddl-auto: validate` contra o Postgres real
+  (o risco `char(n)` vs `varchar` e o mapeamento `jsonb`) e toda a suíte de
+  isolamento por Testcontainers
 
-Instale, nesta ordem de importância:
+## Repositório remoto — RESOLVIDO
 
-- [ ] **JDK 21** — `winget install EclipseAdoptium.Temurin.21.JDK`
-      Sem isso o backend não compila.
-- [ ] **Maven** — `winget install Apache.Maven`
-      Depois de instalar, rode `cd backend && mvn wrapper:wrapper` uma vez.
-      Isso gera o `mvnw` e a partir daí o projeto fica autossuficiente.
-- [ ] **Docker Desktop** — https://docker.com/products/docker-desktop
-      Necessário para `make dev` (Postgres) e para `make test` (Testcontainers).
-      Exige WSL2 e reinicialização. É instalação de administrador, por isso
-      não foi feita automaticamente.
-- [ ] **make** — `winget install ezwinports.make` (use no Git Bash)
-      Opcional: todo comando do Makefile é uma linha de shell que pode ser
-      copiada à mão.
-- [ ] **Node 20+** — `winget install OpenJS.NodeJS.LTS`
-      Só necessário na Fase 3 (interface).
-
-**Primeira coisa a rodar depois de instalar:**
-```bash
-make dev && make migrate && make test
-```
-Se algo quebrar, é esperado — nada foi executado ainda. O checklist do que
-tem maior chance de falhar está em `docs/ESTADO.md`.
-
-## Repositório remoto
-
-- [ ] **Decidir onde hospedar o código** (GitHub/GitLab, público ou privado)
-      O git foi inicializado localmente com commits, mas **não há remoto**.
-      Enquanto não houver, não existe backup fora desta máquina — se o disco
-      falhar, o projeto inteiro se perde. Criar repositório remoto é ação
-      externa e com efeito público, por isso não foi feita automaticamente.
+- [x] **GitHub**: `https://github.com/ddifreju/plataformaerp.git`
+      Push inicial feito pela fundadora. Existe backup fora da máquina.
+      **O push continua sendo dela** — eu commito localmente, ela publica.
 
 ## Credenciais e contas (resolva TUDO antes de rodar autônomo)
 
