@@ -70,6 +70,13 @@ sistema que não pode ser construída nem testada de verdade.
 - [ ] Nome definitivo da marca
 - [ ] Nicho inicial: moda ou pet/suplementos
 - [ ] Modelo e valores de precificação
+- [ ] **Retenção e base legal da trilha de auditoria** (ver decisão 0012)
+      A tabela `consulta_auditada` guarda `executado_por` — dado pessoal de
+      empregado do cliente. Hoje é append-only e cresce para sempre. Antes de
+      rodar com cliente real é preciso definir: por quanto tempo guardar, e sob
+      qual base legal (provavelmente legítimo interesse ou obrigação de guarda
+      de prova). É decisão de negócio/jurídica, não técnica.
+      Não bloqueia as Fases 0 a 2.
 
 ## Como usar
 

@@ -54,6 +54,14 @@ public class FiltroTenant extends OncePerRequestFilter {
             "/actuator/health",
             "/actuator/info");
 
+    // As sub-rotas de health (/actuator/health/liveness e /readiness) sao
+    // usadas por probe de container. Sao isentas pelo mesmo motivo que
+    // /actuator/health: nao devolvem dado de tenant nenhum. Isento por
+    // PREFIXO so aqui, e so para health - a lista acima continua sendo
+    // comparacao exata, para que uma rota nova nao vire isenta por
+    // acidente de nome parecido.
+    private static final String PREFIXO_HEALTH_ISENTO = "/actuator/health/";
+
     private final RepositorioTenant repositorioTenant;
     private final ObjectMapper objectMapper;
 
@@ -70,7 +78,7 @@ public class FiltroTenant extends OncePerRequestFilter {
 
         String caminho = request.getRequestURI().substring(request.getContextPath().length());
 
-        if (ROTAS_ISENTAS.contains(caminho)) {
+        if (ROTAS_ISENTAS.contains(caminho) || caminho.startsWith(PREFIXO_HEALTH_ISENTO)) {
             chain.doFilter(request, response);
             return;
         }

@@ -21,7 +21,10 @@ services:
       # Compara strings de forma previsível e acelera índices de texto.
       POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=pt-BR --encoding=UTF8"
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Preso a 127.0.0.1 de propósito. Sem o prefixo, o Docker publica em
+      # 0.0.0.0 e o banco fica acessível a qualquer máquina da mesma rede
+      # (Wi-Fi de coworking, de café). Não custa nada fechar.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_dados:/var/lib/postgresql/data
       # Monta as migrations dentro do container para que `make migrate-undo`
@@ -44,7 +47,9 @@ services:
     restart: unless-stopped
     profiles: ["ferramentas"]
     ports:
-      - "${ADMINER_PORT:-8081}:8080"
+      # Mesma razão do Postgres: Adminer com acesso ao banco não deve
+      # escutar na rede local.
+      - "127.0.0.1:${ADMINER_PORT:-8081}:8080"
     environment:
       ADMINER_DEFAULT_SERVER: postgres
     depends_on:

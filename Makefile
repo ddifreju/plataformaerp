@@ -82,15 +82,23 @@ migrate-undo: ## Desfaz UMA migration. Uso: make migrate-undo VERSAO=003
 ifndef VERSAO
 	$(error Informe a versão. Exemplo: make migrate-undo VERSAO=003)
 endif
+	@# VERSAO entra numa linha de comando e num literal SQL. Sem validar o
+	@# formato, um valor colado por engano vira execução arbitrária com o
+	@# usuário dono do schema (que tem DDL). Três dígitos, nada mais.
+	@echo "$(VERSAO)" | grep -qE '^[0-9]{3}$$' \
+	  || { echo "VERSAO inválida: use exatamente 3 dígitos, ex. VERSAO=003"; exit 1; }
 	@echo "Desfazendo a migration $(VERSAO)."
 	@echo "ATENÇÃO: undo restaura o SCHEMA, não os DADOS já apagados."
 	$(COMPOSE) exec -T postgres sh -c \
 	  'psql -v ON_ERROR_STOP=1 -U $$POSTGRES_USER -d $$POSTGRES_DB \
 	   -f "$$(ls /migrations/undo/U$(VERSAO)__*.sql)"'
 	@echo "Removendo a linha da flyway_schema_history para permitir reaplicar."
+	@# -v versao=... + :'versao' deixa o psql fazer o escape, em vez de
+	@# interpolar direto no literal SQL. Mesmo padrão de definir-senha-app.
 	$(COMPOSE) exec -T postgres sh -c \
 	  'psql -v ON_ERROR_STOP=1 -U $$POSTGRES_USER -d $$POSTGRES_DB \
-	   -c "DELETE FROM flyway_schema_history WHERE version = '"'"'$(VERSAO)'"'"';"'
+	   -v versao="$(VERSAO)" \
+	   -c "DELETE FROM flyway_schema_history WHERE version = :'"'"'versao'"'"';"'
 
 # -------------------------------------------------------------------- teste --
 

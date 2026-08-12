@@ -51,6 +51,18 @@ spring:
     # V004. Fluxo esperado: "make migrate" ANTES de subir a aplicacao.
     enabled: false
 
+server:
+  error:
+    # Fixado explicitamente em vez de confiar no default. Quando a Fase 1
+    # tiver controllers de verdade, uma excecao nao tratada cai no handler
+    # padrao do Spring - e o que ele revela depende destas propriedades.
+    # "never" em todas: mensagem de excecao e stacktrace frequentemente
+    # carregam SQL, nome de coluna e ate valor de dado de cliente.
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+    include-exception: false
+
 management:
   endpoints:
     web:
