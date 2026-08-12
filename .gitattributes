@@ -1,0 +1,28 @@
+# Normalização de fim de linha.
+#
+# O desenvolvimento é no Windows (CRLF), mas o Postgres, o Docker e a VPS
+# são Linux (LF). Arquivo com CRLF que entra em container quebra de formas
+# difíceis de diagnosticar: `make` reclama de comando não encontrado,
+# script shell falha com "\r: not found".
+#
+# Regra: tudo é LF no repositório e LF no disco.
+
+* text=auto eol=lf
+
+# Estes NÃO podem ter CRLF em hipótese alguma.
+Makefile        text eol=lf
+*.sh            text eol=lf
+*.sql           text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+Dockerfile      text eol=lf
+*.java          text eol=lf
+
+# Binários: git não deve tentar converter nada.
+*.jar           binary
+*.png           binary
+*.jpg           binary
+*.ico           binary
+*.pdf           binary
+*.woff          binary
+*.woff2         binary
