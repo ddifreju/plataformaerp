@@ -18,6 +18,12 @@ Makefile        text eol=lf
 Dockerfile      text eol=lf
 *.java          text eol=lf
 
+# Exceções: scripts do Windows PRECISAM de CRLF.
+# O cmd.exe falha de formas obscuras com script em LF — e o mvnw.cmd é
+# justamente o que a fundadora usa para buildar no Windows.
+*.cmd           text eol=crlf
+*.bat           text eol=crlf
+
 # Binários: git não deve tentar converter nada.
 *.jar           binary
 *.png           binary
