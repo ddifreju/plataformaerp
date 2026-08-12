@@ -1,7 +1,7 @@
 # Estado do Projeto
 
 **Atualizado em:** 12 de agosto de 2026
-**Fase:** 0 — Fundação
+**Fase:** 1 — Espinha de dados (tarefas 7 a 12 concluídas)
 **Modo:** autônomo (gerente decide, registra e segue)
 
 ---
@@ -75,6 +75,33 @@ make test         # a suíte inteira, incluindo o isolamento
 
 Espere quebrar. Nada disso rodou ainda.
 
+### O que a primeira execução valida de uma vez só
+
+`make test` roda o `RlsAtivoEmTodasAsTabelasTest`, que descobre as tabelas por
+`information_schema` e exige RLS forçado + 4 policies em **todas** que tenham
+`tenant_id`. Como ele é genérico, a primeira execução valida o molde da decisão
+0010 nas **12 tabelas da Fase 1 de uma vez** — sem ninguém ter atualizado o
+teste. Conferi o molde por grep, mas grep não é o banco: essa é a prova real.
+
+### Riscos da Fase 1 que só o primeiro `make test` resolve
+
+1. **`char(n)` vs `varchar` no `ddl-auto: validate`** — colunas `char` (`ncm`,
+   `cest`, `uf_entrega`, `moeda`, `hash_payload`) mapeadas com
+   `@Column(length=n)`. Se o validador do Hibernate tratar `bpchar` e `varchar`
+   como incompatíveis, a aplicação **não sobe**. É o maior risco da fase.
+2. **`@JdbcTypeCode(SqlTypes.JSON)` → `jsonb`** — se o dialeto mapear para
+   `json` em vez de `jsonb`, o `validate` falha em todas as colunas jsonb.
+3. **`?::jsonb` via `JdbcTemplate`** no pipeline de ingestão.
+4. **Fixtures são hipótese, não payload real.** A documentação oficial do
+   Mercado Livre e do Bling bloqueou o acesso (403/404). Os testes de tradução
+   passam contra o que **acreditamos** ser o formato. O primeiro payload real
+   pode invalidar parte do mapeamento — e isso é esperado, não é bug.
+   O teste que **não** depende disso é o `SuporteJsonTest`, que prova a regra do
+   dinheiro de forma independente da fixture.
+5. **Reconciliação ML × Bling não existe** (decisão 0017): somar canais
+   sobrepostos pode contar a mesma venda duas vezes. Isso **restringe a tarefa
+   16** — a resposta de "quanto sobrou" precisa declarar o escopo de canal.
+
 ### Onde é mais provável que quebre (por ordem de risco)
 
 1. **`ResolvedorTenantHibernate implements CurrentTenantIdentifierResolver<UUID>`**
@@ -117,4 +144,9 @@ de RLS por tabela). Toda tabela da Fase 1 repete o molde da 0010 sem exceção.
 | 2026-08-12 | 4. Row Level Security | Feito. V001–V004 com `ENABLE`+`FORCE`, quatro policies por tabela, `app_current_tenant_id()` fail-closed, papel `app_aplicacao` sem `BYPASSRLS`. Undo pareado U001–U004. **Não executado.** |
 | 2026-08-12 | 5. Teste de isolamento | Feito. `IsolamentoDeTenantTest` (6 casos, prova que a linha alheia existe antes de provar que não vaza) + `RlsAtivoEmTodasAsTabelasTest` (sentinela genérico: quebra sozinho se a Fase 1 criar tabela sem RLS) + testes do filtro e do contexto. Inclui seção de 4 sabotagens para provar que o teste não é decorativo. **Não executado.** |
 | 2026-08-12 | 6. Makefile | Feito. `dev`, `test`, `migrate`, `migrate-undo`, `definir-senha-app`, `preparar`, `ajuda`. Tabs verificados. **Não executado** (sem make). |
-| 2026-08-12 | Auditoria de segurança | `revisor-seguranca` não achou vazamento entre tenants. Corrigidos: injeção via `VERSAO` no `migrate-undo`, pool Hikari injetável (`autowireCandidate = false`), portas em `0.0.0.0`, `server.error.*` exposto, allowlist do actuator. Registrada a decisão 0012 (LGPD/`executado_por`). |
+| 2026-08-12 | 7 e 8. Modelo canônico | Feito. 12 tabelas: `canal`, `produto`, `variacao`, `cliente`, `pedido`, `item_pedido`, `devolucao`, `item_devolucao`, `custo`, `conversa`, `mensagem`, `evento_ingerido`. `item_devolucao` foi adicionada ao escopo: sem ela "devolução parcial" não tem dado e a margem por SKU erra justamente nos pedidos que mais doem. Dinheiro `NUMERIC(18,4)`. Documento de cliente só como HMAC, nunca em claro. |
+| 2026-08-12 | 9. Migrations reversíveis | Feito. V005–V012 com U005–U012 pareados. Verifiquei mecanicamente que as 12 tabelas têm `ENABLE`+`FORCE`, 4 policies e GRANT — o molde da 0010 está integral. Nenhum tipo de ponto flutuante em coluna monetária. |
+| 2026-08-12 | 7–9. Entidades JPA | Feito. 12 entidades + repositórios, pacote por domínio. Cruzei os 9 maiores enums Java contra os `CHECK` do SQL: batem exatamente. Nenhum `double`/`float` no código. |
+| 2026-08-12 | 10 e 11. Adaptadores ML e Bling | Feito contra fixture. **A documentação oficial das duas APIs respondeu 403/404** — as fixtures são reconstrução do formato conhecido, com cada campo marcado por nível de confiança. Nada foi apresentado como confirmado. Ver `docs/integracoes/`. |
+| 2026-08-12 | 12. Pipeline de ingestão | Feito. UPSERT por chave natural `(tenant_id, canal_id, tipo_evento, id_externo)` numa instrução só, sem janela de corrida. SQL nativo com `tenant_id` explícito e tudo em bind parameter — nativo não recebe o predicado do `@TenantId`. |
+| 2026-08-12 | Auditoria de segurança (Fase 0) | `revisor-seguranca` não achou vazamento entre tenants. Corrigidos: injeção via `VERSAO` no `migrate-undo`, pool Hikari injetável (`autowireCandidate = false`), portas em `0.0.0.0`, `server.error.*` exposto, allowlist do actuator. Registrada a decisão 0012 (LGPD/`executado_por`). |
