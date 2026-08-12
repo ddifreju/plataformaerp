@@ -26,9 +26,9 @@ Execute em ordem. Não pergunte antes de começar cada uma.
 7. [x] Modelo canônico: tenant, canal, produto, variação, pedido, item
 8. [x] Modelo canônico: custo, devolução, conversa, mensagem, cliente
 9. [x] Migrations reversíveis de tudo acima
-10. [ ] Adaptador Mercado Livre contra fixture (mock, sem credencial)
-11. [ ] Adaptador de ERP contra fixture
-12. [ ] Pipeline de ingestão com idempotência
+10. [x] Adaptador Mercado Livre contra fixture (mock, sem credencial)
+11. [x] Adaptador de ERP contra fixture
+12. [x] Pipeline de ingestão com idempotência
 
 ### Fase 2 — Motor de margem (o diferencial)
 13. [ ] Tabela de taxas por marketplace, versionada por vigência
