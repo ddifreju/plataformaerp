@@ -1,0 +1,93 @@
+{
+  "id": 16490291234,
+  "nome": "Camiseta Basica Algodao Premium",
+  "codigo": "CAM-BASICA",
+  "preco": 89.90,
+  "tipo": "P",
+  "situacao": "Ativo",
+  "formato": "V",
+  "descricaoCurta": "Camiseta basica 100% algodao penteado, corte reto.",
+  "unidade": "UN",
+  "pesoLiquido": 0.150,
+  "pesoBruto": 0.180,
+  "volumes": 1,
+  "itensPorCaixa": 1,
+  "gtin": "",
+  "marca": "MarcaTeste",
+  "categoria": {
+    "id": 998877,
+    "descricao": "Vestuario > Camisetas"
+  },
+  "ncm": "61091000",
+  "origem": 0,
+  "estoque": {
+    "minimo": 0,
+    "maximo": 0,
+    "crossdocking": 0,
+    "localizacao": "",
+    "saldoVirtualTotal": 118
+  },
+  "midia": {
+    "imagens": {
+      "externas": [
+        { "link": "https://static.exemplo-loja-teste.com.br/produtos/cam-basica/principal.jpg" }
+      ]
+    }
+  },
+  "variacoes": [
+    {
+      "id": 16490291235,
+      "nome": "Camiseta Basica Algodao Premium - Preto / M",
+      "codigo": "CAM-PRT-M",
+      "gtin": "7891234567891",
+      "preco": 89.90,
+      "precoCusto": 32.50,
+      "situacao": "Ativo",
+      "pesoLiquido": 0.150,
+      "pesoBruto": 0.180,
+      "estoque": {
+        "saldoVirtualTotal": 42
+      },
+      "atributos": [
+        { "nome": "Cor", "valor": "Preto" },
+        { "nome": "Tamanho", "valor": "M" }
+      ]
+    },
+    {
+      "id": 16490291236,
+      "nome": "Camiseta Basica Algodao Premium - Preto / G",
+      "codigo": "CAM-PRT-G",
+      "gtin": "7891234567892",
+      "preco": 89.90,
+      "precoCusto": 32.50,
+      "situacao": "Ativo",
+      "pesoLiquido": 0.160,
+      "pesoBruto": 0.190,
+      "estoque": {
+        "saldoVirtualTotal": 35
+      },
+      "atributos": [
+        { "nome": "Cor", "valor": "Preto" },
+        { "nome": "Tamanho", "valor": "G" }
+      ]
+    },
+    {
+      "id": 16490291237,
+      "nome": "Camiseta Basica Algodao Premium - Branco / M",
+      "codigo": "CAM-BCO-M",
+      "gtin": "7891234567893",
+      "preco": 92.90,
+      "precoCusto": 33.80,
+      "situacao": "Ativo",
+      "pesoLiquido": 0.150,
+      "pesoBruto": 0.180,
+      "estoque": {
+        "saldoVirtualTotal": 41
+      },
+      "atributos": [
+        { "nome": "Cor", "valor": "Branco" },
+        { "nome": "Tamanho", "valor": "M" }
+      ]
+    }
+  ]
+}

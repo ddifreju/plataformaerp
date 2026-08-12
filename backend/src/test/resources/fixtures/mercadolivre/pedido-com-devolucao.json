@@ -1,0 +1,41 @@
+{
+  "id": "5000198765432",
+  "type": "mediations",
+  "stage": "claim",
+  "resource": "order",
+  "resource_id": "2000003508651777",
+  "parent_id": null,
+  "reason_id": "PDD8062",
+  "quantity_type": "total",
+  "site_id": "MLB",
+  "status": "closed",
+  "date_created": "2024-04-02T11:05:00.000-04:00",
+  "last_updated": "2024-04-10T16:20:00.000-04:00",
+  "players": [
+    { "role": "complainant", "user_id": 987655001, "type": "buyer" },
+    { "role": "respondent", "user_id": 123456789, "type": "seller" },
+    { "role": "mediator", "user_id": 0, "type": "mercadolibre" }
+  ],
+  "resolution": {
+    "reason": "product_not_as_described",
+    "benefited": ["complainant"],
+    "date_created": "2024-04-10T16:20:00.000-04:00"
+  },
+  "return": {
+    "claim_id": "5000198765432",
+    "status": "refunded",
+    "type": "mediation",
+    "warehouse": null,
+    "date_created": "2024-04-03T09:00:00.000-04:00",
+    "shipments": [
+      {
+        "shipment_id": 43219999888,
+        "tracking_number": "BR987654321ML",
+        "status": "delivered",
+        "logistic_type": "cross_docking"
+      }
+    ],
+    "refund_at": "money_back",
+    "destination": "seller_address"
+  }
+}

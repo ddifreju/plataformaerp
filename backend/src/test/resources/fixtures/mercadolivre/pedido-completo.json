@@ -1,0 +1,146 @@
+{
+  "id": 2000003508649999,
+  "date_created": "2024-03-15T14:32:10.000-04:00",
+  "date_closed": "2024-03-15T14:35:22.000-04:00",
+  "last_updated": "2024-03-16T09:12:03.000-04:00",
+  "manufacturing_ending_date": null,
+  "comment": null,
+  "pack_id": null,
+  "pickup_id": null,
+  "order_request": {
+    "return": null,
+    "change": null
+  },
+  "fulfilled": false,
+  "mediations": [],
+  "total_amount": 244.70,
+  "total_amount_with_shipping": 244.70,
+  "paid_amount": 244.70,
+  "coupon": {
+    "id": "CUPOM10ML",
+    "amount": 15.00
+  },
+  "expiration_date": "2024-03-19T14:32:10.000-04:00",
+  "order_items": [
+    {
+      "item": {
+        "id": "MLB4123456789",
+        "title": "Camiseta Basica Algodao Premium",
+        "category_id": "MLB1430",
+        "variation_id": 158541288641,
+        "seller_custom_field": "CAM-PRT-M",
+        "variation_attributes": [
+          { "id": "COLOR", "name": "Cor", "value_name": "Preto" },
+          { "id": "SIZE", "name": "Tamanho", "value_name": "M" }
+        ],
+        "warranty": "Garantia do vendedor: 90 dias",
+        "condition": "new",
+        "seller_sku": "CAM-PRT-M"
+      },
+      "quantity": 2,
+      "unit_price": 89.90,
+      "full_unit_price": 89.90,
+      "currency_id": "BRL",
+      "manufacturing_days": null,
+      "sale_fee": 25.17,
+      "requested_quantity": {
+        "value": 2,
+        "measure": "unit"
+      }
+    },
+    {
+      "item": {
+        "id": "MLB4123456790",
+        "title": "Caneca Termica Inox 500ml",
+        "category_id": "MLB271599",
+        "variation_id": null,
+        "seller_custom_field": "CAN-INX-500",
+        "variation_attributes": [],
+        "warranty": "Garantia do vendedor: 30 dias",
+        "condition": "new",
+        "seller_sku": "CAN-INX-500"
+      },
+      "quantity": 1,
+      "unit_price": 79.90,
+      "full_unit_price": 99.90,
+      "currency_id": "BRL",
+      "manufacturing_days": null,
+      "sale_fee": 11.19,
+      "requested_quantity": {
+        "value": 1,
+        "measure": "unit"
+      }
+    }
+  ],
+  "payments": [
+    {
+      "id": 15234567890,
+      "order_id": 2000003508649999,
+      "payer_id": 987654321,
+      "collector": { "id": 123456789 },
+      "card_id": null,
+      "site_id": "MLB",
+      "reason": "Camiseta Basica Algodao Premium",
+      "payment_method_id": "master",
+      "currency_id": "BRL",
+      "installments": 3,
+      "issuer_id": "24",
+      "atm_transfer_reference": { "company_id": null, "transaction_id": null },
+      "coupon_amount": 15.00,
+      "activation_uri": null,
+      "operation_type": "regular_payment",
+      "payment_type": "credit_card",
+      "available_actions": ["refund"],
+      "status": "approved",
+      "status_code": null,
+      "status_detail": "accredited",
+      "transaction_amount": 244.70,
+      "taxes_amount": 0.00,
+      "shipping_cost": 0.00,
+      "coupon_id": "CUPOM10ML",
+      "activation_url": null,
+      "overpaid_amount": 0.00,
+      "total_paid_amount": 244.70,
+      "installment_amount": 81.57,
+      "deferred_period": null,
+      "date_approved": "2024-03-15T14:33:01.000-04:00",
+      "authorization_code": "123456",
+      "transaction_order_id": null,
+      "date_created": "2024-03-15T14:32:15.000-04:00",
+      "date_last_modified": "2024-03-15T14:33:01.000-04:00"
+    }
+  ],
+  "shipping": {
+    "id": 43219876543
+  },
+  "status": "paid",
+  "status_detail": null,
+  "tags": ["paid", "not_delivered"],
+  "buyer": {
+    "id": 987654321,
+    "nickname": "COMPRADOR_TESTE123",
+    "email": null,
+    "phone": {
+      "area_code": "",
+      "number": "",
+      "extension": "",
+      "verified": false
+    },
+    "first_name": null,
+    "last_name": null,
+    "billing_info": {
+      "doc_type": null,
+      "doc_number": null
+    }
+  },
+  "seller": {
+    "id": 123456789,
+    "nickname": "LOJA_TESTE_ECP"
+  },
+  "context": {
+    "channel": "marketplace",
+    "site": "MLB",
+    "flows": []
+  },
+  "currency_id": "BRL"
+}

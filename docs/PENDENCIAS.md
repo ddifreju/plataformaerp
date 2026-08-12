@@ -64,6 +64,13 @@ sistema que não pode ser construída nem testada de verdade.
       Business e aprovação. Pode levar semanas
 - [ ] **Domínio registrado**
 - [ ] **VPS ou conta de cloud** — para quando sair do local
+- [ ] **Chave HMAC para hash de documento de cliente**
+      Variável `APP_DOCUMENTO_HMAC_CHAVE`. A tabela `cliente` guarda
+      `documento_hash` = HMAC-SHA256 do CPF/CNPJ, nunca o documento em claro
+      (SHA-256 puro seria quebrável por força bruta: o espaço de CPF é pequeno).
+      Gere uma chave aleatória longa e guarde fora do banco e fora do git.
+      **Trocar a chave depois invalida todos os hashes existentes** — decida uma
+      vez e guarde bem. Sem ela o adaptador não consegue preencher a coluna.
 
 ## Decisões de negócio pendentes
 
@@ -77,6 +84,15 @@ sistema que não pode ser construída nem testada de verdade.
       qual base legal (provavelmente legítimo interesse ou obrigação de guarda
       de prova). É decisão de negócio/jurídica, não técnica.
       Não bloqueia as Fases 0 a 2.
+- [ ] **Retenção de `evento_ingerido.payload_bruto`**
+      É o maior volume de dado pessoal do banco: o payload cru de cada pedido
+      vindo do marketplace, com nome, endereço e contato do consumidor final do
+      seu cliente. Guardado para poder reprocessar e para provar o que a fonte
+      mandou. Hoje sem prazo de expurgo. Mesma natureza da pendência acima.
+- [ ] **Consentimento de WhatsApp (opt-in)**
+      Deliberadamente não modelado. Quando entrar, é tabela própria de
+      consentimento com data, origem e texto aceito — não um booleano no
+      cliente. Depende de definir o fluxo comercial.
 
 ## Como usar
 

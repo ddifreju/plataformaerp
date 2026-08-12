@@ -1,0 +1,133 @@
+{
+  "id": 987654321,
+  "numero": 15234,
+  "numeroLoja": "2000003508649999",
+  "data": "2024-03-15",
+  "dataSaida": "2024-03-16",
+  "dataPrevista": "2024-03-20",
+  "totalProdutos": 259.70,
+  "totalDesconto": 0.00,
+  "total": 264.70,
+  "contato": {
+    "id": 5544332211,
+    "nome": "Fulano de Tal da Silva",
+    "tipoPessoa": "F",
+    "numeroDocumento": "12345678909",
+    "email": "fulano.teste@exemplo-loja.com.br",
+    "telefone": "11999998888",
+    "endereco": {
+      "endereco": "Rua das Acacias",
+      "numero": "245",
+      "complemento": "Apto 12",
+      "bairro": "Vila Mariana",
+      "cep": "04101000",
+      "municipio": "Sao Paulo",
+      "uf": "SP",
+      "pais": "Brasil"
+    }
+  },
+  "situacao": {
+    "id": 6,
+    "valor": "Atendido"
+  },
+  "loja": {
+    "id": 203910
+  },
+  "numeroPedidoCompra": "2000003508649999",
+  "outrasDespesas": 0.00,
+  "desconto": {
+    "valor": 0.00,
+    "unidade": "REAL"
+  },
+  "observacoes": "Pedido importado do canal Mercado Livre.",
+  "observacoesInternas": "",
+  "categoria": {
+    "id": 12,
+    "descricao": "Venda Marketplace"
+  },
+  "tributacao": {
+    "totalICMS": 0.00,
+    "totalIPI": 0.00,
+    "totalICMSST": 0.00
+  },
+  "transporte": {
+    "fretePorConta": 0,
+    "frete": 5.00,
+    "quantidadeVolumes": 1,
+    "pesoBruto": 0.65,
+    "prazoEntrega": 5,
+    "transportadora": {
+      "nome": "Mercado Envios"
+    },
+    "etiqueta": {
+      "nome": "Fulano de Tal da Silva",
+      "endereco": "Rua das Acacias",
+      "numero": "245",
+      "complemento": "Apto 12",
+      "municipio": "Sao Paulo",
+      "uf": "SP",
+      "cep": "04101000",
+      "bairro": "Vila Mariana"
+    },
+    "volumes": [
+      { "servico": "Mercado Envios", "codigoRastreamento": "BR123456789ML" }
+    ]
+  },
+  "itens": [
+    {
+      "id": 1,
+      "codigo": "CAM-PRT-M",
+      "unidade": "UN",
+      "quantidade": 2.0000,
+      "desconto": 0.00,
+      "valor": 89.90,
+      "aliquotaIPI": 0.00,
+      "descricao": "Camiseta Basica Algodao Premium - Preto / M",
+      "descricaoDetalhada": "",
+      "produto": { "id": 16490291235 }
+    },
+    {
+      "id": 2,
+      "codigo": "CAN-INX-500",
+      "unidade": "UN",
+      "quantidade": 1.0000,
+      "desconto": 0.00,
+      "valor": 79.90,
+      "aliquotaIPI": 0.00,
+      "descricao": "Caneca Termica Inox 500ml",
+      "descricaoDetalhada": "",
+      "produto": { "id": 16490291400 }
+    }
+  ],
+  "parcelas": [
+    {
+      "id": 1,
+      "dataVencimento": "2024-03-18",
+      "valor": 88.24,
+      "observacoes": "",
+      "formaPagamento": { "id": 1, "descricao": "Cartao de Credito" }
+    },
+    {
+      "id": 2,
+      "dataVencimento": "2024-04-18",
+      "valor": 88.23,
+      "observacoes": "",
+      "formaPagamento": { "id": 1, "descricao": "Cartao de Credito" }
+    },
+    {
+      "id": 3,
+      "dataVencimento": "2024-05-18",
+      "valor": 88.23,
+      "observacoes": "",
+      "formaPagamento": { "id": 1, "descricao": "Cartao de Credito" }
+    }
+  ],
+  "vendedor": {
+    "id": 991122,
+    "nome": "Loja Teste ECP"
+  },
+  "intermediador": {
+    "cnpj": "03007331000141",
+    "nomeUsuario": "loja_teste_ecp"
+  }
+}

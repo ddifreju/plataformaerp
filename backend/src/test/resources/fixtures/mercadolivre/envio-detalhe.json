@@ -1,0 +1,31 @@
+{
+  "id": 43219876543,
+  "mode": "me2",
+  "status": "shipped",
+  "substatus": "in_hub",
+  "logistic_type": "cross_docking",
+  "site_id": "MLB",
+  "carrier_info": null,
+  "date_created": "2024-03-15T14:35:00.000-04:00",
+  "last_updated": "2024-03-16T10:02:00.000-04:00",
+  "tracking_number": "BR123456789ML",
+  "tracking_method": "correios",
+  "service_id": 502764,
+  "shipping_option": {
+    "id": 502764,
+    "name": "Mercado Envios Full",
+    "shipping_method_id": 100009,
+    "currency_id": "BRL",
+    "cost": 0.00,
+    "list_cost": 24.90,
+    "estimated_delivery_time": {
+      "date": "2024-03-20T00:00:00.000-04:00"
+    }
+  },
+  "receiver_address": {
+    "city": { "name": "Sao Paulo" },
+    "state": { "id": "BR-SP", "name": "Sao Paulo" },
+    "zip_code": "01310100"
+  },
+  "order_id": 2000003508649999
+}

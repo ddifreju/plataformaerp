@@ -1,0 +1,127 @@
+{
+  "id": 2000003508650321,
+  "date_created": "2024-02-10T09:15:40.000-04:00",
+  "date_closed": "2024-02-10T09:20:11.000-04:00",
+  "last_updated": "2024-02-12T18:03:27.000-04:00",
+  "manufacturing_ending_date": null,
+  "comment": null,
+  "pack_id": null,
+  "pickup_id": null,
+  "order_request": {
+    "return": null,
+    "change": null
+  },
+  "fulfilled": false,
+  "mediations": [],
+  "total_amount": 0.00,
+  "total_amount_with_shipping": 0.00,
+  "paid_amount": 0.00,
+  "coupon": {
+    "id": null,
+    "amount": 0.00
+  },
+  "expiration_date": "2024-02-13T09:15:40.000-04:00",
+  "order_items": [
+    {
+      "item": {
+        "id": "MLB4123456791",
+        "title": "Suporte de Celular para Mesa Ajustavel",
+        "category_id": "MLB1000",
+        "variation_id": null,
+        "seller_custom_field": "SUP-CEL-01",
+        "variation_attributes": [],
+        "warranty": "Garantia do vendedor: 90 dias",
+        "condition": "new",
+        "seller_sku": "SUP-CEL-01"
+      },
+      "quantity": 1,
+      "unit_price": 39.90,
+      "full_unit_price": 39.90,
+      "currency_id": "BRL",
+      "manufacturing_days": null,
+      "sale_fee": 5.59,
+      "requested_quantity": {
+        "value": 1,
+        "measure": "unit"
+      }
+    }
+  ],
+  "payments": [
+    {
+      "id": 15234571234,
+      "order_id": 2000003508650321,
+      "payer_id": 987654455,
+      "collector": { "id": 123456789 },
+      "card_id": null,
+      "site_id": "MLB",
+      "reason": "Suporte de Celular para Mesa Ajustavel",
+      "payment_method_id": "pix",
+      "currency_id": "BRL",
+      "installments": 1,
+      "issuer_id": null,
+      "atm_transfer_reference": { "company_id": null, "transaction_id": null },
+      "coupon_amount": 0.00,
+      "activation_uri": null,
+      "operation_type": "regular_payment",
+      "payment_type": "digital_wallet",
+      "available_actions": [],
+      "status": "refunded",
+      "status_code": null,
+      "status_detail": "reimbursed",
+      "transaction_amount": 39.90,
+      "taxes_amount": 0.00,
+      "shipping_cost": 0.00,
+      "coupon_id": null,
+      "activation_url": null,
+      "overpaid_amount": 0.00,
+      "total_paid_amount": 0.00,
+      "installment_amount": 39.90,
+      "deferred_period": null,
+      "date_approved": "2024-02-10T09:16:02.000-04:00",
+      "authorization_code": null,
+      "transaction_order_id": null,
+      "date_created": "2024-02-10T09:15:45.000-04:00",
+      "date_last_modified": "2024-02-12T18:03:27.000-04:00"
+    }
+  ],
+  "shipping": {
+    "id": 43219877001
+  },
+  "status": "cancelled",
+  "status_detail": null,
+  "cancel_detail": {
+    "group": "buyer_or_seller",
+    "code": "1",
+    "date": "2024-02-12T18:03:27.000-04:00",
+    "description": "Comprador se arrependeu da compra antes do envio",
+    "requested_by": "buyer"
+  },
+  "tags": ["cancelled"],
+  "buyer": {
+    "id": 987654455,
+    "nickname": "COMPRADOR_TESTE456",
+    "email": null,
+    "phone": {
+      "area_code": "",
+      "number": "",
+      "extension": "",
+      "verified": false
+    },
+    "first_name": null,
+    "last_name": null,
+    "billing_info": {
+      "doc_type": null,
+      "doc_number": null
+    }
+  },
+  "seller": {
+    "id": 123456789,
+    "nickname": "LOJA_TESTE_ECP"
+  },
+  "context": {
+    "channel": "marketplace",
+    "site": "MLB",
+    "flows": []
+  },
+  "currency_id": "BRL"
+}
