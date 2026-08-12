@@ -52,11 +52,15 @@ construídas contra mock.
 **Novo bloqueio de validação (não de construção):** a máquina não tem JDK,
 Maven, Docker nem Node. Nada da Fase 0 foi compilado ou executado.
 
-## Pendente de validação — LEIA ANTES DE SEGUIR PARA A FASE 1
+## Pendente de validação — LEIA ANTES DE SEGUIR PARA A FASE 2
 
-A Fase 0 está **escrita e revisada, não executada**. Todo o código foi
-verificado por leitura (inclusive auditoria de segurança dedicada), mas nenhum
-compilador ou banco confirmou nada.
+As Fases 0 e 1 estão **escritas e revisadas, não executadas**. Todo o código foi
+verificado por leitura (com auditoria de segurança e revisão de código
+dedicadas), mas nenhum compilador ou banco confirmou nada.
+
+São 76 arquivos Java, 12 migrations e 12 undos escritos sem uma única
+compilação. Trate a primeira execução como uma fase de trabalho própria, não
+como um detalhe.
 
 O que **foi** validado de verdade:
 - Todas as versões do `pom.xml` existem no Maven Central (conferidas em
@@ -129,10 +133,19 @@ teste. Conferi o molde por grep, mas grep não é o banco: essa é a prova real.
 
 ## Decisões tomadas
 
-Ver `docs/decisoes/`. Nesta execução: 0004 a 0012.
+Ver `docs/decisoes/`. Nesta execução: **0004 a 0017**.
 
-A mais estruturante é a **0007** (propagação de tenant) com a **0010** (padrão
-de RLS por tabela). Toda tabela da Fase 1 repete o molde da 0010 sem exceção.
+As mais estruturantes, em ordem de peso:
+- **0007** (propagação de tenant) + **0010** (molde de RLS por tabela). As 12
+  tabelas da Fase 1 repetem o molde sem exceção.
+- **0015** (FK composta com `tenant_id`) — o banco recusa fisicamente uma
+  referência cruzada entre tenants. Veio do `arquiteto-dados`, promovida a
+  padrão do projeto.
+- **0017** (reconciliação entre fontes é explícita) — a que mais restringe a
+  Fase 2.
+
+Duas decisões nasceram de eu ter errado e estão registradas assim: **0011**
+(Flyway fora do boot) e a ressalva dentro da **0010** sobre `SET` vs `SET LOCAL`.
 
 ## Log de execução
 
