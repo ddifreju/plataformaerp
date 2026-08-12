@@ -1,0 +1,34 @@
+-- =====================================================================
+-- U001 — Desfaz V001__extensoes_e_funcao_tenant.sql
+-- =====================================================================
+-- ORDEM DE EXECUCAO DOS UNDOS: sempre decrescente (U004, U003, U002,
+-- U001). Rodar U001 antes de U003 falha, porque as policies de
+-- consulta_auditada dependem de app_current_tenant_id().
+--
+-- Depois de aplicar este script, apague manualmente a linha
+-- correspondente da tabela flyway_schema_history, senao o Flyway
+-- continuara considerando a migration aplicada:
+--     DELETE FROM flyway_schema_history WHERE version = '001';
+-- =====================================================================
+
+-- A funcao so pode cair depois que nenhuma policy dependa dela.
+-- RESTRICT (padrao) e proposital: se ainda houver dependente, queremos
+-- o erro, nao um CASCADE derrubando policies silenciosamente.
+DROP FUNCTION IF EXISTS app_current_tenant_id();
+
+-- ---------------------------------------------------------------------
+-- PORQUE NAO DERRUBAMOS AS EXTENSOES pgcrypto E vector
+-- ---------------------------------------------------------------------
+-- 1. Extensao e objeto de BANCO, nao do nosso schema logico. Outra
+--    aplicacao, outro schema ou um objeto fora do escopo destas
+--    migrations pode depender dela.
+-- 2. DROP EXTENSION vector removeria tambem os tipos e operadores; se
+--    existir qualquer coluna vector remanescente (ou um backup logico
+--    sendo restaurado), o efeito e perda de dado, nao rollback.
+-- 3. Deixar a extensao instalada e inofensivo: CREATE EXTENSION
+--    IF NOT EXISTS na V001 e idempotente, entao reaplicar a migration
+--    funciona normalmente.
+-- Se realmente for necessario remover (descomissionar o banco inteiro),
+-- faca manualmente e de forma consciente:
+--     DROP EXTENSION vector;
+--     DROP EXTENSION pgcrypto;

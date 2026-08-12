@@ -1,0 +1,56 @@
+# Ambiente de desenvolvimento local.
+# Sobe com `make dev` a partir da raiz do projeto.
+#
+# Nenhuma senha aqui: tudo vem de infra/.env, que NÃO vai para o git.
+# Copie infra/.env.exemplo para infra/.env antes do primeiro uso.
+
+name: plataforma-ecommerce
+
+services:
+  postgres:
+    # Imagem oficial do pgvector sobre Postgres 16.
+    # Usar a mesma imagem em dev, em teste (Testcontainers) e em produção
+    # elimina a classe de bug "funciona na minha máquina".
+    image: pgvector/pgvector:pg16
+    container_name: plataforma-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?defina POSTGRES_DB em infra/.env}
+      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER em infra/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em infra/.env}
+      # Compara strings de forma previsível e acelera índices de texto.
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=pt-BR --encoding=UTF8"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_dados:/var/lib/postgresql/data
+      # Monta as migrations dentro do container para que `make migrate-undo`
+      # consiga aplicar um script de undo com psql sem copiar arquivo.
+      - ../backend/src/main/resources/db:/migrations:ro
+    healthcheck:
+      # O backend só deve subir depois que o banco aceita conexão de verdade.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Interface web para inspecionar o banco durante o desenvolvimento.
+  # Fica no perfil "ferramentas": só sobe com `make dev-ferramentas`,
+  # para não gastar memória no dia a dia.
+  adminer:
+    image: adminer:4
+    container_name: plataforma-adminer
+    restart: unless-stopped
+    profiles: ["ferramentas"]
+    ports:
+      - "${ADMINER_PORT:-8081}:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_dados:
+    name: plataforma_postgres_dados
