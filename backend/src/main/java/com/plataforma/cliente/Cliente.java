@@ -68,7 +68,14 @@ public class Cliente {
     @Column(name = "documento_tipo")
     private TipoDocumento documentoTipo;
 
-    @Column(name = "documento_hash", length = 64)
+    // SQL declara "text", nao char(64), mesmo o CHECK exigindo exatamente
+    // 64 hex (ck_cliente_documento_hash_formato via regex). Sem length:
+    // um @Column(length=64) aqui mapearia para varchar(64) e divergiria
+    // do tipo real da coluna. Compare com
+    // EventoIngerido.hashPayload, que E char(64) de verdade (V012) - as
+    // duas colunas parecem iguais e nao sao; conferido linha a linha nas
+    // migrations.
+    @Column(name = "documento_hash")
     private String documentoHash;
 
     @Column(name = "documento_mascarado")

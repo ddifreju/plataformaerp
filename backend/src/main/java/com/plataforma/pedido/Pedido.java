@@ -108,7 +108,10 @@ public class Pedido {
     @Column(name = "quantidade_parcelas")
     private Short quantidadeParcelas;
 
-    @Column(name = "cep_entrega", length = 8)
+    // SQL declara "text", nao char(8) - o formato de 8 digitos e imposto
+    // so pelo CHECK (ck_pedido_cep), nao pelo tipo da coluna. Sem length
+    // de proposito: ver o mesmo raciocinio em Cliente.documentoHash.
+    @Column(name = "cep_entrega")
     private String cepEntrega;
 
     @Column(name = "cidade_entrega")
