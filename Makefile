@@ -7,7 +7,13 @@
 # colado à mão se preferir não instalar o make.
 
 COMPOSE := docker compose -f infra/docker-compose.yml --env-file infra/.env
-MAVEN   := cd backend && mvn
+
+# O Flyway e a aplicação leem credenciais de variável de ambiente
+# (FLYWAY_URL, SPRING_DATASOURCE_*). Elas moram em infra/.env, que o docker
+# compose lê sozinho mas o Maven não — por isso exportamos aqui antes de
+# chamar o mvn. `set -a` faz todo assignment virar export automaticamente.
+CARREGA_ENV := set -a && . ./infra/.env && set +a
+MAVEN       := $(CARREGA_ENV) && cd backend && mvn
 
 .DEFAULT_GOAL := ajuda
 
@@ -51,6 +57,25 @@ migrate: ## Aplica as migrations pendentes (Flyway)
 .PHONY: migrate-info
 migrate-info: ## Mostra quais migrations já foram aplicadas
 	$(MAVEN) flyway:info
+
+.PHONY: definir-senha-app
+definir-senha-app: ## Define a senha do papel app_aplicacao a partir de APP_DB_PASSWORD
+	@# A V004 cria app_aplicacao sem senha de propósito: segredo não entra
+	@# em migration versionada. Este alvo fecha essa lacuna lendo a senha do
+	@# ambiente. Rode uma vez, depois do primeiro `make migrate`.
+	@$(CARREGA_ENV) && \
+	  test -n "$$APP_DB_PASSWORD" || { echo "APP_DB_PASSWORD não definida em infra/.env"; exit 1; }
+	@$(CARREGA_ENV) && $(COMPOSE) exec -T postgres \
+	  psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" \
+	  -v senha="$$APP_DB_PASSWORD" \
+	  -c "ALTER ROLE app_aplicacao WITH PASSWORD :'senha';"
+	@echo "Senha de app_aplicacao definida."
+	@echo "Confirme que SPRING_DATASOURCE_PASSWORD tem o mesmo valor."
+
+.PHONY: preparar
+preparar: dev migrate definir-senha-app ## Primeira execução: sobe, migra e define a senha do app
+	@echo ""
+	@echo "Ambiente pronto. Rode 'make test' para validar o isolamento."
 
 .PHONY: migrate-undo
 migrate-undo: ## Desfaz UMA migration. Uso: make migrate-undo VERSAO=003

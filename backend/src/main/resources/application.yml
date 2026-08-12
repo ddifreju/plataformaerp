@@ -1,0 +1,61 @@
+# Configuracao da aplicacao. Nenhuma senha literal aqui - CLAUDE.md:
+# "nenhum segredo em codigo, sempre variavel de ambiente". Onde ha valor
+# default, e default de DESENVOLVIMENTO, nunca de producao.
+
+spring:
+  application:
+    name: plataforma-backend
+
+  datasource:
+    # A aplicacao conecta como app_aplicacao (V004): papel com o minimo
+    # de privilegio necessario, sem DDL, sem BYPASSRLS. NUNCA aponte isto
+    # para o mesmo usuario usado em "make migrate" (ver pom.xml).
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/plataforma}
+    username: ${SPRING_DATASOURCE_USERNAME:app_aplicacao}
+    # Sem default de proposito: se a variavel de ambiente nao existir, a
+    # aplicacao falha ao subir em vez de tentar conectar com senha vazia
+    # ou adivinhada.
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    # ATENCAO: este bloco spring.datasource.* alimenta o DataSourceBuilder
+    # usado manualmente em ConfiguracaoTenant (com.plataforma.comum.tenant)
+    # para montar o Hikari por baixo do DataSourceComTenant. Nao existe
+    # bean "dataSource" padrao do Spring Boot neste projeto - ele e
+    # substituido de proposito para que TODA conexao passe pelo SET do
+    # GUC app.tenant_id antes de ser entregue (decisao 0007).
+
+  jpa:
+    # NUNCA update/create: schema e gerenciado exclusivamente pelo Flyway
+    # (decisao 0006). "validate" so confirma que o mapeamento Java bate
+    # com o schema já aplicado; nunca altera o banco.
+    hibernate:
+      ddl-auto: validate
+    # false (nunca deixar no default "true" do Spring Boot): open-in-view
+    # mantem uma conexao presa da entrada a saida de cada requisicao HTTP,
+    # mesmo em trechos que nao tocam banco, e mascara lazy-loading fora de
+    # transacao. Desligar isto NAO compromete o isolamento por tenant: o
+    # GUC app.tenant_id e setado a cada getConnection() (DataSourceComTenant),
+    # nao uma vez por requisicao - entao toda conexao obtida durante o
+    # processamento, com ou sem open-in-view, sai com o GUC correto.
+    open-in-view: false
+
+  flyway:
+    # Desabilitado DE PROPOSITO na aplicacao. Migration roda por fora,
+    # via "make migrate" (flyway-maven-plugin, ver pom.xml), com um
+    # usuario de banco que tem privilegio de DDL. O runtime da aplicacao
+    # usa app_aplicacao (acima), que NAO tem privilegio de DDL (V004) -
+    # se deixassemos o Spring rodar Flyway no boot com essas credenciais,
+    # a aplicacao falharia ao subir (permissao negada) toda vez que
+    # houvesse uma migration pendente, e teria que ter privilegio de DDL
+    # para nunca falhar, o que anularia a garantia de menor privilegio da
+    # V004. Fluxo esperado: "make migrate" ANTES de subir a aplicacao.
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # So health e info ficam expostos por HTTP. Qualquer outro
+        # endpoint do actuator (env, beans, etc.) vaza detalhe interno e
+        # nao tem por que estar acessivel.
+        include: health,info

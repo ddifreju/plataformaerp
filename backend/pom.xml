@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        Decisao 0005: Maven, pom.xml unico, sem multi-modulo, versoes
+        exatas (nada de range/floating version) para tudo que e relevante.
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <!-- 3.3.13 e o ultimo patch da linha 3.3.x. Patch da mesma minor e
+             drop-in e traz correcoes de seguranca acumuladas: nao ha motivo
+             para nascer em 3.3.4. Verificado no Maven Central em 12/08/2026. -->
+        <version>3.3.13</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.plataforma</groupId>
+    <artifactId>plataforma-backend</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>jar</packaging>
+
+    <name>plataforma-backend</name>
+    <description>
+        Backend da plataforma de gestao para e-commerce brasileiro.
+        Fase 0: fundacao (tenant, auditoria, isolamento).
+    </description>
+
+    <properties>
+        <!-- Le pelo spring-boot-starter-parent para fixar o alvo de
+             compilacao em Java 21 (maven.compiler.release). -->
+        <java.version>21</java.version>
+
+        <!-- Camel nao e gerenciado pelo spring-boot-starter-parent: fixamos
+             a versao aqui, como manda a decisao 0005. Escolhida por ser a
+             LTS do Camel 4.x contemporanea ao Spring Boot 3.3.x. -->
+        <camel.version>4.8.9</camel.version>
+
+        <!-- Flyway: fixamos explicitamente (em vez de herdar o que o
+             spring-boot-starter-parent gerencia) para que a MESMA versao
+             seja usada pela dependencia (flyway-core, usada so para o
+             Spring reconhecer o classpath) e pelo flyway-maven-plugin
+             (usado de fato para aplicar migration via "make migrate").
+             Ao trocar a versao do parent, revise este numero. -->
+        <flyway.version>10.22.0</flyway.version>
+
+        <!-- O spring-boot-starter-parent ja gerencia esta versao por
+             baixo dos panos, mas declaramos aqui explicitamente (mesma
+             tecnica usada para flyway.version acima) para que o driver
+             usado pela dependencia de runtime (abaixo) e o usado pelo
+             flyway-maven-plugin sejam garantidamente o mesmo numero,
+             sem depender de eu adivinhar corretamente o nome interno da
+             propriedade herdada do parent. -->
+        <postgresql.version>42.7.13</postgresql.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- BOM do Camel: gerencia a versao de todos os artefatos
+                 org.apache.camel* usados abaixo. Importado DEPOIS do
+                 parent do Spring Boot (que ja veio herdado): entradas que
+                 o parent ja gerencia (jackson, etc.) nao sao tocadas por
+                 este import, porque este BOM so declara artefatos do
+                 proprio Camel. -->
+            <dependency>
+                <groupId>org.apache.camel.springboot</groupId>
+                <artifactId>camel-spring-boot-bom</artifactId>
+                <version>${camel.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- ============================== Web / API ============================== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- ============================== Persistencia ============================= -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${postgresql.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ============================== Migrations =============================
+             flyway-core precisa estar no classpath da APLICACAO so para o
+             Spring detectar que ha suporte a Flyway (metadados, checagem
+             de integridade em runtime se algum dia habilitarmos). Quem de
+             fato aplica migration e o "make migrate" via flyway-maven-plugin
+             (ver <build> abaixo), rodando com credenciais separadas das
+             que a aplicacao usa - ver application.yml para o porque
+             (spring.flyway.enabled: false). -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+            <version>${flyway.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <version>${flyway.version}</version>
+        </dependency>
+
+        <!-- ============================== Integracoes (Camel) =====================
+             So a dependencia por enquanto. Nenhuma rota criada ainda:
+             isso e trabalho de tarefa futura (Fase 1, adaptadores de
+             marketplace/ERP). -->
+        <dependency>
+            <groupId>org.apache.camel.springboot</groupId>
+            <artifactId>camel-spring-boot-starter</artifactId>
+        </dependency>
+
+        <!-- ============================== Testes ================================== -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <finalName>plataforma-backend</finalName>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!--
+                flyway-maven-plugin: e o que "make migrate" chama
+                (Makefile -> mvn flyway:migrate). Le url/usuario/senha de
+                variavel de ambiente - NENHUMA senha literal aqui, como
+                manda o CLAUDE.md ("nenhum segredo em codigo").
+
+                Estas sao credenciais de MIGRACAO (dono do schema, precisa
+                de privilegio de DDL: CREATE TABLE, CREATE POLICY etc.),
+                DIFERENTES das credenciais de runtime da aplicacao
+                (spring.datasource.*, que usa o papel app_aplicacao,
+                deliberadamente sem privilegio de DDL - ver V004). Nunca
+                aponte estas duas configuracoes para o mesmo usuario: se
+                app_aplicacao ganhasse privilegio de DDL para poder migrar,
+                perderia a garantia da V004 de nao conseguir desligar o
+                Row Level Security.
+
+                Variaveis de ambiente esperadas (defina antes de
+                "make migrate", por exemplo exportando a partir de
+                infra/.env): FLYWAY_URL, FLYWAY_USUARIO, FLYWAY_SENHA.
+            -->
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
+                <version>${flyway.version}</version>
+                <configuration>
+                    <url>${env.FLYWAY_URL}</url>
+                    <user>${env.FLYWAY_USUARIO}</user>
+                    <password>${env.FLYWAY_SENHA}</password>
+                    <locations>
+                        <location>filesystem:src/main/resources/db/migration</location>
+                    </locations>
+                </configuration>
+                <dependencies>
+                    <!-- O plugin roda fora do classpath do projeto compilado,
+                         entao precisa das suas proprias dependencias de
+                         driver e de suporte a Postgres. -->
+                    <dependency>
+                        <groupId>org.flywaydb</groupId>
+                        <artifactId>flyway-database-postgresql</artifactId>
+                        <version>${flyway.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.postgresql</groupId>
+                        <artifactId>postgresql</artifactId>
+                        <version>${postgresql.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>
