@@ -109,9 +109,14 @@ public class ConfiguracaoTenant {
     /**
      * Registra o ResolvedorTenantHibernate junto do Hibernate, para que
      * toda entidade anotada com @org.hibernate.annotations.TenantId
-     * (hoje, ConsultaAuditada) tenha o predicado de tenant acrescentado
-     * automaticamente em toda consulta e preenchido automaticamente em
-     * todo insert.
+     * tenha o predicado de tenant acrescentado automaticamente em toda
+     * consulta e preenchido automaticamente em todo insert.
+     *
+     * Hoje isso vale para 13 entidades: ConsultaAuditada (Fase 0) e as
+     * 12 do modelo canonico da Fase 1 (canal, produto, variacao,
+     * cliente, pedido, item_pedido, devolucao, item_devolucao, custo,
+     * conversa, mensagem, evento_ingerido). Nao ha nada a fazer aqui
+     * quando uma entidade nova entra: basta ela ter @TenantId.
      *
      * Usamos a string literal do nome da propriedade
      * ("hibernate.tenant_identifier_resolver") em vez de referenciar a

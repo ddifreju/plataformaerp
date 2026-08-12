@@ -94,8 +94,14 @@ final class SuporteJson {
             return null;
         }
         if (!no.isNumber()) {
+            // Reporta o NOME do campo e o TIPO recebido, nunca o CONTEUDO.
+            // O no poderia ser um objeto aninhado inteiro do payload do
+            // marketplace, com nome, endereco e contato do consumidor
+            // final. Uma excecao costuma acabar em log ou em corpo de
+            // resposta, e ai o dado pessoal ja vazou. A excecao nasce
+            // limpa para nao depender de quem a captura lembrar disso.
             throw new PayloadInvalidoException(
-                    "Campo '" + campo + "' deveria ser numerico e veio '" + no.getNodeType() + "': " + no);
+                    "Campo '" + campo + "' deveria ser numerico e veio do tipo " + no.getNodeType() + ".");
         }
         return no.decimalValue();
     }

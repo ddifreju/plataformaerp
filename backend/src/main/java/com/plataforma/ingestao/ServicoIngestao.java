@@ -159,6 +159,34 @@ public class ServicoIngestao {
         UUID tenantId = ContextoTenant.atual();
         String hash = sha256Hex(payloadBruto);
 
+        // VALIDACAO DO CANAL ANTES DE QUALQUER ESCRITA.
+        //
+        // canalId e o unico parametro deste metodo que NAO vem do
+        // ContextoTenant - vem de quem chama. Quando existir um webhook ou
+        // um endpoint de reprocessamento por cima deste metodo, ele passa a
+        // ser entrada externa.
+        //
+        // O banco ja recusaria um canal de outro tenant: a FK composta
+        // (tenant_id, canal_id) -> canal (tenant_id, id) da decisao 0015
+        // torna isso impossivel de gravar. Mas depender so dela significa
+        // descobrir o problema como violacao de integridade no meio de um
+        // INSERT, virando 500 generico, depois de ja ter tocado o banco.
+        //
+        // Esta consulta e implicitamente restrita ao tenant pelo @TenantId
+        // (decisao 0007, camada 3), entao "nao encontrou" ja significa
+        // "nao existe OU nao e deste tenant" - sem precisar comparar
+        // tenant a mao. Falha explicita, testavel e antes de escrever.
+        Canal canal = repositorioCanal.findById(canalId)
+                .orElseThrow(() -> new CanalDesconhecidoException(
+                        "Canal " + canalId + " nao existe ou nao pertence a este tenant."));
+
+        AdaptadorDeCanal adaptador = adaptadoresPorTipo.get(canal.getTipo());
+        if (adaptador == null) {
+            throw new IllegalStateException(
+                    "Nao ha AdaptadorDeCanal registrado para o tipo " + canal.getTipo()
+                            + " (canal " + canalId + "). Nada foi gravado.");
+        }
+
         // ATENCAO CRITICA: SQL nativo (abaixo) NAO recebe o predicado de
         // tenant que o Hibernate acrescenta sozinho via @TenantId em
         // consultas JPA (decisao 0007, camada 3) - aqui so o RLS (camada
@@ -177,18 +205,6 @@ public class ServicoIngestao {
             LOG.debug("Reenvio identico ignorado (tenant={}, canal={}, tipo={}, idExterno={})",
                     tenantId, canalId, tipoEvento, idExterno);
             return ResultadoIngestao.reenvioIdentico();
-        }
-
-        Canal canal = repositorioCanal.findById(canalId)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Evento " + idEvento + " gravado apontando para canal " + canalId
-                                + " que nao existe (ou nao pertence a este tenant) - dado inconsistente."));
-
-        AdaptadorDeCanal adaptador = adaptadoresPorTipo.get(canal.getTipo());
-        if (adaptador == null) {
-            throw new IllegalStateException(
-                    "Nao ha AdaptadorDeCanal registrado para o tipo " + canal.getTipo() + " (canal " + canalId
-                            + "). Evento " + idEvento + " gravado, mas nao pode ser traduzido ainda.");
         }
 
         ResultadoTraducao resultado = adaptador.traduzirPedido(payloadBruto, canalId);

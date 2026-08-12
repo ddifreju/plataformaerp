@@ -131,6 +131,33 @@ teste. Conferi o molde por grep, mas grep não é o banco: essa é a prova real.
 - O Maven Wrapper (`mvnw`) não existe. Rode `mvn wrapper:wrapper` no `backend/`
   na primeira vez que tiver Maven instalado.
 
+### Dívida da Fase 1 (levantada pelos revisores, ordenada por quando vai doer)
+
+1. **Reprocessar payload alterado não atualiza `Pedido` nem `Cliente`.**
+   As entidades não têm setter, por desenho. Efeito prático: o marketplace manda
+   "aguardando pagamento" e depois "pago" com o mesmo `id_externo`; o segundo
+   evento é gravado e auditável em `evento_ingerido`, mas `pedido.status` **não
+   muda**. É dívida consciente, e deve ser **a primeira coisa da Fase 2** — o
+   motor de margem não pode rodar sobre status desatualizado.
+2. **Falha de tradução desfaz o `evento_ingerido` inteiro.** As colunas
+   `status = ERRO` e `erro_mensagem` da V012 nunca são usadas: um payload
+   malformado "nunca existiu" para o sistema e o reenvio idêntico tenta de novo
+   para sempre. Vai doer no primeiro payload real, porque as fixtures são
+   hipótese.
+3. **`variacaoId` fica sempre nulo.** Casar item vendido com a variação do
+   catálogo exigiria consulta ao banco dentro do adaptador, o que quebraria a
+   pureza que os torna testáveis sem Postgres. A promessa de que "o pipeline
+   resolve" está num javadoc e **ainda não foi implementada em lugar nenhum**.
+   Sem isso, margem por SKU não fecha.
+4. **`RepositorioCusto.somaValorPorPedido` e `somaValorPorPeriodo` não têm
+   chamador nem teste.** Foram escritos adiantando a Fase 2. Ou são usados na
+   tarefa 14, ou devem sair.
+5. **`AdaptadorBling.traduzirPedido` tem ~140 linhas** com o laço de itens
+   embutido, enquanto o irmão do Mercado Livre extrai `parseItens`. Assimetria
+   de leitura entre dois arquivos que se leem em par. Não mexi porque refatorar
+   método longo sem compilador é troca ruim — fazer junto com o primeiro
+   `make test` que passar.
+
 ## Decisões tomadas
 
 Ver `docs/decisoes/`. Nesta execução: **0004 a 0017**.
