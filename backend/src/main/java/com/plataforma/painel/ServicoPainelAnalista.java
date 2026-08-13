@@ -39,7 +39,7 @@ public class ServicoPainelAnalista {
 
         var itensSemVariacao = repositorioItemPedido
                 .findTop100ByVariacaoIdIsNullOrderByCriadoEmDesc()
-                .stream().map(ItemItemSemVariacao::de).toList();
+                .stream().map(ItemPedidoSemVariacao::de).toList();
 
         var variacoesSemCusto = repositorioVariacao
                 .findTop100ByCustoUnitarioAtualIsNullAndAtivoTrueOrderByCriadoEmDesc()

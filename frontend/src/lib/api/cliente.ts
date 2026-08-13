@@ -1,4 +1,3 @@
-import { parseJsonPreservandoNumeros } from "./jsonSeguro";
 import type {
   ErroApi,
   RespostaCanal,

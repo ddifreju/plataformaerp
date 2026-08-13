@@ -21,7 +21,7 @@ import java.util.List;
  */
 public record RespostaFilaPendencias(
         List<ItemEventoComErro> eventosComErro,
-        List<ItemItemSemVariacao> itensSemVariacao,
+        List<ItemPedidoSemVariacao> itensSemVariacao,
         List<ItemVariacaoSemCusto> variacoesSemCusto,
         List<ItemDevolucaoAberta> devolucoesAbertas) {
 }

@@ -40,6 +40,33 @@ public class ServicoLogin {
      */
     @Transactional
     public void registrarAcessoBemSucedido(UUID usuarioId) {
+        // O try/catch NAO e defensivismo generico: sem ele, o javadoc
+        // acima ("nao bloqueia o login se falhar") seria mentira.
+        //
+        // Quando este metodo roda, a autenticacao JA ACONTECEU: o
+        // Authentication esta no SecurityContext e o cookie de sessao (com
+        // changeSessionId aplicado) ja esta a caminho do navegador. Se um
+        // timeout de conexao ou deadlock escapasse daqui, a excecao subiria
+        // por TratadorSucessoLogin.onAuthenticationSuccess ANTES do
+        // setStatus(204) - e o usuario receberia um erro 500 estando, de
+        // fato, logado.
+        //
+        // Esse e o pior tipo de bug para quem opera sozinha: o cliente diz
+        // "nao consegui entrar", o log mostra sessao criada com sucesso, e
+        // as duas coisas sao verdade.
+        //
+        // Registrar o ultimo acesso e informacao util, nunca condicao para
+        // entrar.
+        //
+        // ONDE FICA O try/catch, E POR QUE NAO E AQUI DENTRO:
+        // este metodo e @Transactional, entao ele roda dentro de um proxy.
+        // Capturar a excecao AQUI nao resolveria: uma falha de banco marca
+        // a transacao como rollback-only, e o commit feito pelo proxy - ja
+        // FORA deste corpo - lancaria UnexpectedRollbackException, que
+        // passaria por cima de qualquer catch escrito aqui.
+        // Por isso a guarda mora em TratadorSucessoLogin, que chama este
+        // metodo de fora do limite transacional e por isso consegue
+        // capturar tanto a falha do UPDATE quanto a do commit.
         int linhasAfetadas = repositorioUsuario.marcarUltimoAcesso(usuarioId, OffsetDateTime.now());
         if (linhasAfetadas != 1) {
             LOG.warn("marcarUltimoAcesso afetou {} linha(s) para usuarioId={} - esperado exatamente 1. "

@@ -134,7 +134,7 @@ export interface ItemEventoComErro {
   acao: string;
 }
 
-export interface ItemItemSemVariacao {
+export interface ItemPedidoSemVariacao {
   id: string;
   pedidoId: string;
   skuOrigem: string | null;
@@ -162,7 +162,7 @@ export interface ItemDevolucaoAberta {
 
 export interface RespostaFilaPendencias {
   eventosComErro: ItemEventoComErro[];
-  itensSemVariacao: ItemItemSemVariacao[];
+  itensSemVariacao: ItemPedidoSemVariacao[];
   variacoesSemCusto: ItemVariacaoSemCusto[];
   devolucoesAbertas: ItemDevolucaoAberta[];
 }

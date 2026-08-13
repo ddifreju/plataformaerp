@@ -80,7 +80,7 @@ class ServicoPainelAnalistaTest {
         RespostaFilaPendencias resposta = servico.pendencias();
 
         assertEquals(1, resposta.itensSemVariacao().size());
-        ItemItemSemVariacao dto = resposta.itensSemVariacao().get(0);
+        ItemPedidoSemVariacao dto = resposta.itensSemVariacao().get(0);
         assertEquals(item.getId(), dto.id());
         assertEquals("SKU-1", dto.skuOrigem());
         assertFalse(dto.acao().isBlank());

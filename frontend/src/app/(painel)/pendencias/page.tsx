@@ -6,7 +6,7 @@ import { buscarPainelAnalista, ErroApiCliente } from "@/lib/api/cliente";
 import type {
   ItemDevolucaoAberta,
   ItemEventoComErro,
-  ItemItemSemVariacao,
+  ItemPedidoSemVariacao,
   ItemVariacaoSemCusto,
   RespostaFilaPendencias,
 } from "@/lib/api/tipos";
@@ -144,7 +144,7 @@ function SecaoEventosComErro({ itens }: { itens: ItemEventoComErro[] }) {
   );
 }
 
-function SecaoItensSemVariacao({ itens }: { itens: ItemItemSemVariacao[] }) {
+function SecaoItensSemVariacao({ itens }: { itens: ItemPedidoSemVariacao[] }) {
   return (
     <section aria-labelledby="titulo-itens-sem-variacao">
       <div id="titulo-itens-sem-variacao">
