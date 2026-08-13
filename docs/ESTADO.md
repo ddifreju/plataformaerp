@@ -1,7 +1,7 @@
 # Estado do Projeto
 
 **Atualizado em:** 12 de agosto de 2026
-**Fase:** 2 concluída — próxima: 3 (interface)
+**Fase:** 3 concluída — roadmap inicial completo
 **Modo:** autônomo (gerente decide, registra e segue)
 
 ---
@@ -37,9 +37,9 @@ Execute em ordem. Não pergunte antes de começar cada uma.
 
 ### Fase 3 — Interface
 17. [x] Autenticação e sessão
-18. [ ] Visão do dono: faturamento bruto → lucro real, com decomposição
-19. [ ] Visão do gestor: gargalos do processo
-20. [ ] Visão do analista: fila de pendências
+18. [x] Visão do dono: faturamento bruto → lucro real, com decomposição
+19. [x] Visão do gestor: gargalos do processo
+20. [x] Visão do analista: fila de pendências
 
 ---
 
@@ -58,10 +58,11 @@ depois de reiniciar o computador. Ver `docs/PENDENCIAS.md`.
 - **`./mvnw -B test-compile`: BUILD SUCCESS.** O risco nº 1 da Fase 0 —
   `CurrentTenantIdentifierResolver<UUID>`, que dependia do Hibernate 6.4+ —
   **compila**.
-- **67 testes sem banco passando, 0 falhas** (de 116 casos no projeto; os
-  demais dependem de Testcontainers). Cobrem a regra do dinheiro
-  (`SuporteJsonTest`), os dois adaptadores, o contexto de tenant, as entidades
-  e todo o núcleo puro do motor de margem.
+- **109 testes sem banco passando, 0 falhas.** Cobrem a regra do dinheiro
+  (`SuporteJsonTest`), os dois adaptadores, o contexto de tenant, as entidades,
+  todo o núcleo puro do motor de margem, o fluxo de login e os painéis.
+  Os demais dependem de Testcontainers.
+- **Frontend**: `npm run build` e `npm run lint` limpos.
 - **O exemplo numérico do documento fiscal (§2.5) foi conferido à mão contra o
   teste**: N2 `51,2636`, N3 `44,9636`, 25,64% e 22,49%. O teste usa `compareTo`,
   exercita os 3 rótulos de teto e rastreia os 7 IDs de custo — não passa por
@@ -87,9 +88,26 @@ suíte de isolamento por Testcontainers.
 `make test` roda o `RlsAtivoEmTodasAsTabelasTest`, que descobre as tabelas por
 `information_schema` e exige RLS forçado + 4 policies em **todas** que tenham
 `tenant_id`. Como ele é genérico, a primeira execução valida o molde da decisão
-0010 nas **13 tabelas (12 da Fase 1 + `taxa_canal`) de uma vez** — sem ninguém
-ter atualizado o teste. Conferi o molde por grep nas 13, mas grep não é o banco:
-essa é a prova real.
+0010 nas **14 tabelas de uma vez** (12 da Fase 1 + `taxa_canal` + `usuario`) —
+sem ninguém ter atualizado o teste. Conferi o molde por grep nas 14, mas grep
+não é o banco: essa é a prova real.
+
+Junto rodam os testes de isolamento que também nunca executaram:
+`IsolamentoFaseUmTest`, `IsolamentoMargemTest`, `ChaveCompostaImpedeReferenciaCruzadaTest`
+e o `IsolamentoLoginTest` — este último prova que a fresta de login (decisão
+0024) não vira travessia lateral entre tenants.
+
+### Depois do reboot, valide também a ponta a ponta
+
+Nada do frontend foi testado contra a API real. Suba os dois e confira
+manualmente:
+```bash
+make preparar                      # backend
+cd frontend && npm run dev         # http://localhost:3000
+```
+O que mais provavelmente vai divergir: nomes de campo dos DTOs no JSON,
+formato dos erros, e o fluxo de sessão (cookie + 401). O frontend foi escrito
+lendo os DTOs Java linha a linha, mas ler não é executar.
 
 ### A limitação nº 1 — RESOLVIDA em 12/08/2026
 
