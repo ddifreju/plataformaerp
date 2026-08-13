@@ -85,24 +85,20 @@ suíte de isolamento por Testcontainers.
 ter atualizado o teste. Conferi o molde por grep nas 13, mas grep não é o banco:
 essa é a prova real.
 
-### Riscos da Fase 1 que só o primeiro `make test` resolve
+### Duas limitações que NENHUM teste vai pegar
 
-1. **`char(n)` vs `varchar` no `ddl-auto: validate`** — colunas `char` (`ncm`,
-   `cest`, `uf_entrega`, `moeda`, `hash_payload`) mapeadas com
-   `@Column(length=n)`. Se o validador do Hibernate tratar `bpchar` e `varchar`
-   como incompatíveis, a aplicação **não sobe**. É o maior risco da fase.
-2. **`@JdbcTypeCode(SqlTypes.JSON)` → `jsonb`** — se o dialeto mapear para
-   `json` em vez de `jsonb`, o `validate` falha em todas as colunas jsonb.
-3. **`?::jsonb` via `JdbcTemplate`** no pipeline de ingestão.
-4. **Fixtures são hipótese, não payload real.** A documentação oficial do
+Não são bugs e não se resolvem rodando a suíte. São limites do que o sistema
+sabe hoje, e precisam ser ditos ao usuário em vez de corrigidos no código.
+
+1. **As fixtures são hipótese, não payload real.** A documentação oficial do
    Mercado Livre e do Bling bloqueou o acesso (403/404). Os testes de tradução
    passam contra o que **acreditamos** ser o formato. O primeiro payload real
-   pode invalidar parte do mapeamento — e isso é esperado, não é bug.
-   O teste que **não** depende disso é o `SuporteJsonTest`, que prova a regra do
-   dinheiro de forma independente da fixture.
-5. **Reconciliação ML × Bling não existe** (decisão 0017): somar canais
-   sobrepostos pode contar a mesma venda duas vezes. Isso **restringe a tarefa
-   16** — a resposta de "quanto sobrou" precisa declarar o escopo de canal.
+   pode invalidar parte do mapeamento — isso é esperado. O `SuporteJsonTest`,
+   que prova a regra do dinheiro, é o único que não depende disso.
+2. **Reconciliação ML × Bling não existe** (decisão 0017): somar canais
+   sobrepostos pode contar a mesma venda duas vezes. **Restringe a tarefa 16** —
+   a resposta de "quanto sobrou" declara o escopo de canal, em vez de somar às
+   cegas.
 
 ### Onde é mais provável que quebre no primeiro `make test`
 
