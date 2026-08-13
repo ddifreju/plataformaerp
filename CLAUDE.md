@@ -14,7 +14,7 @@ manutenibilidade acima de tudo.
 - Backend: Java 21 + Spring Boot 3
 - Integrações: Apache Camel
 - Banco: PostgreSQL 16 + pgvector, com Row Level Security
-- Frontend: Next.js 15 + React + Tailwind
+- Frontend: Next.js 16 + React 19 + Tailwind (ver decisão 0022)
 - Infra: Docker Compose (dev), VPS (produção inicial)
 
 ## Regras inegociáveis
