@@ -1,5 +1,7 @@
 package com.plataforma.pedido;
 
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,8 +18,18 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * (com.plataforma.ingestao.ServicoIngestao) como a SEGUNDA trava contra
  * pedido duplicado, independente do evento_ingerido (ver comentario da
  * V012 sobre as duas travas serem independentes de proposito).
+ *
+ * findByCanalIdAndFeitoEm... usa o indice ix_pedido_tenant_canal_feito_em
+ * (V008, "faturamento por canal no periodo"). E a base da tarefa 16
+ * (com.plataforma.margem.ServicoMargemPeriodo): o CANAL e parametro
+ * OBRIGATORIO, nunca opcional - decisao 0017 (reconciliacao entre fontes
+ * e explicita): somar pedidos de canais potencialmente sobrepostos (ML +
+ * Bling espelhando a mesma venda) contaria a mesma venda duas vezes.
  */
 public interface RepositorioPedido extends JpaRepository<Pedido, UUID> {
 
     Optional<Pedido> findByCanalIdAndIdExterno(UUID canalId, String idExterno);
+
+    List<Pedido> findByCanalIdAndFeitoEmGreaterThanEqualAndFeitoEmLessThan(
+            UUID canalId, OffsetDateTime inicio, OffsetDateTime fim);
 }

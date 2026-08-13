@@ -2,6 +2,8 @@ package com.plataforma.comum.web;
 
 import com.plataforma.comum.tenant.TenantDesconhecidoException;
 import com.plataforma.comum.tenant.TenantNaoResolvidoException;
+import com.plataforma.margem.PeriodoInvalidoException;
+import com.plataforma.margem.TaxaCanalAmbiguaException;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +44,31 @@ public class TratadorGlobalDeErros {
         return ResponseEntity
                 .status(HttpStatus.FORBIDDEN)
                 .body(new ErroApi("tenant_desconhecido", erro.getMessage()));
+    }
+
+    /**
+     * Periodo invalido pedido a tarefa 16 (com.plataforma.margem) -
+     * "caminho de erro coberto, nao so o caminho feliz" (CLAUDE.md).
+     */
+    @ExceptionHandler(PeriodoInvalidoException.class)
+    public ResponseEntity<ErroApi> tratarPeriodoInvalido(PeriodoInvalidoException erro) {
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ErroApi("periodo_invalido", erro.getMessage()));
+    }
+
+    /**
+     * Erro de CADASTRO em taxa_canal (duas linhas empatadas em
+     * especificidade - secao 8.2 do documento fiscal). 409 porque o
+     * problema esta no estado dos dados cadastrados, nao na requisicao em
+     * si - a mesma chamada volta a funcionar assim que o cadastro for
+     * corrigido, sem mudar nenhum parametro.
+     */
+    @ExceptionHandler(TaxaCanalAmbiguaException.class)
+    public ResponseEntity<ErroApi> tratarTaxaCanalAmbigua(TaxaCanalAmbiguaException erro) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ErroApi("taxa_canal_ambigua", erro.getMessage()));
     }
 
     /**

@@ -1,6 +1,5 @@
 package com.plataforma.custo;
 
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -13,11 +12,19 @@ import org.springframework.data.jpa.repository.Query;
  * depende. Predicado de tenant vem do @TenantId da entidade (decisao
  * 0007) - nenhum metodo aqui deve escrever "WHERE tenant_id = ?" a mao.
  *
- * somaValorPorPedido implementa a soma S1 do cabecalho da V010
- * ("SELECT sum(valor) FROM custo WHERE pedido_id = :id") via @Query
- * JPQL (nao nativa): o Hibernate ainda acrescenta o predicado de tenant
- * normalmente em JPQL, so @Query nativeQuery=true escaparia disso. Por
- * isso esta consulta NAO e um risco de vazamento entre tenants.
+ * DECISAO DA TAREFA 14/15 SOBRE somaValorPorPedido/somaValorPorPeriodo
+ * (que existiam aqui sem nenhum chamador): REMOVIDOS, nao adotados.
+ * Motivo: o motor de margem (com.plataforma.margem.MotorMargemPedido)
+ * precisa da soma DECOMPOSTA POR NATUREZA/BLOCO (secao 2.2 do documento
+ * fiscal - "N2 = N1 - C(B2) - C(B3) - ... "), nao de um total unico por
+ * pedido; e a tarefa 16 (P&L do periodo) precisa da mesma decomposicao,
+ * mais o escopo por canal (decisao 0017), que a soma cega de periodo nao
+ * carregava. Um SUM(valor) sozinho, sem GROUP BY natureza, teria que ser
+ * refeito de qualquer jeito para alimentar a memoria de calculo (regra 3
+ * do CLAUDE.md) - por isso os dois metodos abaixo devolvem List<Custo> e
+ * a agregacao por bloco acontece em Java
+ * (com.plataforma.margem.MotorMargemPedido), num lugar so, testado sem
+ * banco.
  */
 public interface RepositorioCusto extends JpaRepository<Custo, UUID> {
 
@@ -28,22 +35,22 @@ public interface RepositorioCusto extends JpaRepository<Custo, UUID> {
     List<Custo> findByDevolucaoId(UUID devolucaoId);
 
     /**
-     * S1 do cabecalho da V010: custo real de um pedido e a soma direta,
-     * sem UNION e sem distinguir nivel de pedido/item - custo de item ja
-     * carrega pedido_id preenchido (S3).
-     */
-    @Query("SELECT COALESCE(SUM(c.valor), 0) FROM Custo c WHERE c.pedidoId = :pedidoId")
-    BigDecimal somaValorPorPedido(UUID pedidoId);
-
-    /**
-     * S4 do cabecalho da V010: custo do periodo, SEM as linhas derivadas
-     * de rateio (rateadoDeCustoId IS NULL), senao a fatura-mae e as
-     * linhas-filha do rateio seriam somadas duas vezes.
+     * Custo de PERIODO explicitamente ligado a um CANAL (custo.canal_id
+     * preenchido - ex.: fatura mensal de Ads ou mensalidade de uma conta
+     * do Mercado Livre especifica), nao rateado (rateadoDeCustoId IS
+     * NULL - S4 do cabecalho da V010, senao a fatura-mae e as linhas-filha
+     * do rateio seriam somadas duas vezes) e sem pedido (pedidoId IS
+     * NULL - custo de pedido ja entra pela soma por pedido, nao por
+     * aqui). Usada pela tarefa 16 para compor N4 dentro do escopo de UM
+     * canal (decisao 0017: nunca somamos canais potencialmente
+     * sobrepostos as cegas).
      */
     @Query("""
-            SELECT COALESCE(SUM(c.valor), 0) FROM Custo c
-            WHERE c.competenciaEm >= :inicio AND c.competenciaEm < :fim
+            SELECT c FROM Custo c
+            WHERE c.canalId = :canalId
+              AND c.pedidoId IS NULL
               AND c.rateadoDeCustoId IS NULL
+              AND c.competenciaEm >= :inicio AND c.competenciaEm < :fim
             """)
-    BigDecimal somaValorPorPeriodo(OffsetDateTime inicio, OffsetDateTime fim);
+    List<Custo> buscarCustoDePeriodoDoCanal(UUID canalId, OffsetDateTime inicio, OffsetDateTime fim);
 }
