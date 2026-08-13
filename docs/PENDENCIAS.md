@@ -19,25 +19,18 @@ Revise este arquivo uma vez por dia.
       (A demora foi por sockets órfãos que o Windows não apagava; resolvido
       afastando `AppData\Local\Docker\run` e `docker-secrets-engine`.)
 
-**Toolchain completo.** Uma limitação de ambiente permanece:
+**Toolchain completo.**
 
-- [ ] **O Tomcat não sobe nesta máquina.** `java -jar` e `mvn spring-boot:run`
-      falham com `Unable to establish loopback connection` /
-      `SocketException: Invalid argument: connect` no conector NIO.
-      **Não é o código.** Confirmei isolando: o Node escuta em `127.0.0.1`
-      normalmente, e um `ServerSocket` Java puro faz `bind` e `connect` de
-      loopback sem erro. Falha só o par de sockets que o NIO do Tomcat cria
-      internamente para acordar o *selector*.
-      Suspeito de antivírus/firewall interceptando conexões locais do
-      `java.exe`. Caminhos a tentar, do mais barato ao mais caro:
-      1. Liberar `java.exe` no antivírus e no firewall do Windows
-      2. `netsh winsock reset` e reiniciar
-      3. Conferir se o `%WINDIR%\System32\drivers\etc\hosts` tem
-         `127.0.0.1 localhost` sem nada estranho
-      **Impacto real:** impede abrir a interface no navegador. **Não** impede
-      desenvolver nem validar — o contrato inteiro da API é verificado por
-      `ContratoApiTest`, que exercita filtros, Spring Security, controllers e
-      serialização sem abrir socket.
+- [x] **Tomcat não subia nesta máquina — RESOLVIDO em 13/08/2026.**
+      A causa NÃO era antivírus: era **reserva de portas do Hyper-V/Docker**
+      (o winnat reservava faixas que englobavam as portas efêmeras que o NIO
+      do Tomcat usa para o par interno de sockets do *selector*).
+      Corrigido pela Juliana, como administrador, com:
+      `net stop winnat && net start winnat` e
+      `netsh int ipv4 set dynamic tcp start=49152 num=16384`.
+      O Tomcat agora inicializa normalmente na porta 8080.
+      Com isso, validar o **frontend contra a API real** deixou de ser
+      bloqueio — está liberado.
 
 Estado da validação em 13/08/2026:
 - **A suíte inteira passa contra Postgres real: 150 testes, 0 falhas, 0 erros**
@@ -45,9 +38,10 @@ Estado da validação em 13/08/2026:
 - O molde de RLS está correto nas 14 tabelas, provado pelo teste sentinela
 - Frontend: `build`, `lint` e 20 testes limpos
 
-O que ainda não foi provado: o **frontend contra a API real** (foi escrito
-lendo os DTOs Java, mas ler não é executar) e as **fixtures de Mercado Livre e
-Bling**, que continuam sendo hipótese até o primeiro payload verdadeiro.
+O que ainda não foi provado: as **fixtures de Mercado Livre e Bling**, que
+continuam sendo hipótese até o primeiro payload verdadeiro. (O frontend contra
+a API real ficou possível com o conserto do winnat acima — validação visual em
+andamento em 13/08/2026.)
 
 ## Repositório remoto — RESOLVIDO
 
@@ -55,10 +49,11 @@ Bling**, que continuam sendo hipótese até o primeiro payload verdadeiro.
       Push inicial feito pela fundadora. Existe backup fora da máquina.
       **O push continua sendo dela** — eu commito localmente, ela publica.
 
-## Credenciais e contas (resolva TUDO antes de rodar autônomo)
+## Credenciais e contas (resolva conforme a fase exigir)
 
-Marque conforme for conseguindo. Cada item não resolvido é uma parte do
-sistema que não pode ser construída nem testada de verdade.
+Marque conforme for conseguindo. Credenciais externas atrasam a validação,
+não a construção — cada item não resolvido é uma parte do sistema que segue
+construída contra mock até a credencial chegar (ver "Como usar", no fim).
 
 - [ ] **Chave de API de LLM** (Anthropic ou OpenAI) — sem isso, nenhuma
       funcionalidade de IA funciona
