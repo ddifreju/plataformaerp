@@ -1,9 +1,16 @@
 /**
  * Tipos espelhando, campo a campo, os DTOs do backend. Nenhum campo
  * inventado, nenhum campo omitido — se o backend não devolve algo, o
- * tipo também não promete. Todo `BigDecimal`/número do backend chega
- * como `string` (ver `lib/api/jsonSeguro.ts`): o "número" aqui é sempre
- * o TEXTO decimal exatamente como veio na resposta.
+ * tipo também não promete.
+ *
+ * Todo `BigDecimal` do backend (dinheiro, percentual) chega como `string`
+ * — o `ConfiguracaoJackson` do backend garante isso na origem
+ * (`toPlainString()`), então o "número" nesses campos é sempre o TEXTO
+ * decimal exatamente como veio na resposta; nunca faça conta com eles,
+ * use `lib/dinheiro.ts`. Contagens inteiras pequenas (`int`/`long` no
+ * backend: `quantidade`, `tentativas`, `quantidadePedidos` etc.) NÃO são
+ * `BigDecimal` e chegam como `number` de verdade — não têm risco de perda
+ * de precisão nesse tamanho.
  *
  * Fonte de cada tipo, para conferência: `backend/src/main/java/com/plataforma/...`.
  */

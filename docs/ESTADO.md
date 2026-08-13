@@ -174,6 +174,29 @@ sabe hoje, e precisam ser ditos ao usuário em vez de corrigidos no código.
    SQL). Se `sqlsGerados` vier vazio, adicione `@Import(...)`.
 6. **`EXCLUDE USING gist` da V013** — sintaxe revisada mas nunca aplicada.
 
+### Invariantes que não podem regredir (da auditoria da Fase 3)
+
+A auditoria de segurança **não achou vazamento** e listou o que sustenta isso.
+Se alguma destas cair, o isolamento cai junto:
+
+1. **`usuario.tenant_id` fora do `GRANT UPDATE` e `updatable = false` no JPA.**
+   É o que torna "tenant do contexto == tenant do usuário" uma garantia
+   estrutural, não disciplina.
+2. **`FiltroTenant` registrado fora do ciclo `@Component`**, com ordem explícita
+   `DEFAULT_FILTER_ORDER + 1`. Sem isso, ele poderia rodar antes da cadeia de
+   segurança e não haveria usuário de quem extrair o tenant.
+3. **Nenhum endpoint `GET` pode alterar estado** — é a condição 1 da decisão
+   0025, e é o que sustenta o CSRF desligado. Vale conferir em toda revisão.
+4. **`papel` (DONO/GESTOR/ANALISTA) não é autorização** e nada finge que é.
+   Vira autorização de verdade só com matriz papel×operação e testes de negação.
+
+### Uma armadilha de teste que a auditoria encontrou
+
+Em dev, `frontend/next.config.ts` faz rewrite de `/api/*` para o backend. Isso é
+bom para a segurança (o navegador só fala com a própria origem), mas significa
+que **testar em dev não exercita a configuração de CORS**. Um erro nela só
+apareceria em produção ou numa chamada direta fora do rewrite.
+
 ### Dívida conhecida (não bloqueia)
 
 - `ConsultaAuditada` tem `@Id` sem `@GeneratedValue`, então `save()` chama

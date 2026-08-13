@@ -26,12 +26,33 @@ export class ErroApiCliente extends Error {
 const MENSAGEM_ERRO_GENERICA = "Não consegui falar com o servidor. Tente novamente em instantes.";
 
 /**
+ * Caminhos onde um 401 NÃO significa "sessão expirada" e por isso não
+ * deve disparar o redirecionamento duro para `/login` (achado de
+ * segurança da revisão da Fase 3): `entrar()` chama `/api/login` e senha
+ * errada também devolve 401 — sem esta exclusão, cada tentativa malsucedida
+ * recarregava a página inteira, e a pessoa nunca chegava a ver o
+ * `setErro("E-mail ou senha inválidos.")` da tela de login. `/api/logout`
+ * entra pelo mesmo motivo: uma sessão já encerrada não deveria "redirecionar
+ * para o login" como se fosse uma sessão que expirou no meio do uso.
+ */
+const CAMINHOS_SEM_REDIRECIONAMENTO_NO_401 = ["/api/login", "/api/logout"];
+
+/**
  * Todas as chamadas passam por aqui. `credentials: 'include'` (decisão
  * 0022/README: "o navegador nunca escolhe o tenant" — o cookie de sessão
- * é quem carrega essa informação, resolvido no servidor). Nunca usa
- * `response.json()`: o corpo é lido como texto e reparseado por
- * `parseJsonPreservandoNumeros`, para que nenhum valor monetário passe
- * pelo `number` nativo do JavaScript nesse meio do caminho.
+ * é quem carrega essa informação, resolvido no servidor).
+ *
+ * Usa `response.json()` direto: o backend garante, na origem, que todo
+ * `BigDecimal` (dinheiro) sai como STRING via `toPlainString()`
+ * (`ConfiguracaoJackson`, `backend/.../comum/web/ConfiguracaoJackson.java`)
+ * — nunca como número JSON. Não existe mais um valor monetário que o
+ * `JSON.parse` nativo possa converter em `double` pelo caminho. Um parser
+ * escrito à mão (`jsonSeguro.ts`) existiu aqui para se defender do mesmo
+ * risco quando essa garantia só existia do lado do frontend; com o
+ * contrato do backend fechado, mantê-lo era dívida (~190 linhas sem guarda
+ * de profundidade, sem tratar literais malformados) para proteger algo que
+ * já está protegido na origem. NÃO reintroduza esse parser sem que a
+ * garantia do `ConfiguracaoJackson` deixe de valer.
  */
 async function requisitar<T>(caminho: string, opcoes: RequestInit = {}): Promise<T> {
   let resposta: Response;
@@ -48,7 +69,7 @@ async function requisitar<T>(caminho: string, opcoes: RequestInit = {}): Promise
     throw new ErroApiCliente("falha_de_rede", MENSAGEM_ERRO_GENERICA, 0);
   }
 
-  if (resposta.status === 401) {
+  if (resposta.status === 401 && !CAMINHOS_SEM_REDIRECIONAMENTO_NO_401.some((c) => caminho.startsWith(c))) {
     if (typeof window !== "undefined") {
       // Redirecionamento "duro" (não `router.push`) de propósito: este
       // módulo não é um componente React (é chamado de qualquer lugar,
@@ -61,7 +82,7 @@ async function requisitar<T>(caminho: string, opcoes: RequestInit = {}): Promise
   }
 
   const texto = await resposta.text();
-  const corpo = texto.length > 0 ? (parseJsonPreservandoNumeros(texto) as unknown) : null;
+  const corpo = texto.length > 0 ? (JSON.parse(texto) as unknown) : null;
 
   if (!resposta.ok) {
     const erroApi = corpo as Partial<ErroApi> | null;
