@@ -112,14 +112,33 @@ inexistente devolvem resposta idêntica; e canal de outro tenant não devolve
 dado. **Nenhuma divergência de nome ou tipo** entre a API real e
 `frontend/src/lib/api/tipos.ts`.
 
+### Ambiente de demonstração pronto para ver no navegador
+
+`make dados-demo` popula um tenant navegável. **Credenciais (só em banco
+local):** `dono@demo.plataforma`, `gestor@demo.plataforma` e
+`analista@demo.plataforma`, todos com senha `demo1234`.
+
+O que o seed contém: 3 canais (ML Clássico, ML Premium, Bling), 8 produtos com
+16 variações, 12 clientes, **50 pedidos em 90 dias** (ticket R$ 79,90–299,90,
+média R$ 190,50), 246 linhas de custo, 6 devoluções com motivo e 4 eventos de
+ingestão em `ERRO`.
+
+Os **três rótulos** aparecem de propósito: ~32 `CALCULADA`, ~11 `COM_TETO`
+(variação sem custo cadastrado ou item sem variação casada) e 7
+`INDETERMINADA` (repasse previsto ausente). Um bloco de conferência no fim do
+script **recusa o seed** se algum rótulo ficar de fora.
+
+Datas relativas a `CURRENT_DATE` (a demo não envelhece) e geração
+determinística, sem `random()`: um número conferido na tela hoje continua o
+mesmo amanhã.
+
 ### O que ainda não foi validado
 
-- **O navegador nunca abriu a interface.** O Tomcat não sobe nesta máquina
-  (falha de loopback no conector NIO — ver `docs/PENDENCIAS.md`). Não é o
-  código: Node escuta em `127.0.0.1` e um `ServerSocket` Java puro funciona.
-  O contrato está coberto pelo `ContratoApiTest`; o que falta é o visual e os
-  atributos do cookie no fio (`HttpOnly`/`SameSite`/`Secure`), que só um
-  container real expõe.
+- **O navegador ainda não abriu a interface.** O bloqueio do Tomcat foi
+  resolvido (era reserva de portas do Hyper-V/winnat, não antivírus), mas a
+  validação visual é da fundadora. O contrato está coberto pelo
+  `ContratoApiTest`; o que só um container real expõe são os atributos do
+  cookie no fio (`HttpOnly`/`SameSite`/`Secure`).
 - **As fixtures continuam sendo hipótese** (a documentação do ML e do Bling
   respondeu 403/404). Só o primeiro payload real resolve.
 - **CORS não é exercitado em dev**, por causa do rewrite do Next. Fica para
@@ -320,6 +339,7 @@ Duas decisões nasceram de eu ter errado e estão registradas assim: **0011**
 | 2026-08-12 | Frontend inicializado | `create-next-app` abortou o `npm install` por rede transitória, mas já tinha gerado a árvore: bastou completar. Next 16 + React 19 + Tailwind, `npm run build` passa. `CLAUDE.md` atualizado de 15 para 16 (decisão 0022) — documentação que mente sobre a stack é pior que documentação ausente. |
 | 2026-08-12 | 17. Autenticação e sessão | Feito. Spring Security com sessão em cookie, BCrypt custo 12. **O `X-Tenant-Id` foi removido**, não desativado: com sessão existindo, ele seria escalação horizontal trivial. Fecha o `// PROVISÓRIO` aberto na decisão 0007 na Fase 0. A tabela `usuario` (V014) precisou de uma quinta policy para o login enxergar a própria linha antes de haver tenant — decisão 0024, com o que ela expõe dito sem eufemismo. |
 | 2026-08-12 | Endpoints das visões 19 e 20 | Feito. `/api/painel/gestor` e `/api/painel/analista`, construídos **só sobre dado que existe**: pedido por status, evento com `status=ERRO`, devolução aberta, lacuna de custo. Processo, nunca pessoa (decisões 0003 e 0012). 88 testes puros. |
+| 2026-08-13 | Seed de demonstração navegável | 3 canais, 50 pedidos em 90 dias, 6 devoluções, 4 eventos em `ERRO`, os três rótulos representados. Dois bugs meus no gerador, pegos por conferência dos dados e não por teste: `(n * 23) % 23` é sempre zero, então **todos os 50 pedidos saíram com o mesmo ticket** (multiplicador precisa ser coprimo do módulo), e o canal Bling ficou sem nenhum pedido. Suíte: 161 backend + 20 frontend, build e lint limpos. |
 | 2026-08-13 | **Contrato validado ponta a ponta** | `ContratoApiTest` (11 casos) exercita filtros, Spring Security, controllers e Jackson contra Postgres real. **161 testes, 0 falhas.** Confirmou dinheiro-como-texto no JSON cru, ausência de vazamento em DTO, resposta idêntica para senha errada e e-mail inexistente, e isolamento por canal alheio. Zero divergência entre a API e `tipos.ts` do frontend. |
 | 2026-08-13 | **Bug crítico: login não persistia sessão** | O `FiltroLoginJson`, construído à mão, não recebia `SecurityContextRepository` e ficava com o default de requisição. Login respondia 204, senha era conferida, sessão era criada — e a requisição seguinte chegava **anônima**. O sistema era inacessível por trás do login, em silêncio. Nenhuma das três revisões por leitura pegou. Corrigido com `DelegatingSecurityContextRepository`. |
 | 2026-08-13 | Dados de demonstração | `make dados-demo` (decisão 0028): fora do Flyway, com duas travas contra rodar em produção e senha gerada pelo pgcrypto. Corrigido `valor_repasse_previsto`, cuja ausência faria os dois pedidos saírem `INDETERMINADA` — o script contradizia o próprio comentário. |
