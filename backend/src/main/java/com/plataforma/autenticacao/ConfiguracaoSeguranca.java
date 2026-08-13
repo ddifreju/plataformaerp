@@ -19,6 +19,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
+import org.springframework.security.web.context.DelegatingSecurityContextRepository;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -92,6 +95,31 @@ public class ConfiguracaoSeguranca {
         // estaria silenciosamente desligada, apesar de nunca termos
         // pedido para desliga-la.
         filtroLogin.setSessionAuthenticationStrategy(new ChangeSessionIdAuthenticationStrategy());
+
+        // O LOGIN NAO FUNCIONAVA SEM ESTA LINHA. Encontrado pelo
+        // ContratoApiTest, na primeira vez que o fluxo foi exercitado de
+        // ponta a ponta.
+        //
+        // Mesma armadilha da linha acima, e pela mesma razao: filtro
+        // construido a mao nao recebe o que o .formLogin() configuraria.
+        // O default de fabrica de AbstractAuthenticationProcessingFilter e
+        // RequestAttributeSecurityContextRepository, que guarda o
+        // SecurityContext como ATRIBUTO DA REQUISICAO - some no fim dela.
+        //
+        // O efeito era o pior possivel: POST /api/login respondia 204
+        // (sucesso!), a senha era conferida de verdade, a sessao ate era
+        // criada - e a requisicao SEGUINTE chegava anonima. Ou seja, o
+        // sistema inteiro era inacessivel por tras do login, e o login
+        // nao dava nenhum sinal de erro. Nenhuma das tres revisoes por
+        // leitura pegou isso, porque o codigo "parece" completo.
+        //
+        // DelegatingSecurityContextRepository(HttpSession..., RequestAttribute...)
+        // e exatamente o que o Spring monta por padrao na cadeia: grava na
+        // sessao (sobrevive entre requisicoes) e tambem no atributo da
+        // requisicao (leitura barata dentro da mesma).
+        filtroLogin.setSecurityContextRepository(new DelegatingSecurityContextRepository(
+                new HttpSessionSecurityContextRepository(),
+                new RequestAttributeSecurityContextRepository()));
 
         http
                 // CSRF DESLIGADO, deliberadamente. O vetor classico de CSRF

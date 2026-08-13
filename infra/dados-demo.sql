@@ -160,13 +160,21 @@ VALUES (
 -- ---------------------------------------------------------------------
 -- Reproduz o exemplo numerico da secao 2.5 do documento fiscal:
 -- N0 199,9000 / N2 51,2636 / N3 44,9636.
+-- valor_repasse_previsto PRECISA estar preenchido, e o motivo nao e
+-- obvio: quando ele e NULL, ConferenciaRepasse.conferir devolve a lacuna
+-- #17 (repasse_previsto_ausente), de vies INDETERMINADA - e QUALQUER
+-- lacuna indeterminada faz o rotulo do pedido virar INDETERMINADA, nunca
+-- CALCULADA. Ou seja: sem esta coluna, o cenario "fecha CALCULADA" nao
+-- fecharia, e o script mentiria no proprio comentario.
+-- Valor conforme a secao 2.6: N0 - B1 - B3 - frete - B5
+--   199,9000 - 0 - 25,9870 - 24,9000 - 0 = 149,0130
 INSERT INTO pedido (id, tenant_id, canal_id, id_externo, status, feito_em,
-                    valor_total_pedido, valor_bruto_itens, moeda)
+                    valor_total_pedido, valor_bruto_itens, valor_repasse_previsto, moeda)
 VALUES ('77777777-7777-7777-7777-777777777777',
         '11111111-1111-1111-1111-111111111111',
         '33333333-3333-3333-3333-333333333333',
         'ML-DEMO-0001', 'ENTREGUE', now() - interval '10 days',
-        199.9000, 199.9000, 'BRL');
+        199.9000, 199.9000, 149.0130, 'BRL');
 
 INSERT INTO item_pedido (id, tenant_id, pedido_id, variacao_id, sku_origem,
                          titulo_origem, quantidade, valor_unitario_bruto, valor_total_linha)
@@ -216,13 +224,16 @@ VALUES
 -- A variacao existe e esta casada, mas NAO tem custo_unitario_atual.
 -- E o caso que o produto precisa mostrar com honestidade: "sua margem e
 -- no maximo X, a real e menor".
+-- Mesma razao do pedido 1: 149,9000 - 19,4870 - 22,5000 = 107,9130.
+-- Sem isso este pedido sairia INDETERMINADA em vez de COM_TETO, e o
+-- cenario perderia justamente o caso que ele existe para mostrar.
 INSERT INTO pedido (id, tenant_id, canal_id, id_externo, status, feito_em,
-                    valor_total_pedido, valor_bruto_itens, moeda)
+                    valor_total_pedido, valor_bruto_itens, valor_repasse_previsto, moeda)
 VALUES ('77777777-7777-7777-7777-777777777778',
         '11111111-1111-1111-1111-111111111111',
         '33333333-3333-3333-3333-333333333333',
         'ML-DEMO-0002', 'ENVIADO', now() - interval '5 days',
-        149.9000, 149.9000, 'BRL');
+        149.9000, 149.9000, 107.9130, 'BRL');
 
 INSERT INTO item_pedido (id, tenant_id, pedido_id, variacao_id, sku_origem,
                          titulo_origem, quantidade, valor_unitario_bruto, valor_total_linha)
