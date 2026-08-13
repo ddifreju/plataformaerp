@@ -1,26 +1,62 @@
 @import "tailwindcss";
 
 :root {
+  /* Neutros — base de texto e superfície */
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #0f172a;      /* slate-900: quase preto, não preto puro */
+  --superficie: #f8fafc;      /* slate-50: fundo de cartão/tabela, sutil */
+  --borda: #e2e8f0;           /* slate-200 */
+  --texto-secundario: #475569; /* slate-600: legenda, rótulo, texto de apoio */
+  --texto-desabilitado: #94a3b8; /* slate-400 */
+
+  /* Ação — sóbria de propósito, não é cor de venda */
+  --acao: #1e3a5f;            /* azul-marinho fechado */
+  --acao-hover: #16304d;
+
+  /* Semânticas de dado — o coração da interface */
+  --valor-positivo: #15803d;     /* green-700 */
+  --valor-positivo-bg: #f0fdf4;  /* green-50 */
+  --valor-negativo: #b91c1c;     /* red-700 */
+  --valor-negativo-bg: #fef2f2;  /* red-50 */
+  --dado-estimado: #b45309;      /* amber-700 */
+  --dado-estimado-bg: #fffbeb;   /* amber-50 */
+  --dado-ausente: #57534e;       /* stone-600 — propositalmente NÃO é vermelho */
+  --dado-ausente-bg: #f5f5f4;    /* stone-100 */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-superficie: var(--superficie);
+  --color-borda: var(--borda);
+  --color-texto-secundario: var(--texto-secundario);
+  --color-texto-desabilitado: var(--texto-desabilitado);
+  --color-acao: var(--acao);
+  --color-acao-hover: var(--acao-hover);
+
+  --color-valor-positivo: var(--valor-positivo);
+  --color-valor-positivo-bg: var(--valor-positivo-bg);
+  --color-valor-negativo: var(--valor-negativo);
+  --color-valor-negativo-bg: var(--valor-negativo-bg);
+  --color-dado-estimado: var(--dado-estimado);
+  --color-dado-estimado-bg: var(--dado-estimado-bg);
+  --color-dado-ausente: var(--dado-ausente);
+  --color-dado-ausente-bg: var(--dado-ausente-bg);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Foco visível em todo elemento interativo — navegação por teclado
+   (seção "Acessibilidade" do CLAUDE.md) nunca pode depender só do
+   estilo padrão do navegador, que alguns resets apagam sem querer. */
+:focus-visible {
+  outline: 2px solid var(--acao);
+  outline-offset: 2px;
 }

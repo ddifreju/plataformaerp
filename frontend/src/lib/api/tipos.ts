@@ -1,0 +1,186 @@
+/**
+ * Tipos espelhando, campo a campo, os DTOs do backend. Nenhum campo
+ * inventado, nenhum campo omitido — se o backend não devolve algo, o
+ * tipo também não promete. Todo `BigDecimal`/número do backend chega
+ * como `string` (ver `lib/api/jsonSeguro.ts`): o "número" aqui é sempre
+ * o TEXTO decimal exatamente como veio na resposta.
+ *
+ * Fonte de cada tipo, para conferência: `backend/src/main/java/com/plataforma/...`.
+ */
+
+// ---- autenticacao/RespostaSessao.java -------------------------------
+
+export type PapelUsuario = "DONO" | "GESTOR" | "ANALISTA";
+
+export interface RespostaSessao {
+  email: string;
+  nome: string;
+  papel: PapelUsuario;
+  tenantId: string;
+  tenantNome: string;
+}
+
+// ---- margem: enums e memória de cálculo ------------------------------
+
+export type RotuloTeto = "CALCULADA" | "COM_TETO" | "INDETERMINADA";
+
+export type DirecaoViesLacuna = "SUPERESTIMA_MARGEM" | "SUBESTIMA_MARGEM" | "INDETERMINADA";
+
+/**
+ * Os oito blocos de apresentação (BlocoMargem.java). A ORDEM aqui importa
+ * na tela — é a mesma ordem de `values()` no backend (B1 → B8), e o
+ * backend já devolve `decomposicao` nessa ordem; este array serve para
+ * quem precisar da ordem sem depender da resposta.
+ */
+export const ORDEM_BLOCOS_MARGEM = [
+  "B1_DEDUCOES_RECEITA",
+  "B2_CUSTO_MERCADORIA",
+  "B3_CUSTOS_CANAL",
+  "B4_CUSTOS_LOGISTICOS",
+  "B5_CUSTOS_FINANCEIROS",
+  "B6_IMPOSTO",
+  "B7_MARKETING_ATRIBUIDO",
+  "B8_OVERHEAD_ATRIBUIDO",
+] as const;
+
+export type BlocoMargem = (typeof ORDEM_BLOCOS_MARGEM)[number];
+
+export interface Lacuna {
+  codigo: string;
+  descricao: string;
+  direcaoVies: DirecaoViesLacuna;
+}
+
+/** margem/MemoriaCalculoBlocoPeriodo.java — decomposição agregada do período. */
+export interface MemoriaCalculoBlocoPeriodo {
+  bloco: BlocoMargem;
+  valor: string;
+  contemEstimativa: boolean;
+}
+
+// ---- margem/RespostaMargemPeriodo.java -------------------------------
+
+export interface RespostaMargemPeriodo {
+  canalId: string;
+  inicio: string;
+  fim: string;
+  escopoCanal: string;
+  faturamentoBrutoN0: string;
+  receitaLiquidaN1: string;
+  margemContribuicaoN2: string;
+  resultadoPeriodoN3: string;
+  lucroOperacionalN4: string;
+  /** Optional<BigDecimal> do backend: ausente (faturamento zero) vira `null`, nunca 0. */
+  margemContribuicaoPercentual: string | null;
+  margemLiquidaPercentual: string | null;
+  decomposicao: MemoriaCalculoBlocoPeriodo[];
+  lacunas: Lacuna[];
+  rotulo: RotuloTeto;
+  quantidadePedidos: string;
+  idsPedidoUsados: string[];
+  idsCustoUsados: string[];
+}
+
+// ---- painel/RespostaGargalosProcesso.java (visão "Operação") --------
+
+export type StatusPedido =
+  | "AGUARDANDO_PAGAMENTO"
+  | "PAGAMENTO_RECUSADO"
+  | "PAGO"
+  | "EM_SEPARACAO"
+  | "ENVIADO"
+  | "ENTREGUE"
+  | "CANCELADO"
+  | "DEVOLVIDO";
+
+export interface ContagemPorStatusPedido {
+  status: StatusPedido;
+  quantidade: string;
+}
+
+export type StatusDevolucao =
+  | "ABERTA"
+  | "EM_ANALISE"
+  | "EM_MEDIACAO"
+  | "APROVADA"
+  | "RECUSADA"
+  | "EM_TRANSITO"
+  | "RECEBIDA"
+  | "CONCLUIDA"
+  | "CANCELADA";
+
+export interface ContagemPorStatusDevolucao {
+  status: StatusDevolucao;
+  quantidade: string;
+}
+
+export interface RespostaGargalosProcesso {
+  pedidosPorStatus: ContagemPorStatusPedido[];
+  devolucoesPorStatus: ContagemPorStatusDevolucao[];
+  eventosIngestaoComErro: string;
+  pedidosSemCustoMercadoria: string;
+}
+
+// ---- painel/RespostaFilaPendencias.java (visão "Pendências") --------
+
+export interface ItemEventoComErro {
+  id: string;
+  canalId: string;
+  tipoEvento: string;
+  idExterno: string;
+  erroMensagem: string | null;
+  recebidoEm: string;
+  tentativas: string;
+  acao: string;
+}
+
+export interface ItemItemSemVariacao {
+  id: string;
+  pedidoId: string;
+  skuOrigem: string | null;
+  tituloOrigem: string | null;
+  criadoEm: string;
+  acao: string;
+}
+
+export interface ItemVariacaoSemCusto {
+  id: string;
+  sku: string;
+  descricaoVariacao: string | null;
+  criadoEm: string;
+  acao: string;
+}
+
+export interface ItemDevolucaoAberta {
+  id: string;
+  pedidoId: string;
+  status: string;
+  motivo: string | null;
+  abertaEm: string;
+  acao: string;
+}
+
+export interface RespostaFilaPendencias {
+  eventosComErro: ItemEventoComErro[];
+  itensSemVariacao: ItemItemSemVariacao[];
+  variacoesSemCusto: ItemVariacaoSemCusto[];
+  devolucoesAbertas: ItemDevolucaoAberta[];
+}
+
+// ---- comum/web/ErroApi.java -------------------------------------------
+
+export interface ErroApi {
+  erro: string;
+  mensagem: string;
+}
+
+// ---- canal/RespostaCanal.java -----------------------------------------
+
+export interface RespostaCanal {
+  id: string;
+  codigo: string;
+  nome: string;
+  tipo: string;
+  categoria: string;
+  ativo: boolean;
+}

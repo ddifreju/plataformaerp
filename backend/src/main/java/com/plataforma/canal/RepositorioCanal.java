@@ -1,5 +1,6 @@
 package com.plataforma.canal;
 
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,4 +16,17 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * (nao tem tabela filha).
  */
 public interface RepositorioCanal extends JpaRepository<Canal, UUID> {
+
+    /**
+     * Canais do tenant, em ordem alfabetica, para o seletor da interface.
+     *
+     * Devolve inclusive os inativos de proposito: um canal desligado hoje
+     * continua tendo pedidos no historico, e a tela de Resultado precisa
+     * conseguir consultar periodos passados dele. Quem decide como exibir
+     * um canal inativo e a interface, que recebe o campo {@code ativo}.
+     *
+     * Sem "WHERE tenant_id" aqui: o @TenantId injeta o predicado (ver o
+     * javadoc da interface).
+     */
+    List<Canal> findAllByOrderByNomeAsc();
 }
