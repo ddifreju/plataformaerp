@@ -19,7 +19,25 @@ Revise este arquivo uma vez por dia.
       (A demora foi por sockets órfãos que o Windows não apagava; resolvido
       afastando `AppData\Local\Docker\run` e `docker-secrets-engine`.)
 
-**Toolchain completo. Nenhuma ferramenta bloqueia mais nada.**
+**Toolchain completo.** Uma limitação de ambiente permanece:
+
+- [ ] **O Tomcat não sobe nesta máquina.** `java -jar` e `mvn spring-boot:run`
+      falham com `Unable to establish loopback connection` /
+      `SocketException: Invalid argument: connect` no conector NIO.
+      **Não é o código.** Confirmei isolando: o Node escuta em `127.0.0.1`
+      normalmente, e um `ServerSocket` Java puro faz `bind` e `connect` de
+      loopback sem erro. Falha só o par de sockets que o NIO do Tomcat cria
+      internamente para acordar o *selector*.
+      Suspeito de antivírus/firewall interceptando conexões locais do
+      `java.exe`. Caminhos a tentar, do mais barato ao mais caro:
+      1. Liberar `java.exe` no antivírus e no firewall do Windows
+      2. `netsh winsock reset` e reiniciar
+      3. Conferir se o `%WINDIR%\System32\drivers\etc\hosts` tem
+         `127.0.0.1 localhost` sem nada estranho
+      **Impacto real:** impede abrir a interface no navegador. **Não** impede
+      desenvolver nem validar — o contrato inteiro da API é verificado por
+      `ContratoApiTest`, que exercita filtros, Spring Security, controllers e
+      serialização sem abrir socket.
 
 Estado da validação em 13/08/2026:
 - **A suíte inteira passa contra Postgres real: 150 testes, 0 falhas, 0 erros**

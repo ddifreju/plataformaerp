@@ -73,6 +73,27 @@ definir-senha-app: ## Define a senha do papel app_aplicacao a partir de APP_DB_P
 	@echo "Senha de app_aplicacao definida."
 	@echo "Confirme que SPRING_DATASOURCE_PASSWORD tem o mesmo valor."
 
+.PHONY: dados-demo
+dados-demo: ## Popula um tenant de demonstração (SÓ desenvolvimento)
+	@# Duas travas contra rodar em produção: a variável `confirmo` (sem
+	@# ela o script aborta) e uma verificação dentro do SQL, que recusa
+	@# se encontrar qualquer tenant que não seja de demo.
+	@echo "Criando dados de demonstração no banco LOCAL."
+	@$(CARREGA_ENV) && $(COMPOSE) exec -T postgres \
+	  psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" \
+	  -v confirmo=sim < infra/dados-demo.sql
+
+# ---------------------------------------------------------- aplicação --
+
+.PHONY: backend
+backend: ## Sobe o backend Spring Boot em desenvolvimento
+	@# Lê as credenciais de infra/.env: a aplicação conecta como
+	@# app_aplicacao (sem DDL, sem BYPASSRLS), nunca como dono do schema.
+	@# Rode `make migrate` antes se houver migration pendente — o
+	@# ddl-auto=validate derruba o boot se o schema estiver defasado,
+	@# que é o comportamento desejado.
+	$(CARREGA_ENV) && cd backend && ./mvnw -B spring-boot:run
+
 .PHONY: preparar
 preparar: dev migrate definir-senha-app ## Primeira execução: sobe, migra e define a senha do app
 	@echo ""
