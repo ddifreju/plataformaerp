@@ -89,6 +89,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Tarefa 17 (decisao 0023): sessao no servidor, nao JWT. Traz
+             spring-security-core/web/config; BCrypt e um destes. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
 
         <!-- ============================== Persistencia ============================= -->
         <dependency>

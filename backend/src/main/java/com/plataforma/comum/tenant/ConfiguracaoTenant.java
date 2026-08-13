@@ -3,16 +3,17 @@ package com.plataforma.comum.tenant;
 import javax.sql.DataSource;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.plataforma.autenticacao.RepositorioUsuario;
 import com.zaxxer.hikari.HikariDataSource;
 
 import org.springframework.boot.autoconfigure.jdbc.DataSourceProperties;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernatePropertiesCustomizer;
+import org.springframework.boot.autoconfigure.security.SecurityProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.core.Ordered;
 
 /**
  * Fiacao das quatro camadas de isolamento de tenant descritas na
@@ -29,17 +30,27 @@ public class ConfiguracaoTenant {
 
     /**
      * FiltroTenant nao e @Component de proposito (ver o comentario na
-     * propria classe): registramos aqui, explicitamente, com a ordem
-     * mais alta possivel, para garantir que ele roda antes de qualquer
-     * outro filtro da aplicacao.
+     * propria classe): registramos aqui, explicitamente, com a ordem que
+     * a decisao 0023 exige.
+     *
+     * ORDEM (o ponto delicado da tarefa 17, ver o Javadoc de FiltroTenant):
+     * ate a tarefa 17 este filtro rodava em Ordered.HIGHEST_PRECEDENCE
+     * (antes de tudo). Agora ele PRECISA rodar DEPOIS da cadeia inteira do
+     * Spring Security, que o Spring Boot registra com a ordem
+     * SecurityProperties.DEFAULT_FILTER_ORDER (-100 hoje) - so depois que
+     * o Security autentica a requisicao existe um usuario autenticado de
+     * quem extrair o tenant. Por isso a ordem aqui e
+     * DEFAULT_FILTER_ORDER + 1: o menor incremento que garante "logo
+     * depois do Security", sem depender de adivinhar um numero fixo que
+     * quebraria se o Spring Boot mudasse o proprio default no futuro.
      */
     @Bean
     public FilterRegistrationBean<FiltroTenant> registroFiltroTenant(
-            RepositorioTenant repositorioTenant, ObjectMapper objectMapper) {
+            RepositorioTenant repositorioTenant, RepositorioUsuario repositorioUsuario, ObjectMapper objectMapper) {
 
         FilterRegistrationBean<FiltroTenant> registro = new FilterRegistrationBean<>();
-        registro.setFilter(new FiltroTenant(repositorioTenant, objectMapper));
-        registro.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        registro.setFilter(new FiltroTenant(repositorioTenant, repositorioUsuario, objectMapper));
+        registro.setOrder(SecurityProperties.DEFAULT_FILTER_ORDER + 1);
         registro.addUrlPatterns("/*");
         return registro;
     }

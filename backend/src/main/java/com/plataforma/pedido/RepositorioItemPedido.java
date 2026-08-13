@@ -19,10 +19,17 @@ import org.springframework.data.jpa.repository.JpaRepository;
  *
  * Predicado de tenant vem do @TenantId da entidade (decisao 0007) -
  * nenhum metodo aqui deve escrever "WHERE tenant_id = ?" a mao.
+ *
+ * findTop100ByVariacaoIdIsNull... alimenta a tarefa 20 (fila do analista -
+ * "itens sem variacao_id casado" e uma das lacunas #2 do catalogo fiscal,
+ * secao 9.1: sem casamento com o catalogo, nao ha CMV automatico para
+ * aquele item).
  */
 public interface RepositorioItemPedido extends JpaRepository<ItemPedido, UUID> {
 
     List<ItemPedido> findByPedidoId(UUID pedidoId);
 
     List<ItemPedido> findByVariacaoId(UUID variacaoId);
+
+    List<ItemPedido> findTop100ByVariacaoIdIsNullOrderByCriadoEmDesc();
 }

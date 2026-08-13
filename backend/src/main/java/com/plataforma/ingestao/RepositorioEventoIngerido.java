@@ -1,5 +1,6 @@
 package com.plataforma.ingestao;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,9 +24,18 @@ import org.springframework.data.jpa.repository.JpaRepository;
  * implementar o pipeline de ingestao (fora do escopo desta tarefa) decide
  * como executar aquela instrucao especifica, com o cuidado de concorrencia
  * que o comentario da V012 exige.
+ *
+ * countByStatus e findTop100ByStatusOrderByRecebidoEmDesc alimentam,
+ * respectivamente, a tarefa 19 (visao do gestor - quantos eventos
+ * falharam ao ingerir) e a tarefa 20 (fila do analista - QUAIS eventos
+ * falharam, para reprocessar).
  */
 public interface RepositorioEventoIngerido extends JpaRepository<EventoIngerido, UUID> {
 
     Optional<EventoIngerido> findByCanalIdAndTipoEventoAndIdExterno(
             UUID canalId, TipoEvento tipoEvento, String idExterno);
+
+    long countByStatus(StatusEventoIngerido status);
+
+    List<EventoIngerido> findTop100ByStatusOrderByRecebidoEmDesc(StatusEventoIngerido status);
 }

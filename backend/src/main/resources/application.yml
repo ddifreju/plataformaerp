@@ -52,6 +52,22 @@ spring:
     enabled: false
 
 server:
+  servlet:
+    session:
+      cookie:
+        # Decisao 0023 (tarefa 17): cookie de sessao HttpOnly (JS do
+        # navegador nunca le o cookie - mitiga roubo de sessao via XSS),
+        # SameSite=Lax (o navegador NAO envia o cookie em requisicoes de
+        # origem cruzada feitas por fetch/XHR - e a principal defesa
+        # contra CSRF neste desenho, ver o comentario do .csrf(disable)
+        # em com.plataforma.autenticacao.ConfiguracaoSeguranca) e Secure
+        # controlado por variavel de ambiente: dev roda em HTTP puro (sem
+        # TLS), entao Secure=true derrubaria o login em desenvolvimento -
+        # producao (atras de TLS) precisa definir SESSAO_COOKIE_SECURE=true.
+        http-only: true
+        same-site: lax
+        secure: ${SESSAO_COOKIE_SECURE:false}
+
   error:
     # Fixado explicitamente em vez de confiar no default. Quando a Fase 1
     # tiver controllers de verdade, uma excecao nao tratada cai no handler
