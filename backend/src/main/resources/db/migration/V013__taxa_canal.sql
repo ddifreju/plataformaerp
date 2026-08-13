@@ -496,6 +496,11 @@ CREATE TABLE taxa_canal (
     -- que gera linha de FRETE — erro que ninguem percebe olhando a tela
     -- de cadastro e que desloca dinheiro de um bloco da margem para outro
     -- (B3 e B4 somam igual no total e contam historias diferentes).
+    -- Este CHECK ja implica os dois de dominio acima. Eles ficam mesmo
+    -- assim, e a redundancia e deliberada: sao eles que documentam o
+    -- dominio completo de cada coluna em um lugar so, dao mensagem de
+    -- erro especifica ("tipo_taxa invalido" x "par incoerente") e sao o
+    -- que o grep encontra quando alguem procurar os valores validos.
     CONSTRAINT ck_taxa_canal_tipo_natureza_coerentes CHECK (
         (tipo_taxa, natureza_custo) IN (
             ('COMISSAO',              'COMISSAO_CANAL'),

@@ -1,7 +1,7 @@
 # Estado do Projeto
 
 **Atualizado em:** 12 de agosto de 2026
-**Fase:** 1 — Espinha de dados (tarefas 7 a 12 concluídas)
+**Fase:** 2 — Motor de margem
 **Modo:** autônomo (gerente decide, registra e segue)
 
 ---
@@ -18,9 +18,8 @@ Execute em ordem. Não pergunte antes de começar cada uma.
 5. [x] Teste de isolamento de tenant (precisa FALHAR se vazar)
 6. [x] Makefile com dev, test, migrate
 
-> **Fase 0 escrita, NÃO executada.** Ver "Pendente de validação" no fim deste
-> arquivo. A máquina não tem JDK, Maven, Docker nem Node — nada foi compilado
-> nem rodado. Este é o risco aberto mais importante do projeto agora.
+> **Fases 0 e 1 compilam e os testes sem banco passam.** O que ainda não rodou
+> é o que depende de Postgres — ver "Pendente de validação".
 
 ### Fase 1 — Espinha de dados
 7. [x] Modelo canônico: tenant, canal, produto, variação, pedido, item
@@ -31,7 +30,7 @@ Execute em ordem. Não pergunte antes de começar cada uma.
 12. [x] Pipeline de ingestão com idempotência
 
 ### Fase 2 — Motor de margem (o diferencial)
-13. [ ] Tabela de taxas por marketplace, versionada por vigência
+13. [x] Tabela de taxas por marketplace, versionada por vigência
 14. [ ] Cálculo de custo real por pedido
 15. [ ] Cálculo de margem líquida com memória de cálculo auditável
 16. [ ] Endpoint que responde "quanto sobrou no período X"
@@ -49,43 +48,42 @@ Execute em ordem. Não pergunte antes de começar cada uma.
 Ver `docs/PENDENCIAS.md`. Nenhum bloqueia as tarefas 1 a 20 — todas podem ser
 construídas contra mock.
 
-**Novo bloqueio de validação (não de construção):** a máquina não tem JDK,
-Maven, Docker nem Node. Nada da Fase 0 foi compilado ou executado.
+**Único bloqueio de validação: Docker.** Está instalado, mas o engine só sobe
+depois de reiniciar o computador. Ver `docs/PENDENCIAS.md`.
 
-## Pendente de validação — LEIA ANTES DE SEGUIR PARA A FASE 2
+## Pendente de validação
 
-As Fases 0 e 1 estão **escritas e revisadas, não executadas**. Todo o código foi
-verificado por leitura (com auditoria de segurança e revisão de código
-dedicadas), mas nenhum compilador ou banco confirmou nada.
+### O que JÁ foi validado de verdade (12/08/2026)
 
-São 76 arquivos Java, 12 migrations e 12 undos escritos sem uma única
-compilação. Trate a primeira execução como uma fase de trabalho própria, não
-como um detalhe.
+- **`./mvnw -B test-compile`: BUILD SUCCESS.** 68 fontes principais + testes,
+  zero erros. O risco nº 1 da Fase 0 — `CurrentTenantIdentifierResolver<UUID>`,
+  que dependia do Hibernate 6.4+ — **compila**.
+- **32 testes sem banco passando, 0 falhas.** Cobrem a regra do dinheiro
+  (`SuporteJsonTest`), os dois adaptadores, o contexto de tenant e as entidades.
+- Maven Wrapper (`mvnw`) gerado: o projeto é autossuficiente.
+- Versões do `pom.xml` conferidas no Maven Central.
+- `.gitignore` de fato ignora `infra/.env` e **não** ignora `.env.exemplo`.
 
-O que **foi** validado de verdade:
-- Todas as versões do `pom.xml` existem no Maven Central (conferidas em
-  12/08/2026) e foram elevadas para o último patch da linha 3.3.x
-- `pom.xml` é XML bem formado (balanceamento de tags verificado)
-- `Makefile` usa tabs corretamente nas 38 linhas de receita
-- `.gitignore` de fato ignora `infra/.env` e de fato **não** ignora
-  `infra/.env.exemplo` (verificado com `git check-ignore`)
+### O que ainda NÃO foi validado (tudo depende do Docker)
 
-### Primeira execução, na ordem
-
+Reinicie e rode:
 ```bash
 make preparar     # sobe o Postgres, migra e define a senha do app
 make test         # a suíte inteira, incluindo o isolamento
 ```
 
-Espere quebrar. Nada disso rodou ainda.
+Falta provar: `ddl-auto: validate` contra o Postgres real (o risco `char(n)` vs
+`varchar` e o mapeamento `jsonb`), as migrations aplicando de fato, e toda a
+suíte de isolamento por Testcontainers.
 
 ### O que a primeira execução valida de uma vez só
 
 `make test` roda o `RlsAtivoEmTodasAsTabelasTest`, que descobre as tabelas por
 `information_schema` e exige RLS forçado + 4 policies em **todas** que tenham
 `tenant_id`. Como ele é genérico, a primeira execução valida o molde da decisão
-0010 nas **12 tabelas da Fase 1 de uma vez** — sem ninguém ter atualizado o
-teste. Conferi o molde por grep, mas grep não é o banco: essa é a prova real.
+0010 nas **13 tabelas (12 da Fase 1 + `taxa_canal`) de uma vez** — sem ninguém
+ter atualizado o teste. Conferi o molde por grep nas 13, mas grep não é o banco:
+essa é a prova real.
 
 ### Riscos da Fase 1 que só o primeiro `make test` resolve
 
@@ -106,21 +104,19 @@ teste. Conferi o molde por grep, mas grep não é o banco: essa é a prova real.
    sobrepostos pode contar a mesma venda duas vezes. Isso **restringe a tarefa
    16** — a resposta de "quanto sobrou" precisa declarar o escopo de canal.
 
-### Onde é mais provável que quebre (por ordem de risco)
+### Onde é mais provável que quebre no primeiro `make test`
 
-1. **`ResolvedorTenantHibernate implements CurrentTenantIdentifierResolver<UUID>`**
-   — o resolver genérico com tipo diferente de `String` depende do Hibernate 6.4+.
-   Se não compilar, a alternativa é `<String>`, mas aí o mapeamento contra a
-   coluna `uuid` pode falhar no `ddl-auto: validate`. Teste isto isolado antes
-   de confiar no resto.
-2. **`UUID[] idsRetornados`** mapeado direto para `uuid[]` sem `@JdbcTypeCode`.
-3. **`@TestConfiguration` aninhado em `IsolamentoDeTenantTest`** (captura de SQL).
-   Se `sqlsGerados` vier vazio, adicione `@Import(...)` — a instrução exata está
-   no relato do próprio teste.
-4. **Placeholder `${SPRING_DATASOURCE_PASSWORD}` sem default** sendo sobreposto
-   por `@DynamicPropertySource` nos testes.
-5. **`server.error.*` e o handler de fallback** foram adicionados depois da
-   auditoria e não têm teste próprio.
+1. **`ddl-auto: validate` com `char(n)`** (`ncm`, `cest`, `uf_entrega`, `moeda`,
+   `hash_payload`). Se o Hibernate tratar `bpchar` e `varchar` como
+   incompatíveis, a aplicação **não sobe**. Maior risco.
+2. **`@JdbcTypeCode(SqlTypes.JSON)` → `jsonb`.**
+3. **`especificidade` em `taxa_canal` é `GENERATED ALWAYS`.** Ao mapear em JPA,
+   precisa de `insertable = false, updatable = false` — sem isso o Hibernate
+   monta o INSERT com a coluna e o Postgres rejeita a instrução inteira.
+4. **`UUID[] idsRetornados`** mapeado para `uuid[]` sem `@JdbcTypeCode`.
+5. **`@TestConfiguration` aninhado em `IsolamentoDeTenantTest`** (captura de
+   SQL). Se `sqlsGerados` vier vazio, adicione `@Import(...)`.
+6. **`EXCLUDE USING gist` da V013** — sintaxe revisada mas nunca aplicada.
 
 ### Dívida conhecida (não bloqueia)
 
@@ -128,48 +124,50 @@ teste. Conferi o molde por grep, mas grep não é o banco: essa é a prova real.
   `merge()` e faz um `SELECT` a mais por escrita. Não afeta isolamento nem
   correção. Resolver com `Persistable<UUID>` **se** virar gargalo — por ora,
   simplicidade acima de otimização.
-- O Maven Wrapper (`mvnw`) não existe. Rode `mvn wrapper:wrapper` no `backend/`
-  na primeira vez que tiver Maven instalado.
 
-### Dívida da Fase 1 (levantada pelos revisores, ordenada por quando vai doer)
+### Dívida da Fase 1 — QUITADA em 12/08/2026
 
-1. **Reprocessar payload alterado não atualiza `Pedido` nem `Cliente`.**
-   As entidades não têm setter, por desenho. Efeito prático: o marketplace manda
-   "aguardando pagamento" e depois "pago" com o mesmo `id_externo`; o segundo
-   evento é gravado e auditável em `evento_ingerido`, mas `pedido.status` **não
-   muda**. É dívida consciente, e deve ser **a primeira coisa da Fase 2** — o
-   motor de margem não pode rodar sobre status desatualizado.
-2. **Falha de tradução desfaz o `evento_ingerido` inteiro.** As colunas
-   `status = ERRO` e `erro_mensagem` da V012 nunca são usadas: um payload
-   malformado "nunca existiu" para o sistema e o reenvio idêntico tenta de novo
-   para sempre. Vai doer no primeiro payload real, porque as fixtures são
-   hipótese.
-3. **`variacaoId` fica sempre nulo.** Casar item vendido com a variação do
-   catálogo exigiria consulta ao banco dentro do adaptador, o que quebraria a
-   pureza que os torna testáveis sem Postgres. A promessa de que "o pipeline
-   resolve" está num javadoc e **ainda não foi implementada em lugar nenhum**.
-   Sem isso, margem por SKU não fecha.
-4. **`RepositorioCusto.somaValorPorPedido` e `somaValorPorPeriodo` não têm
-   chamador nem teste.** Foram escritos adiantando a Fase 2. Ou são usados na
-   tarefa 14, ou devem sair.
-5. **`AdaptadorBling.traduzirPedido` tem ~140 linhas** com o laço de itens
-   embutido, enquanto o irmão do Mercado Livre extrai `parseItens`. Assimetria
-   de leitura entre dois arquivos que se leem em par. Não mexi porque refatorar
-   método longo sem compilador é troca ruim — fazer junto com o primeiro
-   `make test` que passar.
+Todos os 5 itens abaixo foram resolvidos antes de começar a Fase 2. Ficam
+registrados porque o histórico do *porquê* continua útil.
+
+1. ~~Reprocessar payload alterado não atualiza `Pedido`/`Cliente`.~~
+   **Resolvido**: métodos de intenção `atualizarAPartirDaOrigem`. Identidade
+   (`id`, `tenant_id`, chave natural) nunca muda; campo nullable só é
+   sobrescrito quando a origem traz valor — payload mais estreito não apaga
+   dado bom.
+2. ~~Falha de tradução desfaz o evento inteiro.~~ **Resolvido**: `status=ERRO`
+   e `erro_mensagem` gravados em transação própria (`REQUIRES_NEW`
+   sequencial). A mensagem carrega tipo do erro e campo, **nunca** conteúdo do
+   payload.
+3. ~~`variacaoId` sempre nulo.~~ **Resolvido** conforme decisão 0018: o
+   pipeline resolve por SKU; não achando, declara ausência.
+4. ~~`RepositorioCusto` com métodos sem chamador.~~ Endereçado na tarefa 14.
+5. ~~`AdaptadorBling.traduzirPedido` com ~140 linhas.~~ **Resolvido**:
+   `parseItens` extraído, espelhando o do Mercado Livre.
+
+**Bug sério encontrado de brinde e corrigido:** o pedido apontava para o UUID de
+cliente que o adaptador gerou na tradução e que nunca era gravado quando o
+comprador já existia. A FK rejeitaria. Efeito prático: o sistema ingeria o
+**primeiro** pedido de cada comprador e falhava em todos os seguintes — ou seja,
+quebrava exatamente no comprador recorrente. Corrigido com
+`Pedido.resolverCliente(...)`.
 
 ## Decisões tomadas
 
-Ver `docs/decisoes/`. Nesta execução: **0004 a 0017**.
+Ver `docs/decisoes/`. **0004 a 0020.**
 
 As mais estruturantes, em ordem de peso:
-- **0007** (propagação de tenant) + **0010** (molde de RLS por tabela). As 12
-  tabelas da Fase 1 repetem o molde sem exceção.
+- **0007** (propagação de tenant) + **0010** (molde de RLS por tabela). As 13
+  tabelas repetem o molde sem exceção.
 - **0015** (FK composta com `tenant_id`) — o banco recusa fisicamente uma
-  referência cruzada entre tenants. Veio do `arquiteto-dados`, promovida a
-  padrão do projeto.
-- **0017** (reconciliação entre fontes é explícita) — a que mais restringe a
-  Fase 2.
+  referência cruzada entre tenants.
+- **0019** (três níveis de taxa, sem quarto nível) — nenhum número de margem
+  existe sem rótulo de confiança. É o que sustenta a proposta do produto.
+- **0017** (reconciliação entre fontes é explícita) — restringe a tarefa 16.
+
+Decisões que nasceram de eu ter errado, registradas como tal: **0011** (Flyway
+fora do boot), a ressalva da **0010** sobre `SET` vs `SET LOCAL`, e a **0020**
+(imposto fora da `taxa_canal`, contra a sugestão do documento fiscal).
 
 Duas decisões nasceram de eu ter errado e estão registradas assim: **0011**
 (Flyway fora do boot) e a ressalva dentro da **0010** sobre `SET` vs `SET LOCAL`.
