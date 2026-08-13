@@ -85,6 +85,48 @@ suíte de isolamento por Testcontainers.
 ter atualizado o teste. Conferi o molde por grep nas 13, mas grep não é o banco:
 essa é a prova real.
 
+### A limitação nº 1 do produto hoje: nenhuma margem sai `CALCULADA`
+
+**Não é bug. Não adianta procurar no código.** Encontrado pela revisão da
+Fase 2 e registrado aqui para poupar uma tarde de investigação futura.
+
+Nenhum caminho do sistema grava uma linha `custo(MERCADORIA)`: nem os
+adaptadores, nem o pipeline de ingestão, nem o `ResolvedorCustoPedido`. O custo
+da mercadoria existe em `variacao.custo_unitario_atual`, mas **nada o copia para
+`custo` no momento da venda**.
+
+Consequência mecânica: o `DetectorDeLacunas` sempre dispara a lacuna
+`custo_mercadoria_nao_cadastrado`, que tem viés `SUPERESTIMA_MARGEM`. Logo,
+`RotuloTeto.calcular` **nunca** devolve `CALCULADA` — todo resultado sai, na
+melhor das hipóteses, `COM_TETO`, faltando o que costuma ser a maior parcela do
+custo.
+
+O mecanismo está funcionando como projetado: a ausência é **visível**, não é um
+número errado disfarçado. Mas é a peça que falta para o produto cumprir a
+promessa central. **É a primeira tarefa da Fase 3.**
+
+Junto com ela, duas peças que também existem mas não têm quem as chame:
+- `ResolvedorCustoPedido` (nível 2 da hierarquia de taxas) **não tem chamador em
+  produção** — hoje todo pedido sem valor informado cai direto em lacuna, mesmo
+  havendo taxa cadastrada que resolveria. Falha para o lado seguro (mais
+  lacunas, nunca número otimista), mas esvazia parte da V013.
+- `Rateio` está pronto e testado, sem chamador: `EMBALAGEM` e `ADS` ainda não
+  são rateados por ninguém.
+- `Apresentacao.paraExibicao` só é usada em teste. O endpoint devolve os valores
+  com 4 casas (escala de armazenamento), não 2. Quando a Fase 3 ligar a tela,
+  formatar na borda de saída — não recalcular nada.
+
+### A lacuna que o sistema NÃO consegue avisar
+
+`TAXA_ANTECIPACAO` (lacuna #11 do catálogo fiscal) é a única que não deixa
+rastro em campo nenhum: um custo ausente do payload e sem taxa cadastrada é
+indistinguível, para o código, de um custo que legitimamente não se aplica.
+
+Para um lojista que antecipa recebíveis e não cadastrou a taxa, **a margem sai
+superestimada e o sistema não avisa**. Detectar exige saber que aquele tenant
+antecipa — informação que não existe no modelo hoje. Está dito no Javadoc do
+`DetectorDeLacunas` para não parecer esquecimento.
+
 ### Duas limitações que NENHUM teste vai pegar
 
 Não são bugs e não se resolvem rodando a suíte. São limites do que o sistema

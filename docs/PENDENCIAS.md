@@ -70,6 +70,16 @@ sistema que não pode ser construída nem testada de verdade.
       qual base legal (provavelmente legítimo interesse ou obrigação de guarda
       de prova). É decisão de negócio/jurídica, não técnica.
       Não bloqueia as Fases 0 a 2.
+- [ ] **Regime tributário do tenant** (decisão 0020)
+      Enquanto não existir, o imposto é **lacuna declarada** e toda margem sai
+      rotulada `COM_TETO`. Precisa do contador: regime (Simples/Presumido),
+      anexo, RBT12, e se há produto com ICMS-ST ou PIS/COFINS monofásico —
+      nesses casos o imposto já foi pago antes e **não pode ser deduzido de
+      novo**, senão a margem sai subestimada.
+- [ ] **O lojista antecipa recebíveis?**
+      Se sim, qual a taxa. É a única lacuna que o sistema **não consegue
+      detectar sozinho** (ver `docs/ESTADO.md`): sem essa resposta, a margem de
+      quem antecipa sai superestimada em silêncio.
 - [ ] **Retenção de `evento_ingerido.payload_bruto`**
       É o maior volume de dado pessoal do banco: o payload cru de cada pedido
       vindo do marketplace, com nome, endereço e contato do consumidor final do

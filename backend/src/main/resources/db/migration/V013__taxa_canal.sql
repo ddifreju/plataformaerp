@@ -760,4 +760,25 @@ CREATE POLICY taxa_canal_delete ON taxa_canal
 -- a resposta a "por que voces disseram 13%?" deixa de existir.
 -- Encerrar (vigencia_fim) e cancelar (vigencia_fim = vigencia_inicio)
 -- cobrem todos os casos de uso e deixam rastro.
-GRANT SELECT, INSERT, UPDATE ON TABLE taxa_canal TO app_aplicacao;
+--
+-- UPDATE E CONCEDIDO POR COLUNA, nao na tabela inteira.
+--
+-- PORQUE (achado da auditoria de seguranca da Fase 2):
+--   Um GRANT UPDATE irrestrito permitiria
+--   "UPDATE taxa_canal SET percentual = ..." numa linha JA usada para
+--   calcular a margem de um pedido passado. A linha de custo guarda um
+--   PONTEIRO para a taxa ("taxa_canal id X"), nao uma copia do valor —
+--   entao reescrever o percentual reescreveria retroativamente a
+--   explicacao de um numero ja mostrado ao lojista, sem deixar rastro.
+--   E exatamente o que o paragrafo acima diz que nao pode acontecer.
+--
+--   RLS nao ajuda aqui: a policy taxa_canal_update restringe QUAIS
+--   LINHAS (as do proprio tenant), nunca QUAIS COLUNAS.
+--
+--   Com o GRANT por coluna, encerrar e cancelar continuam funcionando
+--   (ambos so escrevem vigencia_fim) e alterar valor vigente passa a ser
+--   impossivel pela aplicacao. Corrigir um valor errado exige criar uma
+--   linha nova — que e precisamente o que "versionado por vigencia"
+--   significa.
+GRANT SELECT, INSERT ON TABLE taxa_canal TO app_aplicacao;
+GRANT UPDATE (vigencia_fim, atualizado_em) ON TABLE taxa_canal TO app_aplicacao;

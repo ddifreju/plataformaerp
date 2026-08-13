@@ -20,6 +20,22 @@ import com.plataforma.pedido.ItemPedido;
  * ver {@link ConferenciaRepasse}, que precisa do valor de repasse alem da
  * lista de custo); canais sobrepostos (#15 - decisao de ESCOPO da
  * consulta, nao do pedido individual, ver {@code ServicoMargemPeriodo}).
+ *
+ * NAO DETECTA E AINDA NAO TEM DONO — antecipacao de recebivel (#11).
+ *
+ * Esta e a unica lacuna do catalogo §9.1 que nao e detectada aqui, nem
+ * delegada a outra classe, nem coberta por decisao registrada. Fica dita
+ * em voz alta porque o documento fiscal a classifica como "a lacuna mais
+ * silenciosa": diferente das outras, ela NAO deixa rastro em campo
+ * nenhum. Um custo que nao existe no payload e que nao tem taxa
+ * cadastrada e indistinguivel, para o codigo, de um custo que
+ * legitimamente nao se aplica.
+ *
+ * Consequencia pratica: para um lojista que antecipa recebiveis e nao
+ * cadastrou a taxa, a margem sai SUPERESTIMADA e o sistema NAO avisa.
+ * Detectar exige saber que aquele tenant antecipa - informacao que hoje
+ * nao existe em lugar nenhum do modelo. Enquanto nao existir, esta
+ * ausencia esta registrada em docs/ESTADO.md, nao escondida aqui.
  */
 public final class DetectorDeLacunas {
 

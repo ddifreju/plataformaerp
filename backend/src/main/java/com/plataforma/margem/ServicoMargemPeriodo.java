@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +49,8 @@ import com.plataforma.pedido.RepositorioPedido;
  */
 @Service
 public class ServicoMargemPeriodo {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ServicoMargemPeriodo.class);
 
     private final RepositorioPedido repositorioPedido;
     private final RepositorioItemPedido repositorioItemPedido;
@@ -99,6 +103,25 @@ public class ServicoMargemPeriodo {
             ConferenciaRepasse.ResultadoConferencia conferencia = ConferenciaRepasse.conferir(
                     pedido.getValorTotalPedido(), custos, pedido.getValorRepassePrevisto());
             conferencia.lacuna().ifPresent(lacunasPedido::add);
+
+            // O alerta e diferente da lacuna: lacuna e "nao sei", alerta e
+            // "sei que esta errado". E o UNICO sinal do sistema que aponta
+            // para custo contado em dobro, taxa cadastrada errada ou
+            // estorno nao lancado.
+            //
+            // Ele NAO vira Lacuna de proposito (ver ConferenciaRepasse):
+            // lacuna puxa a margem numa direcao conhecida e alimenta o
+            // rotulo do teto; alerta nao tem direcao definida.
+            //
+            // Mas tambem nao pode ser descartado em silencio - detectar um
+            // problema e nao contar a ninguem e pior do que nao detectar,
+            // porque cria falsa sensacao de cobertura. Ate existir campo
+            // proprio na resposta, no minimo fica no log com o id do
+            // pedido, que e o suficiente para investigar.
+            conferencia.alerta().ifPresent(alerta ->
+                    LOG.warn("Repasse divergente para CIMA no pedido {}: {}. "
+                            + "Isto sugere custo faltando, taxa cadastrada errada ou estorno nao lancado - investigar.",
+                            pedido.getId(), alerta));
 
             ResultadoMargemPedido resultadoPedido = MotorMargemPedido.calcular(
                     pedido.getId(), pedido.getValorTotalPedido(), custos, lacunasPedido);
