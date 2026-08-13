@@ -84,7 +84,7 @@ import com.plataforma.pedido.RepositorioPedido;
  * nao existe "desfaz tudo, mas mantem esta UPDATE aqui". A solucao nao e
  * {@code REQUIRES_NEW} ANINHADA dentro da mesma transacao ambiente -
  * isso faria a transacao de erro tentar dar UPDATE numa linha que a
- * transacao externa (ainda aberta, ainda seguran do o lock da linha que
+ * transacao externa (ainda aberta, ainda segurando o lock da linha que
  * ela mesma inseriu) nao liberou, travando a aplicacao esperando um lock
  * que so ela mesma poderia soltar (autodeadlock). A solucao usada aqui e
  * SEQUENCIAL: a transacao do caminho feliz RODA E TERMINA (commit ou
@@ -406,7 +406,14 @@ public class ServicoIngestao {
             return new ResultadoPersistencia(existente.getId(), List.of());
         }
 
-        persistirClienteOuAtualizar(resultado.cliente(), canalId);
+        // O id REAL do cliente, que difere do id gerado pelo adaptador
+        // sempre que o comprador ja existia. Apontar o pedido para o id
+        // certo ANTES do save e o que impede a FK de rejeitar o segundo
+        // pedido de um comprador recorrente - ver Pedido.resolverCliente.
+        UUID clienteIdPersistido = persistirClienteOuAtualizar(resultado.cliente(), canalId);
+        if (clienteIdPersistido != null) {
+            pedidoTraduzido.resolverCliente(clienteIdPersistido);
+        }
 
         // Casamento de item x variacao (dívida 3): so o pipeline tem banco,
         // por isso so aqui, nunca no adaptador. Precisa rodar ANTES do
@@ -501,9 +508,18 @@ public class ServicoIngestao {
      * {@link Cliente#atualizarAPartirDaOrigem} em vez de so ignorar o
      * cliente recem-traduzido. Quando nao existe, insere normalmente.
      */
-    private void persistirClienteOuAtualizar(Cliente clienteTraduzido, UUID canalId) {
+    /**
+     * @return o id REAL do cliente no banco, que NAO e necessariamente o
+     *         id que o adaptador gerou ao traduzir. Quando o comprador ja
+     *         existe, o id certo e o da linha existente. Quem chama
+     *         precisa usar este retorno para apontar o pedido - ver
+     *         {@link Pedido#resolverCliente(UUID)}, que documenta o bug
+     *         que isso evita. Devolve {@code null} quando o payload nao
+     *         trouxe comprador.
+     */
+    private UUID persistirClienteOuAtualizar(Cliente clienteTraduzido, UUID canalId) {
         if (clienteTraduzido == null) {
-            return;
+            return null;
         }
 
         Optional<Cliente> clienteExistente = (clienteTraduzido.getIdExterno() == null)
@@ -515,7 +531,7 @@ public class ServicoIngestao {
             existente.atualizarAPartirDaOrigem(clienteTraduzido);
             repositorioCliente.save(existente);
             repositorioCliente.flush();
-            return;
+            return existente.getId();
         }
 
         repositorioCliente.save(clienteTraduzido);
@@ -523,6 +539,7 @@ public class ServicoIngestao {
         // pedido: fk_pedido_cliente (V008) precisa que o cliente ja
         // exista no banco - ver comentario do flush() em persistirResultado.
         repositorioCliente.flush();
+        return clienteTraduzido.getId();
     }
 
     private static String sha256Hex(String payload) {

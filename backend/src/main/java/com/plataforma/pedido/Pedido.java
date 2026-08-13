@@ -188,6 +188,32 @@ public class Pedido {
         return canalId;
     }
 
+    /**
+     * Aponta o pedido para o cliente REAL, ja persistido.
+     *
+     * PORQUE ISTO EXISTE (bug que ele corrige):
+     * o adaptador e puro e nao consulta banco, entao ele traduz o
+     * comprador do payload para um {@link com.plataforma.cliente.Cliente}
+     * novo, com UUID gerado na hora, e carimba esse UUID aqui em
+     * clienteId. Isso funciona no PRIMEIRO pedido de um comprador.
+     *
+     * No SEGUNDO pedido do mesmo comprador, o cliente ja existe no banco
+     * com OUTRO id. O pipeline detecta isso e atualiza a linha existente
+     * em vez de inserir - mas o clienteId deste pedido continuaria
+     * apontando para o UUID recem-inventado pelo adaptador, que nunca foi
+     * gravado. A FK fk_pedido_cliente (V008) rejeitaria o INSERT.
+     *
+     * Ou seja: sem este metodo, o sistema ingere o primeiro pedido de
+     * cada comprador e falha em todos os seguintes - justamente o
+     * comprador recorrente, que e o mais valioso do lojista.
+     *
+     * Mesmo padrao de {@link ItemPedido#resolverVariacao(UUID)}: o
+     * adaptador expoe o que sabe, o pipeline resolve contra o banco.
+     */
+    public void resolverCliente(UUID clienteIdPersistido) {
+        this.clienteId = clienteIdPersistido;
+    }
+
     public UUID getClienteId() {
         return clienteId;
     }
