@@ -1,7 +1,7 @@
 # Estado do Projeto
 
 **Atualizado em:** 12 de agosto de 2026
-**Fase:** 2 — Motor de margem
+**Fase:** 2 concluída — próxima: 3 (interface)
 **Modo:** autônomo (gerente decide, registra e segue)
 
 ---
@@ -192,7 +192,7 @@ quebrava exatamente no comprador recorrente. Corrigido com
 
 ## Decisões tomadas
 
-Ver `docs/decisoes/`. **0004 a 0020.**
+Ver `docs/decisoes/`. **0004 a 0021.**
 
 As mais estruturantes, em ordem de peso:
 - **0007** (propagação de tenant) + **0010** (molde de RLS por tabela). As 13
@@ -231,6 +231,9 @@ Duas decisões nasceram de eu ter errado e estão registradas assim: **0011**
 | 2026-08-12 | 15. Margem com memória de cálculo | Feito. Fórmula N0→N3 com **quatro números nomeados** em vez de um "lucro" genérico. Cada resultado carrega a decomposição por bloco, a origem de cada dedução e os IDs de custo que entraram. Rateio de maior resto com desempate determinístico — recalcular dá o mesmo número, que é o que torna a auditoria possível. |
 | 2026-08-12 | 16. Endpoint do período | Feito. `GET /api/margem/periodo` com `canalId` **obrigatório** (decisão 0021): o backend nunca soma canais potencialmente sobrepostos. Controller com 42 linhas, só delega; tenant vem do contexto, nunca de parâmetro. |
 | 2026-08-12 | Verificação independente do motor | Recalculei o exemplo §2.5 à mão e conferi contra o teste: N2 `51,2636`, N3 `44,9636`, 25,64% e 22,49% batem. O teste usa `compareTo`, exercita os 3 rótulos de teto e rastreia os 7 IDs de custo — não passa por construção. **67 testes puros, 0 falhas.** |
+| 2026-08-12 | Auditoria de segurança (Fase 2) | **Nenhum vazamento entre tenants.** As 3 queries novas são JPQL sobre entidades com `@TenantId`, então recebem o predicado automático. `canalId` vindo do usuário não é vetor: o predicado de tenant é aplicado **antes** do filtro por canal, e canal alheio devolve vazio — indistinguível de "canal vazio no período", sem oráculo de enumeração. Corrigidos: `GRANT UPDATE` largo demais em `taxa_canal` (agora por coluna) e o alerta de repasse que era calculado e descartado. |
+| 2026-08-12 | Revisão de código (Fase 2) | Aprovou o pacote (granularidade adequada, regra do teto sem duplicação, `Rateio` fiel ao §6.3). Achado principal: **nenhuma margem sai `CALCULADA`** porque ninguém grava `custo(MERCADORIA)` — registrado acima como limitação nº 1, não como bug. |
+| 2026-08-12 | Teste de isolamento do motor | `IsolamentoMargemTest` (7 casos) fecha o achado ALTO da auditoria: a regra 1 do CLAUDE.md exige teste de isolamento por query nova. **116 casos de teste no projeto.** O agente verificou minha premissa em vez de repeti-la e descobriu que a sabotagem que sugeri (`nativeQuery = true`) **não** derrubaria o teste sozinha — o RLS, camada independente, continuaria filtrando. Está documentado com a cadeia real de sabotagem. |
 | 2026-08-12 | Auditoria de segurança (Fase 1) | `revisor-seguranca` **não achou vazamento entre tenants** nas 12 tabelas novas. Corrigido o achado MÉDIO: a ingestão agora valida o canal contra o tenant **antes** de qualquer escrita, com exceção própria, em vez de depender da FK composta estourar no meio do INSERT. Corrigido também vazamento de conteúdo de payload em mensagem de exceção. |
 | 2026-08-12 | Revisão de código (Fase 1) | `revisor-codigo` aprovou o padrão geral (12 entidades uniformes, `SuporteJson` como abstração certa, nenhuma abstração prematura entre os adaptadores). Apontou 2 comportamentos críticos sem teste — ambos cobertos agora. Dívida registrada na seção acima. |
 | 2026-08-12 | Testes de isolamento da Fase 1 | Feito. `IsolamentoFaseUmTest` (comportamental em `canal`, `pedido`, `cliente`), `ChaveCompostaImpedeReferenciaCruzadaTest` (prova que a decisão 0015 não é só comentário: FK cruzada entre tenants é recusada com SQLSTATE 23503) e 3 casos novos no `ServicoIngestaoTest` (canal de outro tenant, dedup de cliente, backstop de corrida). 63 casos de teste no total. **Nenhum executado.** |
