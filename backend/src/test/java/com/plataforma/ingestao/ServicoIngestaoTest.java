@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -17,10 +18,18 @@ import com.plataforma.canal.Canal;
 import com.plataforma.canal.CategoriaCanal;
 import com.plataforma.canal.RepositorioCanal;
 import com.plataforma.canal.TipoCanal;
+import com.plataforma.catalogo.Produto;
+import com.plataforma.catalogo.RepositorioProduto;
+import com.plataforma.catalogo.RepositorioVariacao;
+import com.plataforma.catalogo.Variacao;
 import com.plataforma.cliente.RepositorioCliente;
 import com.plataforma.comum.tenant.ContextoTenant;
+import com.plataforma.integracao.PayloadInvalidoException;
+import com.plataforma.pedido.ItemPedido;
 import com.plataforma.pedido.Pedido;
+import com.plataforma.pedido.RepositorioItemPedido;
 import com.plataforma.pedido.RepositorioPedido;
+import com.plataforma.pedido.StatusPedido;
 import com.plataforma.suporte.LeitorDeFixture;
 import com.plataforma.suporte.PostgresDeTeste;
 
@@ -32,6 +41,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -65,6 +75,15 @@ class ServicoIngestaoTest {
 
     @Autowired
     private RepositorioCliente repositorioCliente;
+
+    @Autowired
+    private RepositorioItemPedido repositorioItemPedido;
+
+    @Autowired
+    private RepositorioProduto repositorioProduto;
+
+    @Autowired
+    private RepositorioVariacao repositorioVariacao;
 
     @AfterEach
     void limparContexto() {
@@ -118,10 +137,14 @@ class ServicoIngestaoTest {
             // Caso 3 do cabecalho da V012: hash mudou, o EVENTO reprocessa
             // (status volta para RECEBIDO, novo payload_bruto gravado)...
             assertTrue(comHashDiferente.processado());
-            // ...mas a segunda trava (uq_pedido_origem, V008) impede um
-            // SEGUNDO pedido: Pedido e imutavel por desenho nesta rodada
-            // (ver javadoc de ServicoIngestao.persistirResultado), entao o
-            // id devolvido e o MESMO pedido de antes, nunca um novo.
+            // ...e a segunda trava (uq_pedido_origem, V008) impede um
+            // SEGUNDO pedido: o id devolvido e o MESMO pedido de antes -
+            // mas, desde a dívida 1 (docs/ESTADO.md), esse pedido existente
+            // agora e ATUALIZADO com os campos do payload reprocessado
+            // (Pedido.atualizarAPartirDaOrigem), nao mais ignorado. Como o
+            // unico campo alterado nesta fixture ('comment') nao e mapeado
+            // para nenhuma coluna canonica, nenhum valor visivel muda -
+            // mas a identidade da linha (id) e preservada de qualquer forma.
             assertEquals(primeiraVez.idPedido(), comHashDiferente.idPedido());
 
             assertEquals(1, repositorioPedido.count(), "reprocessar com a mesma chave natural NUNCA duplica pedido");
@@ -263,6 +286,190 @@ class ServicoIngestaoTest {
     }
 
     // ------------------------------------------------------------------
+    // Dívida 1 (docs/ESTADO.md): reprocessar com status novo ATUALIZA o
+    // pedido existente, em vez de so auditar em evento_ingerido.
+    // ------------------------------------------------------------------
+
+    @Test
+    void reprocessarPedidoComStatusNovoAtualizaOStatusDoPedidoExistente() throws SQLException {
+        UUID tenantId = criarTenant("ingestao-status");
+        UUID canalId = criarCanalMercadoLivre(tenantId);
+        String payloadPago = LeitorDeFixture.ler("/fixtures/mercadolivre/pedido-completo.json");
+        // Mesmo id_externo de PEDIDO (o "id" dentro do payload nao muda),
+        // status_origem trocado para algo que o adaptador ainda nao
+        // mapeia -> cai no neutro AGUARDANDO_PAGAMENTO (ver
+        // AdaptadorMercadoLivre.traduzirStatus). Simula o primeiro
+        // webhook do ciclo de vida do pedido, antes do pagamento.
+        String payloadAindaNaoPago = comCampoAlterado(payloadPago, "status", "in_process");
+
+        ContextoTenant.definir(tenantId);
+        try {
+            ResultadoIngestao primeiraVez = servicoIngestao.ingerir(canalId, TipoEvento.PEDIDO, "evt-status-1", payloadAindaNaoPago);
+            assertTrue(primeiraVez.processado());
+            Pedido pedidoAntes = repositorioPedido.findById(primeiraVez.idPedido()).orElseThrow();
+            assertEquals(StatusPedido.AGUARDANDO_PAGAMENTO, pedidoAntes.getStatus());
+
+            // Segundo webhook, MESMO pedido (mesmo "id" no payload), agora
+            // com status_origem="paid" - simula o pagamento sendo
+            // confirmado depois. idExterno do EVENTO e outro de proposito:
+            // sao dois eventos distintos (dois webhooks) sobre o MESMO
+            // pedido, exatamente o cenario que motivou a dívida 1.
+            ResultadoIngestao segundaVez = servicoIngestao.ingerir(canalId, TipoEvento.PEDIDO, "evt-status-2", payloadPago);
+            assertTrue(segundaVez.processado());
+            assertEquals(primeiraVez.idPedido(), segundaVez.idPedido(),
+                    "mesma chave natural de pedido (canal_id + id_externo do PAYLOAD) - tem que ser o MESMO pedido");
+
+            Pedido pedidoDepois = repositorioPedido.findById(segundaVez.idPedido()).orElseThrow();
+            assertEquals(StatusPedido.PAGO, pedidoDepois.getStatus(),
+                    "dívida 1: reprocessar com status novo tem que ATUALIZAR o pedido existente");
+            assertEquals(1, repositorioPedido.count(), "atualizar status nunca cria um segundo pedido");
+        } finally {
+            ContextoTenant.limpar();
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Dívida 2 (docs/ESTADO.md): falha de traducao grava status=ERRO,
+    // sem apagar o evento e sem vazar payload em erro_mensagem.
+    // ------------------------------------------------------------------
+
+    @Test
+    void falhaDeTraducaoPersisteEventoComStatusErroSemVazarPayloadNaMensagem() throws SQLException {
+        UUID tenantId = criarTenant("ingestao-erro");
+        UUID canalId = criarCanalMercadoLivre(tenantId);
+        // Payload sem 'id': AdaptadorMercadoLivre.traduzirPedido lanca
+        // PayloadInvalidoException antes de qualquer outra coisa (nao ha
+        // chave de idempotencia possivel sem id do pedido).
+        String payloadSemId = "{\"date_created\": \"2024-01-10T10:00:00.000-04:00\"}";
+        String idExternoDoEvento = "evt-erro-" + UUID.randomUUID();
+
+        ContextoTenant.definir(tenantId);
+        try {
+            assertThrows(PayloadInvalidoException.class,
+                    () -> servicoIngestao.ingerir(canalId, TipoEvento.PEDIDO, idExternoDoEvento, payloadSemId),
+                    "quem chama ingerir() continua vendo a falha - gravar o erro nao pode virar sucesso silencioso");
+
+            EventoIngerido evento = repositorioEventoIngerido
+                    .findByCanalIdAndTipoEventoAndIdExterno(canalId, TipoEvento.PEDIDO, idExternoDoEvento)
+                    .orElseThrow(() -> new AssertionError(
+                            "evento_ingerido tem que SOBREVIVER a uma falha de traducao (dívida 2) - "
+                                    + "sem isso o reenvio identico tenta para sempre, invisivel"));
+
+            assertEquals(StatusEventoIngerido.ERRO, evento.getStatus());
+            assertNotNull(evento.getErroMensagem(), "erro_mensagem tem que estar preenchida quando status=ERRO");
+            assertTrue(evento.getErroMensagem().contains("PayloadInvalidoException"),
+                    "erro_mensagem guarda o TIPO do erro (regra da dívida 2)");
+            assertFalse(evento.getErroMensagem().contains(payloadSemId),
+                    "erro_mensagem NUNCA pode conter o payload nem trecho dele - risco de dado pessoal do comprador");
+            assertEquals(1, evento.getTentativas());
+        } finally {
+            ContextoTenant.limpar();
+        }
+    }
+
+    @Test
+    void reenvioIdenticoDoMesmoPayloadQuebradoContinuaFalhandoEIncrementaTentativas() throws SQLException {
+        UUID tenantId = criarTenant("ingestao-erro-reenvio");
+        UUID canalId = criarCanalMercadoLivre(tenantId);
+        String payloadSemId = "{\"date_created\": \"2024-01-10T10:00:00.000-04:00\"}";
+        String idExternoDoEvento = "evt-erro-reenvio";
+
+        ContextoTenant.definir(tenantId);
+        try {
+            assertThrows(PayloadInvalidoException.class,
+                    () -> servicoIngestao.ingerir(canalId, TipoEvento.PEDIDO, idExternoDoEvento, payloadSemId));
+            assertThrows(PayloadInvalidoException.class,
+                    () -> servicoIngestao.ingerir(canalId, TipoEvento.PEDIDO, idExternoDoEvento, payloadSemId));
+
+            EventoIngerido evento = repositorioEventoIngerido
+                    .findByCanalIdAndTipoEventoAndIdExterno(canalId, TipoEvento.PEDIDO, idExternoDoEvento)
+                    .orElseThrow();
+            // Diferente do caminho feliz (reenvio identico de payload BOM
+            // e no-op silencioso, ver SQL_UPSERT_EVENTO): reenvio do
+            // MESMO payload QUEBRADO continua contando, para dar visibilidade
+            // de "isto esta falhando ha N tentativas" a quem for investigar.
+            assertEquals(2, evento.getTentativas());
+            assertEquals(1, repositorioEventoIngerido.count(), "continua sendo UMA linha, nao uma por tentativa");
+        } finally {
+            ContextoTenant.limpar();
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Dívida 3 (docs/ESTADO.md): variacaoId resolvido pelo PIPELINE,
+    // por SKU, sempre restrito ao tenant do evento.
+    // ------------------------------------------------------------------
+
+    @Test
+    void resolveVariacaoPorSkuQuandoExisteNoCatalogoDoMesmoTenant() throws SQLException {
+        UUID tenantId = criarTenant("ingestao-variacao-ok");
+        String sku = "SKU-RESOLVIDO-" + UUID.randomUUID();
+        UUID variacaoId = criarVariacao(tenantId, sku);
+        UUID canalId = criarCanalMercadoLivre(tenantId);
+        String payload = payloadComUmItem(sku);
+
+        ContextoTenant.definir(tenantId);
+        ResultadoIngestao resultado;
+        try {
+            resultado = servicoIngestao.ingerir(canalId, TipoEvento.PEDIDO, "evt-variacao-ok", payload);
+        } finally {
+            ContextoTenant.limpar();
+        }
+        assertTrue(resultado.processado());
+
+        ContextoTenant.definir(tenantId);
+        try {
+            List<ItemPedido> itens = repositorioItemPedido.findByPedidoId(resultado.idPedido());
+            assertEquals(1, itens.size());
+            assertEquals(variacaoId, itens.get(0).getVariacaoId(),
+                    "SKU casando com uma variacao do MESMO tenant tem que resolver variacao_id");
+        } finally {
+            ContextoTenant.limpar();
+        }
+    }
+
+    /**
+     * Isolamento de tenant obrigatorio para toda query nova (regra do
+     * enunciado desta tarefa): {@code RepositorioVariacao.findBySku} e uma
+     * consulta NOVA que a dívida 3 introduziu no pipeline. Este teste
+     * FALHARIA se ela vazasse entre tenants - o tenant B nunca pode
+     * resolver variacao_id a partir de uma variacao cadastrada pelo
+     * tenant A, mesmo com o SKU identico.
+     */
+    @Test
+    void resolucaoDeVariacaoPorSkuNuncaVazaEntreTenants() throws SQLException {
+        UUID tenantA = criarTenant("ingestao-variacao-a");
+        UUID tenantB = criarTenant("ingestao-variacao-b");
+        String skuCompartilhado = "SKU-ISOLAMENTO-" + UUID.randomUUID();
+
+        criarVariacao(tenantA, skuCompartilhado);
+
+        UUID canalB = criarCanalMercadoLivre(tenantB);
+        String payload = payloadComUmItem(skuCompartilhado);
+
+        ContextoTenant.definir(tenantB);
+        ResultadoIngestao resultado;
+        try {
+            resultado = servicoIngestao.ingerir(canalB, TipoEvento.PEDIDO, "evt-variacao-isolamento", payload);
+        } finally {
+            ContextoTenant.limpar();
+        }
+        assertTrue(resultado.processado());
+        assertTrue(resultado.camposAusentes().stream().anyMatch(a -> a.campo().equals("item_pedido.variacao_id")),
+                "ausencia de variacao tem que ser DECLARADA (regra 5 do CLAUDE.md), nunca silenciosa");
+
+        ContextoTenant.definir(tenantB);
+        try {
+            List<ItemPedido> itens = repositorioItemPedido.findByPedidoId(resultado.idPedido());
+            assertEquals(1, itens.size());
+            assertNull(itens.get(0).getVariacaoId(),
+                    "isolamento de tenant: SKU de OUTRO tenant NUNCA pode resolver variacao_id aqui");
+        } finally {
+            ContextoTenant.limpar();
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Auxiliares
     // ------------------------------------------------------------------
 
@@ -361,5 +568,48 @@ class ServicoIngestaoTest {
                 return (UUID) resultado.getObject("id");
             }
         }
+    }
+
+    /**
+     * Cria produto + variacao (o SKU) para os testes de resolucao de
+     * variacao (dívida 3). Roda sob o tenant informado - quem chama decide
+     * de qual tenant e a variacao, e e exatamente essa escolha que o
+     * teste de isolamento explora.
+     */
+    private UUID criarVariacao(UUID tenantId, String sku) {
+        ContextoTenant.definir(tenantId);
+        try {
+            Produto produto = repositorioProduto.save(
+                    new Produto(null, null, "Produto de teste - " + sku, null, null, null, null, null, null));
+            Variacao variacao = repositorioVariacao.save(
+                    new Variacao(produto.getId(), sku, null, null, null, true, null, null, null, null, null, null, null));
+            return variacao.getId();
+        } finally {
+            ContextoTenant.limpar();
+        }
+    }
+
+    /**
+     * Payload minimo valido de pedido do Mercado Livre, com um unico item
+     * do SKU informado - usado pelos testes de resolucao de variacao
+     * (dívida 3), que nao precisam de nenhum outro campo do pedido.
+     */
+    private static String payloadComUmItem(String sku) {
+        String idExternoPedido = "pedido-variacao-" + UUID.randomUUID();
+        return """
+                {
+                  "id": "%s",
+                  "date_created": "2024-01-10T10:00:00.000-04:00",
+                  "status": "paid",
+                  "total_amount": 10.00,
+                  "order_items": [
+                    {
+                      "item": { "id": "ITEM-1", "title": "Produto de teste", "seller_sku": "%s" },
+                      "quantity": 1,
+                      "unit_price": 10.00
+                    }
+                  ]
+                }
+                """.formatted(idExternoPedido, sku);
     }
 }

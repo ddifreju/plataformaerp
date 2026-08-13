@@ -191,4 +191,59 @@ public class Cliente {
     public OffsetDateTime getAtualizadoEm() {
         return atualizadoEm;
     }
+
+    /**
+     * Metodo de INTENCAO (dívida 1 do docs/ESTADO.md, "mesma coisa para
+     * Cliente"): enriquece um cliente JA EXISTENTE (mesma chave natural
+     * canalId+idExterno) com dado mais novo de um reprocessamento. So o
+     * pipeline chama isto (com.plataforma.ingestao.ServicoIngestao).
+     *
+     * NUNCA MUDAM: id, tenantId, canalId, idExterno - mesma razao do
+     * {@link com.plataforma.pedido.Pedido#atualizarAPartirDaOrigem}: sao a
+     * identidade da linha, nao dado que se atualiza.
+     *
+     * REGRA DE MERGE: para nome, apelidoOrigem, email, telefone,
+     * documentoTipo, documentoHash, documentoMascarado - um valor NULO em
+     * {@code origem} preserva o que ja estava gravado, nunca apaga. O
+     * cliente e a tabela mais sensivel do sistema (LGPD, V007) e um
+     * payload de atualizacao de PEDIDO raramente repete o cadastro
+     * completo do comprador; tratar "nao veio desta vez" como "apague o
+     * que tinha" perderia dado bom (ex.: um telefone ja capturado) so
+     * porque um evento seguinte, sobre outro assunto, nao trouxe de novo.
+     *
+     * dadosOrigem sempre e sobrescrito (nunca fica null - o construtor ja
+     * garante isso, defaultando para "{}"): e o extrato do payload mais
+     * recente, faz sentido refletir sempre o ultimo evento visto.
+     *
+     * LIMITACAO CONHECIDA, mesma familia da registrada em
+     * Pedido.atualizarAPartirDaOrigem: {@code tipo} (TipoCliente) NUNCA e
+     * null depois de construido - o construtor de Cliente ja aplica o
+     * default PESSOA_FISICA quando o adaptador nao confirma o tipo (ver
+     * AdaptadorBling.traduzirCliente, contato.tipoPessoa fora de
+     * F/J). Ou seja, um {@code origem.tipo} "PESSOA_FISICA" pode ser um
+     * dado CONFIRMADO pela fonte (tipoPessoa='F') ou um NEUTRO por falta
+     * de confirmacao - as duas coisas sao indistinguiveis neste ponto do
+     * pipeline, porque a distincao se perde dentro do proprio construtor
+     * de Cliente antes de chegar aqui. Por isso {@code tipo} e sempre
+     * sobrescrito por {@code origem.tipo}, igual a decisao para
+     * Pedido.status: consistente com o resto do sistema, mas nao resolve
+     * o risco de um evento posterior "rebaixar" um PESSOA_JURIDICA
+     * confirmado para o neutro PESSOA_FISICA. Resolver de verdade exigiria
+     * o adaptador expor a distincao "confirmado vs. neutro" para alem do
+     * enum ja resolvido - fora do escopo desta rodada.
+     */
+    public void atualizarAPartirDaOrigem(Cliente origem) {
+        this.tipo = origem.tipo;
+        this.dadosOrigem = origem.dadosOrigem;
+
+        this.nome = (origem.nome != null) ? origem.nome : this.nome;
+        this.apelidoOrigem = (origem.apelidoOrigem != null) ? origem.apelidoOrigem : this.apelidoOrigem;
+        this.email = (origem.email != null) ? origem.email : this.email;
+        this.telefone = (origem.telefone != null) ? origem.telefone : this.telefone;
+        this.documentoTipo = (origem.documentoTipo != null) ? origem.documentoTipo : this.documentoTipo;
+        this.documentoHash = (origem.documentoHash != null) ? origem.documentoHash : this.documentoHash;
+        this.documentoMascarado = (origem.documentoMascarado != null) ? origem.documentoMascarado : this.documentoMascarado;
+
+        this.atualizadoEm = OffsetDateTime.now();
+    }
 }

@@ -291,4 +291,80 @@ public class Pedido {
     public OffsetDateTime getAtualizadoEm() {
         return atualizadoEm;
     }
+
+    /**
+     * Metodo de INTENCAO (dívida 1 do docs/ESTADO.md), nao um setter
+     * generico: aplica, num pedido JA EXISTENTE, os campos que um
+     * reprocessamento pode legitimamente mudar - o caso motivador e o
+     * marketplace mandar "aguardando pagamento" e depois "pago" com o
+     * MESMO id_externo. So o pipeline chama isto
+     * (com.plataforma.ingestao.ServicoIngestao), nunca um controller.
+     *
+     * {@code origem} e o {@link Pedido} recem-traduzido pelo adaptador
+     * para o MESMO evento reprocessado - ainda nao persistido, so usado
+     * aqui como fonte dos valores novos.
+     *
+     * NUNCA MUDAM (este metodo simplesmente nao toca neles): id,
+     * tenantId, canalId, idExterno. Esses quatro sao a IDENTIDADE da
+     * linha - a chave natural (canalId, idExterno) e o que localizou este
+     * pedido em primeiro lugar (ver ServicoIngestao.persistirResultado),
+     * entao "atualizar" a propria chave que serviu para encontrar a linha
+     * nao faz sentido e abriria espaco para o pedido "migrar" de chave por
+     * engano.
+     *
+     * DUAS REGRAS DE MERGE DIFERENTES, uma por grupo de campo:
+     *
+     * <ol>
+     *   <li><b>status, valorBrutoItens, valorDesconto, valorFreteCobrado,
+     *       valorTotalPedido, feitoEm, moeda, dadosOrigem</b> - sempre
+     *       aplicados de {@code origem}, sem condicao. Sao colunas
+     *       {@code NOT NULL} do schema (V008) e o construtor de Pedido ja
+     *       garante que {@code origem} sempre traz um valor (nunca null,
+     *       mesmo quando a fonte nao informa - nesse caso o adaptador usa
+     *       um neutro, ex.: {@code AGUARDANDO_PAGAMENTO} ou
+     *       {@code BigDecimal.ZERO}, e declara a lacuna via
+     *       {@code CampoAusente}). LIMITACAO CONHECIDA, nao resolvida
+     *       aqui: se um evento novo trouxer um {@code status_origem} que o
+     *       adaptador NAO reconhece, ele cai no neutro
+     *       {@code AGUARDANDO_PAGAMENTO} (ver
+     *       AdaptadorBling/AdaptadorMercadoLivre.traduzirStatus) - esse
+     *       neutro sobrescreveria aqui um status mais avancado (ex.: PAGO)
+     *       que este pedido ja tinha. E o mesmo tipo de risco de "default
+     *       mascarando ausencia" que ja existe nos adaptadores hoje;
+     *       resolver exigiria o pipeline distinguir "status confirmado
+     *       pela fonte" de "status neutro por falta de mapeamento", o que
+     *       nao existe ainda (fora do escopo desta rodada).</li>
+     *   <li><b>codigoExibicao, statusOrigem, valorRepassePrevisto,
+     *       formaPagamento, quantidadeParcelas, cepEntrega, cidadeEntrega,
+     *       ufEntrega</b> - colunas nullable do schema. So sobrescrevem
+     *       quando {@code origem} traz um valor NAO NULO; um valor nulo em
+     *       {@code origem} preserva o que ja estava gravado. Motivo:
+     *       payload de atualizacao de status normalmente e mais ESTREITO
+     *       que o payload original (ex.: um webhook so de pagamento pode
+     *       nao repetir cep/cidade/uf de entrega) - tratar "o campo nao
+     *       veio desta vez" como "apague o que tinha" destruiria dado bom
+     *       por causa de um payload legitimamente incompleto.</li>
+     * </ol>
+     */
+    public void atualizarAPartirDaOrigem(Pedido origem) {
+        this.status = origem.status;
+        this.feitoEm = origem.feitoEm;
+        this.valorBrutoItens = origem.valorBrutoItens;
+        this.valorDesconto = origem.valorDesconto;
+        this.valorFreteCobrado = origem.valorFreteCobrado;
+        this.valorTotalPedido = origem.valorTotalPedido;
+        this.moeda = origem.moeda;
+        this.dadosOrigem = origem.dadosOrigem;
+
+        this.codigoExibicao = (origem.codigoExibicao != null) ? origem.codigoExibicao : this.codigoExibicao;
+        this.statusOrigem = (origem.statusOrigem != null) ? origem.statusOrigem : this.statusOrigem;
+        this.valorRepassePrevisto = (origem.valorRepassePrevisto != null) ? origem.valorRepassePrevisto : this.valorRepassePrevisto;
+        this.formaPagamento = (origem.formaPagamento != null) ? origem.formaPagamento : this.formaPagamento;
+        this.quantidadeParcelas = (origem.quantidadeParcelas != null) ? origem.quantidadeParcelas : this.quantidadeParcelas;
+        this.cepEntrega = (origem.cepEntrega != null) ? origem.cepEntrega : this.cepEntrega;
+        this.cidadeEntrega = (origem.cidadeEntrega != null) ? origem.cidadeEntrega : this.cidadeEntrega;
+        this.ufEntrega = (origem.ufEntrega != null) ? origem.ufEntrega : this.ufEntrega;
+
+        this.atualizadoEm = OffsetDateTime.now();
+    }
 }

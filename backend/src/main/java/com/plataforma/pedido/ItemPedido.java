@@ -170,4 +170,25 @@ public class ItemPedido {
     public OffsetDateTime getAtualizadoEm() {
         return atualizadoEm;
     }
+
+    /**
+     * Casa este item com a variacao (SKU) do catalogo - dívida 3 do
+     * docs/ESTADO.md. DECISAO JA TOMADA (nao reaberta aqui): quem resolve
+     * e o PIPELINE (com.plataforma.ingestao.ServicoIngestao), nunca o
+     * adaptador - o adaptador e PURO e nao consulta banco (ver javadoc de
+     * AdaptadorMercadoLivre/AdaptadorBling), entao ele so sabe expor
+     * {@link #getSkuOrigem()}. Depois que o item ja foi traduzido, o
+     * pipeline (que TEM acesso ao {@code RepositorioVariacao}) busca a
+     * variacao por SKU dentro do tenant e, se achar, chama este metodo.
+     *
+     * Se a variacao NAO for encontrada, o pipeline simplesmente NAO chama
+     * este metodo: variacaoId fica NULL (o valor com que o item nasce) e
+     * a lacuna e declarada via {@link com.plataforma.integracao.CampoAusente}
+     * no resultado da ingestao - nunca inventado (regra 5 do CLAUDE.md).
+     * Por isso este metodo nao tem um "resolverVariacao(null)" com
+     * significado especial: chamar ou nao chamar E a propria decisao.
+     */
+    public void resolverVariacao(UUID variacaoId) {
+        this.variacaoId = variacaoId;
+    }
 }

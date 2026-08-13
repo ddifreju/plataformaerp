@@ -3,6 +3,7 @@ package com.plataforma.ingestao;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -15,17 +16,23 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.plataforma.canal.Canal;
 import com.plataforma.canal.RepositorioCanal;
 import com.plataforma.canal.TipoCanal;
+import com.plataforma.catalogo.RepositorioVariacao;
+import com.plataforma.catalogo.Variacao;
 import com.plataforma.cliente.Cliente;
 import com.plataforma.cliente.RepositorioCliente;
 import com.plataforma.comum.tenant.ContextoTenant;
 import com.plataforma.custo.Custo;
 import com.plataforma.custo.RepositorioCusto;
 import com.plataforma.integracao.AdaptadorDeCanal;
+import com.plataforma.integracao.CampoAusente;
+import com.plataforma.integracao.PayloadInvalidoException;
 import com.plataforma.integracao.ResultadoTraducao;
 import com.plataforma.pedido.ItemPedido;
 import com.plataforma.pedido.Pedido;
@@ -55,6 +62,46 @@ import com.plataforma.pedido.RepositorioPedido;
  * real (o candidato hoje, numeroLoja do Bling, e hipotese nao
  * confirmada - ver mapeamento-bling.md). Ate la, cada canal gera sua
  * propria linha de pedido, e "quanto vendi" tem que declarar o canal.
+ *
+ * ---------------------------------------------------------------------
+ * POR QUE DUAS TRANSACOES SEPARADAS, NAO UMA SO (dívida 2 do ESTADO.md)
+ * ---------------------------------------------------------------------
+ * {@link #ingerir} NAO tem {@code @Transactional} no metodo: ele abre
+ * transacoes explicitamente, via {@link TransactionTemplate}, em vez de
+ * depender do proxy declarativo do Spring. O motivo e estrutural, nao
+ * estilo:
+ *
+ * <p>O caminho feliz (upsert do evento -> traducao -> persistencia ->
+ * marcar processado) PRECISA ser atomico - se qualquer passo falhar, o
+ * upsert do evento tambem deve desfazer (senao um pedido "meio gravado"
+ * fica associado a um evento que diz "processado"). Mas quando quem falha
+ * e especificamente a TRADUCAO ({@link PayloadInvalidoException}), o
+ * requisito e o OPOSTO: o evento tem que sobreviver, com
+ * {@code status=ERRO} e {@code erro_mensagem}, para o reenvio nao cair
+ * num buraco negro (ver javadoc de PayloadInvalidoException).
+ *
+ * <p>Essas duas necessidades sao inconciliaveis dentro de UMA transacao:
+ * nao existe "desfaz tudo, mas mantem esta UPDATE aqui". A solucao nao e
+ * {@code REQUIRES_NEW} ANINHADA dentro da mesma transacao ambiente -
+ * isso faria a transacao de erro tentar dar UPDATE numa linha que a
+ * transacao externa (ainda aberta, ainda seguran do o lock da linha que
+ * ela mesma inseriu) nao liberou, travando a aplicacao esperando um lock
+ * que so ela mesma poderia soltar (autodeadlock). A solucao usada aqui e
+ * SEQUENCIAL: a transacao do caminho feliz RODA E TERMINA (commit ou
+ * rollback) inteiramente antes de qualquer decisao sobre gravar erro.
+ * So DEPOIS que ela terminou (e, no caso de falha de traducao, deu
+ * rollback e soltou o lock) e que uma SEGUNDA transacao, independente,
+ * grava o {@code status=ERRO}. {@link TransactionTemplate} com
+ * {@code PROPAGATION_REQUIRES_NEW} garante que cada uma das duas
+ * chamadas abre sua PROPRIA transacao do zero, mesmo que no futuro
+ * {@code ingerir} passe a ser chamado de dentro de outro
+ * {@code @Transactional} (ex.: um controller transacional).
+ *
+ * <p>Efeito colateral aceito: se a traducao falhar, o upsert de
+ * {@code status='RECEBIDO'} feito dentro da primeira transacao e
+ * desfeito junto - por isso a segunda transacao REFAZ o upsert (variante
+ * com {@code status='ERRO'}), nao faz so um UPDATE. Ver
+ * {@link #SQL_UPSERT_EVENTO_ERRO}.
  */
 @Service
 public class ServicoIngestao {
@@ -90,6 +137,31 @@ public class ServicoIngestao {
             RETURNING id
             """;
 
+    // Variante de erro (dívida 2). Duas diferencas deliberadas em relacao
+    // a SQL_UPSERT_EVENTO:
+    //   1. SEM o "WHERE hash_payload IS DISTINCT FROM ...": um reenvio do
+    //      MESMO payload quebrado tem que continuar sendo contado (
+    //      tentativas incrementa, atualizado_em atualiza) - diferente do
+    //      caminho feliz, aqui "reenvio identico" NAO e no-op, e mais uma
+    //      tentativa falha que vale registrar para quem for investigar.
+    //   2. tentativas SOBE (evento_ingerido.tentativas + 1) em vez de
+    //      zerar - e o contador de "quantas vezes isto falhou".
+    private static final String SQL_UPSERT_EVENTO_ERRO = """
+            INSERT INTO evento_ingerido
+                (tenant_id, canal_id, tipo_evento, id_externo, hash_payload,
+                 payload_bruto, status, recebido_em, tentativas, erro_mensagem)
+            VALUES (?, ?, ?, ?, ?, ?::jsonb, 'ERRO', now(), 1, ?)
+            ON CONFLICT (tenant_id, canal_id, tipo_evento, id_externo)
+            DO UPDATE SET hash_payload  = excluded.hash_payload,
+                          payload_bruto = excluded.payload_bruto,
+                          status        = 'ERRO',
+                          recebido_em   = excluded.recebido_em,
+                          processado_em = NULL,
+                          tentativas    = evento_ingerido.tentativas + 1,
+                          erro_mensagem = excluded.erro_mensagem,
+                          atualizado_em = now()
+            """;
+
     // Fecha o ciclo do evento (RECEBIDO -> PROCESSADO) e aponta para a
     // linha canonica gerada (rastreabilidade - comentario de
     // entidade_tipo/entidade_id na V012). SQL nativo pelo MESMO motivo do
@@ -112,11 +184,17 @@ public class ServicoIngestao {
     private final RepositorioItemPedido repositorioItemPedido;
     private final RepositorioCliente repositorioCliente;
     private final RepositorioCusto repositorioCusto;
+    private final RepositorioVariacao repositorioVariacao;
     private final Map<TipoCanal, AdaptadorDeCanal> adaptadoresPorTipo;
+    // PROPAGATION_REQUIRES_NEW definido no construtor (nao e o default do
+    // TransactionTemplate) - ver o "POR QUE DUAS TRANSACOES SEPARADAS" no
+    // javadoc da classe.
+    private final TransactionTemplate transactionTemplate;
 
     public ServicoIngestao(JdbcTemplate jdbcTemplate, RepositorioCanal repositorioCanal,
             RepositorioPedido repositorioPedido, RepositorioItemPedido repositorioItemPedido,
             RepositorioCliente repositorioCliente, RepositorioCusto repositorioCusto,
+            RepositorioVariacao repositorioVariacao, PlatformTransactionManager gerenciadorTransacao,
             List<AdaptadorDeCanal> adaptadores) {
         this.jdbcTemplate = jdbcTemplate;
         this.repositorioCanal = repositorioCanal;
@@ -124,8 +202,11 @@ public class ServicoIngestao {
         this.repositorioItemPedido = repositorioItemPedido;
         this.repositorioCliente = repositorioCliente;
         this.repositorioCusto = repositorioCusto;
+        this.repositorioVariacao = repositorioVariacao;
         this.adaptadoresPorTipo = adaptadores.stream()
                 .collect(Collectors.toUnmodifiableMap(AdaptadorDeCanal::tipoSuportado, adaptador -> adaptador));
+        this.transactionTemplate = new TransactionTemplate(gerenciadorTransacao);
+        this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     /**
@@ -140,21 +221,14 @@ public class ServicoIngestao {
      *                     id deterministico a partir do payload (ver
      *                     comentario da V012), esta classe nao faz isso
      * @param payloadBruto o payload cru, exatamente como recebido
-     *
-     * LIMITACAO CONHECIDA (registrada aqui em vez de escondida): o metodo
-     * inteiro roda numa unica @Transactional. Se o adaptador ou a
-     * persistencia falharem DEPOIS do upsert do evento (ex.:
-     * PayloadInvalidoException), a transacao inteira desfaz - inclusive o
-     * upsert de evento_ingerido. Ou seja: hoje uma falha de tradução NAO
-     * fica gravada como status=ERRO/erro_mensagem (essas colunas existem
-     * na V012, mas esta rodada nao as usa) - o evento simplesmente volta
-     * a nao existir, e o proximo reenvio tenta de novo do zero. Gravar o
-     * erro de forma durável exigiria uma transacao separada (ex.:
-     * REQUIRES_NEW) só para a marcação de erro, fora do escopo desta
-     * tarefa - registrar aqui para quem for tratar retry/alerta de erro
-     * de verdade não presumir que já existe.
+     * @throws PayloadInvalidoException quando o adaptador nao consegue
+     *         traduzir o payload. ANTES de propagar, o evento e gravado
+     *         (em transacao propria - ver javadoc da classe) com
+     *         {@code status='ERRO'} e {@code erro_mensagem} preenchida:
+     *         quem chama ve a falha (pode responder 4xx/alertar), e o
+     *         evento fica rastreavel para investigacao, em vez de "nunca
+     *         ter existido".
      */
-    @Transactional
     public ResultadoIngestao ingerir(UUID canalId, TipoEvento tipoEvento, String idExterno, String payloadBruto) {
         UUID tenantId = ContextoTenant.atual();
         String hash = sha256Hex(payloadBruto);
@@ -176,6 +250,9 @@ public class ServicoIngestao {
         // (decisao 0007, camada 3), entao "nao encontrou" ja significa
         // "nao existe OU nao e deste tenant" - sem precisar comparar
         // tenant a mao. Falha explicita, testavel e antes de escrever.
+        // Roda fora de qualquer transacao explicita: leitura simples,
+        // Spring Data ja envolve findById num @Transactional(readOnly)
+        // proprio.
         Canal canal = repositorioCanal.findById(canalId)
                 .orElseThrow(() -> new CanalDesconhecidoException(
                         "Canal " + canalId + " nao existe ou nao pertence a este tenant."));
@@ -187,6 +264,23 @@ public class ServicoIngestao {
                             + " (canal " + canalId + "). Nada foi gravado.");
         }
 
+        try {
+            return transactionTemplate.execute(status ->
+                    processarDentroDeUmaTransacao(tenantId, canalId, tipoEvento, idExterno, hash, payloadBruto, adaptador));
+        } catch (PayloadInvalidoException falhaDeTraducao) {
+            // A transacao acima ja deu ROLLBACK sozinha (TransactionTemplate
+            // desfaz e relanca quando o callback propaga uma
+            // RuntimeException) - o upsert de evento_ingerido feito dentro
+            // dela foi desfeito junto. Por isso a chamada abaixo roda numa
+            // SEGUNDA transacao (nova, ver construtor) e REFAZ o upsert do
+            // zero, desta vez com status=ERRO.
+            registrarErroDeTraducao(tenantId, canalId, tipoEvento, idExterno, hash, payloadBruto, falhaDeTraducao);
+            throw falhaDeTraducao;
+        }
+    }
+
+    private ResultadoIngestao processarDentroDeUmaTransacao(UUID tenantId, UUID canalId, TipoEvento tipoEvento,
+            String idExterno, String hash, String payloadBruto, AdaptadorDeCanal adaptador) {
         // ATENCAO CRITICA: SQL nativo (abaixo) NAO recebe o predicado de
         // tenant que o Hibernate acrescenta sozinho via @TenantId em
         // consultas JPA (decisao 0007, camada 3) - aqui so o RLS (camada
@@ -207,13 +301,48 @@ public class ServicoIngestao {
             return ResultadoIngestao.reenvioIdentico();
         }
 
+        // Pode lancar PayloadInvalidoException - quem trata isso e
+        // ingerir() (ver javadoc da classe: precisa terminar/desfazer ESTA
+        // transacao antes de gravar o erro numa transacao nova).
         ResultadoTraducao resultado = adaptador.traduzirPedido(payloadBruto, canalId);
 
-        UUID idPedidoPersistido = persistirResultado(resultado, canalId);
+        ResultadoPersistencia persistencia = persistirResultado(resultado, canalId);
 
-        marcarComoProcessado(idEvento, tenantId, idPedidoPersistido);
+        marcarComoProcessado(idEvento, tenantId, persistencia.idPedido());
 
-        return ResultadoIngestao.processado(idEvento, idPedidoPersistido, resultado.camposAusentes());
+        List<CampoAusente> camposAusentes = new ArrayList<>(resultado.camposAusentes());
+        camposAusentes.addAll(persistencia.camposAusentesAdicionais());
+        return ResultadoIngestao.processado(idEvento, persistencia.idPedido(), camposAusentes);
+    }
+
+    /**
+     * Grava a falha de traducao de forma duravel (dívida 2). Roda em
+     * transacao PROPRIA (REQUIRES_NEW, ver construtor) - a transacao do
+     * caminho feliz ja terminou (rollback) quando isto e chamado, entao
+     * nao ha risco do autodeadlock descrito no javadoc da classe.
+     *
+     * CUIDADO COM DADO PESSOAL: erro_mensagem NUNCA pode conter o payload
+     * nem trecho dele - o payload do marketplace/ERP carrega nome,
+     * endereco e contato do comprador (ver PayloadInvalidoException e
+     * regra 3/CLAUDE.md sobre isso). {@code falha.getMessage()} e seguro
+     * de usar aqui PORQUE, por contrato do proprio tipo (ver javadoc de
+     * PayloadInvalidoException e os pontos onde e lancada em
+     * AdaptadorBling/AdaptadorMercadoLivre), a mensagem so referencia
+     * id_externo de pedido/item e nome de campo ausente/invalido - nunca
+     * nome, endereco, e-mail ou telefone do comprador (que so aparecem
+     * dentro de traduzirCliente(), e esse metodo NUNCA lanca
+     * PayloadInvalidoException, so acumula CampoAusente). O prefixo com o
+     * nome da classe da excecao e o "tipo do erro" pedido pela dívida 2;
+     * o restante da mensagem e o "campo problematico", nunca conteudo do
+     * payload.
+     */
+    private void registrarErroDeTraducao(UUID tenantId, UUID canalId, TipoEvento tipoEvento, String idExterno,
+            String hash, String payloadBruto, PayloadInvalidoException falha) {
+        String erroMensagem = falha.getClass().getSimpleName() + ": " + falha.getMessage();
+        LOG.warn("Falha de traducao registrada como ERRO (tenant={}, canal={}, tipo={}, idExterno={}, tipoErro={})",
+                tenantId, canalId, tipoEvento, idExterno, falha.getClass().getSimpleName());
+        transactionTemplate.executeWithoutResult(status -> jdbcTemplate.update(SQL_UPSERT_EVENTO_ERRO,
+                tenantId, canalId, tipoEvento.name(), idExterno, hash, payloadBruto, erroMensagem));
     }
 
     private UUID executarUpsertEvento(UUID tenantId, UUID canalId, TipoEvento tipoEvento, String idExterno,
@@ -229,25 +358,35 @@ public class ServicoIngestao {
     }
 
     /**
+     * O que {@link #persistirResultado} produz: o id do pedido persistido
+     * (novo, atualizado ou ja existente) e os {@link CampoAusente} que so
+     * a PERSISTENCIA descobre (hoje, so a resolucao de variacao por SKU -
+     * dívida 3) - distintos dos que o ADAPTADOR ja declarou em
+     * {@link ResultadoTraducao#camposAusentes()}, porque o adaptador nao
+     * tem acesso ao catalogo para saber se o SKU casa com uma variacao.
+     */
+    private record ResultadoPersistencia(UUID idPedido, List<CampoAusente> camposAusentesAdicionais) {
+    }
+
+    /**
      * Persiste o resultado da traducao.
      *
      * SEGUNDA TRAVA contra pedido duplicado, alem do evento_ingerido
      * (V012): antes de inserir um pedido novo, verifica se ja existe um
      * pedido com a mesma chave natural (canal_id, id_externo) -
-     * uq_pedido_origem (V008). Se ja existir, este metodo NAO tenta
-     * atualiza-lo campo a campo: {@link Pedido} e imutavel por desenho
-     * (sem setters - ver seu javadoc: "esta entidade so mapeia e
-     * constroi, nao tem logica de negocio"; as datas de transicao de
-     * status nascem NULL e sao preenchidas por outro fluxo, de outra
-     * tarefa). Reprocessar um payload com hash diferente (caso 3 do
-     * cabecalho da V012) ainda fica registrado em evento_ingerido (hash e
-     * payload_bruto novos gravados), mas ATUALIZAR os campos do pedido ja
-     * existente e trabalho fora do escopo desta tarefa. A garantia que
-     * ESTA tarefa pede - "reprocessar nao duplica" - esta cumprida: o
-     * mesmo payload (ou uma versao alterada dele, com a mesma chave
-     * natural) NUNCA cria uma segunda linha de pedido.
+     * uq_pedido_origem (V008).
+     *
+     * QUANDO JA EXISTE (dívida 1 - reprocessar payload alterado agora
+     * ATUALIZA): em vez de so devolver o id existente sem tocar em nada,
+     * chama {@link Pedido#atualizarAPartirDaOrigem}, o metodo de INTENCAO
+     * que aplica status/valores/datas/dados_origem do pedido
+     * recem-traduzido, preservando a identidade da linha (id, tenantId,
+     * canalId, idExterno nunca mudam - ver javadoc daquele metodo). Itens
+     * e custos NAO sao tocados neste caminho: esta rodada so cobre
+     * pedido e cliente (ver docs/ESTADO.md, dívida 1) - atualizar
+     * item_pedido/custo em reprocessamento e trabalho de outra tarefa.
      */
-    private UUID persistirResultado(ResultadoTraducao resultado, UUID canalId) {
+    private ResultadoPersistencia persistirResultado(ResultadoTraducao resultado, UUID canalId) {
         Pedido pedidoTraduzido = resultado.pedido();
 
         Optional<Pedido> pedidoExistente = (pedidoTraduzido.getIdExterno() == null)
@@ -255,13 +394,25 @@ public class ServicoIngestao {
                 : repositorioPedido.findByCanalIdAndIdExterno(canalId, pedidoTraduzido.getIdExterno());
 
         if (pedidoExistente.isPresent()) {
-            LOG.info("Pedido ja existente para canal={} idExterno={} (id={}) - nenhuma linha nova criada "
-                    + "(Pedido e imutavel por desenho; atualizacao de campos e outra tarefa).",
-                    canalId, pedidoTraduzido.getIdExterno(), pedidoExistente.get().getId());
-            return pedidoExistente.get().getId();
+            Pedido existente = pedidoExistente.get();
+            existente.atualizarAPartirDaOrigem(pedidoTraduzido);
+            repositorioPedido.save(existente);
+            repositorioPedido.flush();
+            LOG.info("Pedido ja existente ATUALIZADO para canal={} idExterno={} (id={}) a partir do payload reprocessado.",
+                    canalId, pedidoTraduzido.getIdExterno(), existente.getId());
+
+            persistirClienteOuAtualizar(resultado.cliente(), canalId);
+
+            return new ResultadoPersistencia(existente.getId(), List.of());
         }
 
-        persistirClienteSeNovo(resultado.cliente(), canalId);
+        persistirClienteOuAtualizar(resultado.cliente(), canalId);
+
+        // Casamento de item x variacao (dívida 3): so o pipeline tem banco,
+        // por isso so aqui, nunca no adaptador. Precisa rodar ANTES do
+        // save() dos itens, ja que muda o campo variacaoId dos MESMOS
+        // objetos ItemPedido que serao gravados logo abaixo.
+        List<CampoAusente> camposAusentesVariacao = resolverVariacoesDosItens(resultado.itens());
 
         Pedido pedidoSalvo;
         try {
@@ -287,7 +438,7 @@ public class ServicoIngestao {
             LOG.warn("Corrida detectada ao inserir pedido canal={} idExterno={} - uq_pedido_origem pegou a "
                     + "duplicata, pedido existente (id={}) mantido.",
                     canalId, pedidoTraduzido.getIdExterno(), jaExistente.getId());
-            return jaExistente.getId();
+            return new ResultadoPersistencia(jaExistente.getId(), List.of());
         }
 
         for (ItemPedido item : resultado.itens()) {
@@ -304,21 +455,69 @@ public class ServicoIngestao {
             repositorioCusto.save(custo);
         }
 
-        return pedidoSalvo.getId();
+        return new ResultadoPersistencia(pedidoSalvo.getId(), camposAusentesVariacao);
     }
 
-    private void persistirClienteSeNovo(Cliente clienteTraduzido, UUID canalId) {
+    /**
+     * Dívida 3: casa cada item com a variacao do catalogo pelo SKU, DENTRO
+     * do tenant (RepositorioVariacao.findBySku ja e restrito pelo
+     * @TenantId - decisao 0007). Muta os MESMOS objetos ItemPedido
+     * recebidos (List.copyOf em ResultadoTraducao protege a LISTA, nao os
+     * elementos - mutar o elemento aqui e valido e e exatamente o que
+     * {@link ItemPedido#resolverVariacao} existe para permitir).
+     *
+     * Quando o SKU nao bate com nenhuma variacao (ou o item nao tem SKU
+     * nenhum), variacaoId fica NULL - o valor com que o item ja nasceu -
+     * e a ausencia e declarada aqui como CampoAusente, nunca inventada
+     * (regra 5 do CLAUDE.md). Isso cobre tanto "produto ainda nao
+     * sincronizado no catalogo" quanto "venda avulsa fora do catalogo",
+     * que sao situacoes legitimas, nao erros.
+     */
+    private List<CampoAusente> resolverVariacoesDosItens(List<ItemPedido> itens) {
+        List<CampoAusente> ausentes = new ArrayList<>();
+        for (ItemPedido item : itens) {
+            String sku = item.getSkuOrigem();
+            if (sku == null || sku.isBlank()) {
+                // Sem SKU na origem: nao ha o que buscar. Nao e uma
+                // ausencia NOVA declarada aqui - se for relevante, e o
+                // proprio adaptador quem ja documentou a falta do SKU.
+                continue;
+            }
+            Optional<Variacao> variacao = repositorioVariacao.findBySku(sku);
+            if (variacao.isPresent()) {
+                item.resolverVariacao(variacao.get().getId());
+            } else {
+                ausentes.add(new CampoAusente("item_pedido.variacao_id",
+                        "SKU '" + sku + "' nao corresponde a nenhuma variacao cadastrada/sincronizada para este "
+                                + "tenant - variacao_id fica NULL, nunca inventado (regra 5 do CLAUDE.md)."));
+            }
+        }
+        return ausentes;
+    }
+
+    /**
+     * Dívida 1 ("mesma coisa para Cliente"): quando o cliente da mesma
+     * chave natural (canalId, idExterno) ja existe, enriquece com
+     * {@link Cliente#atualizarAPartirDaOrigem} em vez de so ignorar o
+     * cliente recem-traduzido. Quando nao existe, insere normalmente.
+     */
+    private void persistirClienteOuAtualizar(Cliente clienteTraduzido, UUID canalId) {
         if (clienteTraduzido == null) {
             return;
         }
-        boolean jaExiste = clienteTraduzido.getIdExterno() != null
-                && repositorioCliente.findByCanalIdAndIdExterno(canalId, clienteTraduzido.getIdExterno()).isPresent();
-        if (jaExiste) {
-            // Mesma logica do pedido: Cliente e imutavel por desenho
-            // (sem setters), enriquecer um cadastro ja existente com dado
-            // mais recente da fonte e trabalho de outra tarefa.
+
+        Optional<Cliente> clienteExistente = (clienteTraduzido.getIdExterno() == null)
+                ? Optional.empty()
+                : repositorioCliente.findByCanalIdAndIdExterno(canalId, clienteTraduzido.getIdExterno());
+
+        if (clienteExistente.isPresent()) {
+            Cliente existente = clienteExistente.get();
+            existente.atualizarAPartirDaOrigem(clienteTraduzido);
+            repositorioCliente.save(existente);
+            repositorioCliente.flush();
             return;
         }
+
         repositorioCliente.save(clienteTraduzido);
         // flush() antes de voltar para persistirResultado inserir o
         // pedido: fk_pedido_cliente (V008) precisa que o cliente ja

@@ -147,6 +147,31 @@ public class AdaptadorBling implements AdaptadorDeCanal {
                 // ha repasse de canal). Por isso NAO entra em `ausentes`.
                 null, null, null, quantidadeParcelas, cepEntrega, cidadeEntrega, ufEntrega, dadosOrigemPedido);
 
+        List<ItemPedido> itens = parseItens(raiz, pedido.getId(), idExternoPedido, ausentes);
+
+        List<Custo> custos = new ArrayList<>();
+        if (frete.ehCustoDoLojista()) {
+            custos.add(new Custo(NaturezaCusto.FRETE, pedido.getId(), null, null, frete.valor(), pedido.getMoeda(),
+                    pedido.getFeitoEm(), true, null, null, null, null,
+                    "Frete pago pelo lojista (transporte.frete do Bling) - classificacao CIF/FOB nao confirmada, "
+                            + "ver armadilha 3 do mapeamento-bling.md", canalId, null, "{}"));
+        }
+        JsonNode tributacao = raiz.get("tributacao");
+        adicionarCustoImposto(custos, tributacao, "totalICMS", pedido, canalId);
+        adicionarCustoImposto(custos, tributacao, "totalIPI", pedido, canalId);
+        adicionarCustoImposto(custos, tributacao, "totalICMSST", pedido, canalId);
+
+        return new ResultadoTraducao(pedido, itens, cliente, custos, ausentes);
+    }
+
+    // ------------------------------------------------------------------
+    // Itens (de "itens[]") - extraido do corpo de traduzirPedido (dívida 4
+    // do docs/ESTADO.md: o metodo tinha ~140 linhas com o laço de itens
+    // embutido, enquanto o AdaptadorMercadoLivre ja isolava isto em
+    // parseItens. So estrutura - nenhum comportamento mudou.
+    // ------------------------------------------------------------------
+
+    private List<ItemPedido> parseItens(JsonNode raiz, UUID pedidoId, String idExternoPedido, List<CampoAusente> ausentes) {
         List<ItemPedido> itens = new ArrayList<>();
         boolean primeiroItem = true;
         for (JsonNode itemNode : raiz.path("itens")) {
@@ -183,23 +208,10 @@ public class AdaptadorBling implements AdaptadorDeCanal {
                             .setScale(SuporteJson.ESCALA_MONETARIA, SuporteJson.ARREDONDAMENTO_MONETARIO)
                     : null;
 
-            itens.add(new ItemPedido(pedido.getId(), null, skuOrigem, titulo, quantidade, valorUnitario, descontoLinha,
+            itens.add(new ItemPedido(pedidoId, null, skuOrigem, titulo, quantidade, valorUnitario, descontoLinha,
                     totalLinha, idExternoItem, extensaoItem(itemNode)));
         }
-
-        List<Custo> custos = new ArrayList<>();
-        if (frete.ehCustoDoLojista()) {
-            custos.add(new Custo(NaturezaCusto.FRETE, pedido.getId(), null, null, frete.valor(), pedido.getMoeda(),
-                    pedido.getFeitoEm(), true, null, null, null, null,
-                    "Frete pago pelo lojista (transporte.frete do Bling) - classificacao CIF/FOB nao confirmada, "
-                            + "ver armadilha 3 do mapeamento-bling.md", canalId, null, "{}"));
-        }
-        JsonNode tributacao = raiz.get("tributacao");
-        adicionarCustoImposto(custos, tributacao, "totalICMS", pedido, canalId);
-        adicionarCustoImposto(custos, tributacao, "totalIPI", pedido, canalId);
-        adicionarCustoImposto(custos, tributacao, "totalICMSST", pedido, canalId);
-
-        return new ResultadoTraducao(pedido, itens, cliente, custos, ausentes);
+        return itens;
     }
 
     // ------------------------------------------------------------------
