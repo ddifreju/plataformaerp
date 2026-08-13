@@ -34,6 +34,8 @@ import com.plataforma.integracao.AdaptadorDeCanal;
 import com.plataforma.integracao.CampoAusente;
 import com.plataforma.integracao.PayloadInvalidoException;
 import com.plataforma.integracao.ResultadoTraducao;
+import com.plataforma.margem.CongelamentoCustoMercadoria;
+import com.plataforma.margem.ResolvedorCustoPedido;
 import com.plataforma.pedido.ItemPedido;
 import com.plataforma.pedido.Pedido;
 import com.plataforma.pedido.RepositorioItemPedido;
@@ -185,6 +187,7 @@ public class ServicoIngestao {
     private final RepositorioCliente repositorioCliente;
     private final RepositorioCusto repositorioCusto;
     private final RepositorioVariacao repositorioVariacao;
+    private final ResolvedorCustoPedido resolvedorCustoPedido;
     private final Map<TipoCanal, AdaptadorDeCanal> adaptadoresPorTipo;
     // PROPAGATION_REQUIRES_NEW definido no construtor (nao e o default do
     // TransactionTemplate) - ver o "POR QUE DUAS TRANSACOES SEPARADAS" no
@@ -194,8 +197,8 @@ public class ServicoIngestao {
     public ServicoIngestao(JdbcTemplate jdbcTemplate, RepositorioCanal repositorioCanal,
             RepositorioPedido repositorioPedido, RepositorioItemPedido repositorioItemPedido,
             RepositorioCliente repositorioCliente, RepositorioCusto repositorioCusto,
-            RepositorioVariacao repositorioVariacao, PlatformTransactionManager gerenciadorTransacao,
-            List<AdaptadorDeCanal> adaptadores) {
+            RepositorioVariacao repositorioVariacao, ResolvedorCustoPedido resolvedorCustoPedido,
+            PlatformTransactionManager gerenciadorTransacao, List<AdaptadorDeCanal> adaptadores) {
         this.jdbcTemplate = jdbcTemplate;
         this.repositorioCanal = repositorioCanal;
         this.repositorioPedido = repositorioPedido;
@@ -203,6 +206,7 @@ public class ServicoIngestao {
         this.repositorioCliente = repositorioCliente;
         this.repositorioCusto = repositorioCusto;
         this.repositorioVariacao = repositorioVariacao;
+        this.resolvedorCustoPedido = resolvedorCustoPedido;
         this.adaptadoresPorTipo = adaptadores.stream()
                 .collect(Collectors.toUnmodifiableMap(AdaptadorDeCanal::tipoSuportado, adaptador -> adaptador));
         this.transactionTemplate = new TransactionTemplate(gerenciadorTransacao);
@@ -415,11 +419,13 @@ public class ServicoIngestao {
             pedidoTraduzido.resolverCliente(clienteIdPersistido);
         }
 
-        // Casamento de item x variacao (dívida 3): so o pipeline tem banco,
-        // por isso so aqui, nunca no adaptador. Precisa rodar ANTES do
-        // save() dos itens, ja que muda o campo variacaoId dos MESMOS
-        // objetos ItemPedido que serao gravados logo abaixo.
-        List<CampoAusente> camposAusentesVariacao = resolverVariacoesDosItens(resultado.itens());
+        // Casamento de item x variacao (dívida 3) E congelamento de
+        // custo(MERCADORIA) (PRÉ-TAREFA da Fase 3 - ver
+        // CongelamentoCustoMercadoria): so o pipeline tem banco, por isso
+        // so aqui, nunca no adaptador. Precisa rodar ANTES do save() dos
+        // itens, ja que muda o campo variacaoId dos MESMOS objetos
+        // ItemPedido que serao gravados logo abaixo.
+        ResolucaoVariacoes resolucaoVariacoes = resolverVariacoesEGerarCustoMercadoria(resultado.itens(), pedidoTraduzido);
 
         Pedido pedidoSalvo;
         try {
@@ -461,27 +467,79 @@ public class ServicoIngestao {
         for (Custo custo : resultado.custos()) {
             repositorioCusto.save(custo);
         }
+        // custo(MERCADORIA) congelado nesta ingestao (PRÉ-TAREFA da Fase
+        // 3) - salvo no MESMO lugar que o custo do adaptador (nivel 1),
+        // pelo mesmo motivo de FK (comentario acima).
+        for (Custo custoMercadoria : resolucaoVariacoes.custosMercadoria()) {
+            repositorioCusto.save(custoMercadoria);
+        }
+        repositorioCusto.flush();
 
-        return new ResultadoPersistencia(pedidoSalvo.getId(), camposAusentesVariacao);
+        // NIVEL 2 da hierarquia de taxas (decisao 0019 / tarefa 14):
+        // ResolvedorCustoPedido tenta fechar COMISSAO_CANAL e
+        // TARIFA_FIXA_CANAL por taxa_canal vigente PARA OS ITENS em que a
+        // fonte (nivel 1, os custos do adaptador salvos acima) nao
+        // informou o valor cobrado. Roda AQUI, depois do flush de custo,
+        // porque ResolvedorCustoPedido.resolver() comeca consultando
+        // repositorioCusto.findByPedidoId(...) para decidir o que ja esta
+        // resolvido (idempotencia - ver o Javadoc daquela classe): sem o
+        // flush acima, essa consulta nao veria as linhas que acabamos de
+        // salvar nesta mesma transacao. Falha para o lado seguro: sem
+        // taxa cadastrada para a vigencia, o item continua em lacuna
+        // (nivel 3) - nunca inventa (mesma regra 5 do CLAUDE.md).
+        //
+        // So roda no caminho de pedido NOVO (esta branch do metodo) - o
+        // mesmo limite ja documentado para itens/custo em reprocessamento
+        // (dívida 1 do docs/ESTADO.md): "itens e custos NAO sao tocados
+        // neste caminho". Reprocessar um pedido reenviando o MESMO
+        // payload nao deveria acionar recalculo de taxa, que e sempre
+        // ACIONADO, nunca automatico (secao 8.4 do documento fiscal).
+        resolvedorCustoPedido.resolver(pedidoSalvo, resultado.itens());
+
+        return new ResultadoPersistencia(pedidoSalvo.getId(), resolucaoVariacoes.camposAusentes());
     }
 
     /**
-     * Dívida 3: casa cada item com a variacao do catalogo pelo SKU, DENTRO
-     * do tenant (RepositorioVariacao.findBySku ja e restrito pelo
-     * @TenantId - decisao 0007). Muta os MESMOS objetos ItemPedido
-     * recebidos (List.copyOf em ResultadoTraducao protege a LISTA, nao os
-     * elementos - mutar o elemento aqui e valido e e exatamente o que
+     * O que {@link #resolverVariacoesEGerarCustoMercadoria} produz: as
+     * DUAS coisas que nascem da MESMA consulta por SKU (divida 3 +
+     * PRÉ-TAREFA da Fase 3), para nao consultar a variacao duas vezes por
+     * item.
+     */
+    private record ResolucaoVariacoes(List<CampoAusente> camposAusentes, List<Custo> custosMercadoria) {
+    }
+
+    /**
+     * Casa cada item com a variacao do catalogo pelo SKU (dívida 3,
+     * decisao 0018), DENTRO do tenant (RepositorioVariacao.findBySku ja e
+     * restrito pelo @TenantId - decisao 0007), E congela custo(MERCADORIA)
+     * quando casa (PRÉ-TAREFA da Fase 3 - ver
+     * {@link CongelamentoCustoMercadoria}, que faz a conta em si; este
+     * metodo so decide QUANDO chama-la, porque so aqui existe banco).
+     * Muta os MESMOS objetos ItemPedido recebidos (List.copyOf em
+     * ResultadoTraducao protege a LISTA, nao os elementos - mutar o
+     * elemento aqui e valido e e exatamente o que
      * {@link ItemPedido#resolverVariacao} existe para permitir).
      *
-     * Quando o SKU nao bate com nenhuma variacao (ou o item nao tem SKU
-     * nenhum), variacaoId fica NULL - o valor com que o item ja nasceu -
-     * e a ausencia e declarada aqui como CampoAusente, nunca inventada
-     * (regra 5 do CLAUDE.md). Isso cobre tanto "produto ainda nao
-     * sincronizado no catalogo" quanto "venda avulsa fora do catalogo",
-     * que sao situacoes legitimas, nao erros.
+     * TRES situacoes possiveis por item, cada uma com sua PROPRIA
+     * declaracao (regra 5 do CLAUDE.md - "nao sei o produto" e "sei o
+     * produto mas nao sei o custo" sao problemas diferentes para o
+     * lojista resolver, entao nao viram a mesma mensagem):
+     * <ol>
+     *   <li>SKU nao bate com nenhuma variacao (ou item sem SKU): variacaoId
+     *       fica NULL, custo(MERCADORIA) nem e tentado. Cobre tanto
+     *       "produto ainda nao sincronizado no catalogo" quanto "venda
+     *       avulsa fora do catalogo", que sao situacoes legitimas, nao
+     *       erros.</li>
+     *   <li>SKU bate, mas a variacao nao tem custo_unitario_atual
+     *       cadastrado: variacaoId FICA preenchido (o casamento aconteceu
+     *       de verdade), so a linha de custo que nao e criada.</li>
+     *   <li>SKU bate e tem custo cadastrado: variacaoId preenchido e
+     *       custo(MERCADORIA) congelado.</li>
+     * </ol>
      */
-    private List<CampoAusente> resolverVariacoesDosItens(List<ItemPedido> itens) {
+    private ResolucaoVariacoes resolverVariacoesEGerarCustoMercadoria(List<ItemPedido> itens, Pedido pedido) {
         List<CampoAusente> ausentes = new ArrayList<>();
+        List<Custo> custosMercadoria = new ArrayList<>();
         for (ItemPedido item : itens) {
             String sku = item.getSkuOrigem();
             if (sku == null || sku.isBlank()) {
@@ -490,16 +548,26 @@ public class ServicoIngestao {
                 // proprio adaptador quem ja documentou a falta do SKU.
                 continue;
             }
-            Optional<Variacao> variacao = repositorioVariacao.findBySku(sku);
-            if (variacao.isPresent()) {
-                item.resolverVariacao(variacao.get().getId());
-            } else {
+            Optional<Variacao> variacaoEncontrada = repositorioVariacao.findBySku(sku);
+            if (variacaoEncontrada.isEmpty()) {
                 ausentes.add(new CampoAusente("item_pedido.variacao_id",
                         "SKU '" + sku + "' nao corresponde a nenhuma variacao cadastrada/sincronizada para este "
                                 + "tenant - variacao_id fica NULL, nunca inventado (regra 5 do CLAUDE.md)."));
+                continue;
             }
+
+            Variacao variacao = variacaoEncontrada.get();
+            item.resolverVariacao(variacao.getId());
+
+            CongelamentoCustoMercadoria.congelar(pedido, item, variacao).ifPresentOrElse(
+                    custosMercadoria::add,
+                    () -> ausentes.add(new CampoAusente("custo.mercadoria",
+                            "Variacao " + variacao.getId() + " (SKU '" + sku + "') nao tem custo_unitario_atual "
+                                    + "cadastrado - sei qual produto e, mas nao sei quanto ele custou. "
+                                    + "custo(MERCADORIA) NAO foi gravado (regra 5 do CLAUDE.md): custo zero seria "
+                                    + "mentira otimista.")));
         }
-        return ausentes;
+        return new ResolucaoVariacoes(ausentes, custosMercadoria);
     }
 
     /**

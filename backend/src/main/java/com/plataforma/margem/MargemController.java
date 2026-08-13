@@ -22,6 +22,12 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * {@code canalId} e OBRIGATORIO de proposito - ver o Javadoc de
  * {@link ServicoMargemPeriodo} sobre a decisao 0017.
+ *
+ * A resposta e {@link RespostaMargemPeriodo}, nao
+ * {@link ResultadoMargemPeriodo} diretamente: a formatacao para 2 casas
+ * (secao 6.1/6.2 do documento fiscal) acontece NA BORDA DE SAIDA, aqui -
+ * {@link ServicoMargemPeriodo} continua devolvendo escala de armazenamento
+ * (4 casas), que e o que o resto do sistema espera reusar/somar.
  */
 @RestController
 public class MargemController {
@@ -33,10 +39,11 @@ public class MargemController {
     }
 
     @GetMapping("/api/margem/periodo")
-    public ResultadoMargemPeriodo periodo(
+    public RespostaMargemPeriodo periodo(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime inicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime fim,
             @RequestParam UUID canalId) {
-        return servicoMargemPeriodo.calcular(inicio, fim, canalId);
+        ResultadoMargemPeriodo resultado = servicoMargemPeriodo.calcular(inicio, fim, canalId);
+        return RespostaMargemPeriodo.de(resultado);
     }
 }
