@@ -82,17 +82,48 @@ E uma falha de teste que era o sistema funcionando: um `count()` fora do
 contexto de tenant devolveu zero, porque o RLS estava fazendo exatamente o que
 deveria. Corrigido no teste, com comentário para o próximo que tropeçar.
 
+### Contrato da API validado — e um bug crítico que só ele achou
+
+`ContratoApiTest` (11 casos) exercita a stack HTTP inteira — filtros, Spring
+Security, controllers, Jackson — contra Postgres real. **161 testes, 0 falhas.**
+
+Ele achou o bug mais grave do projeto até hoje: **o login nunca persistia a
+sessão.** O `FiltroLoginJson` é construído à mão e não recebia um
+`SecurityContextRepository`, ficando com o default de fábrica
+(`RequestAttributeSecurityContextRepository`), que guarda o contexto como
+atributo da requisição e o descarta no fim dela.
+
+O efeito era o pior possível: o login respondia **204 (sucesso)**, a senha era
+conferida de verdade, a sessão até era criada — e a requisição **seguinte
+chegava anônima**. O sistema inteiro era inacessível por trás do login, sem
+nenhuma mensagem de erro.
+
+**Nenhuma das três revisões por leitura pegou**, porque o código parece
+completo — é a ausência de uma linha que só aparece quando o fluxo roda.
+É o mesmo padrão da `ChangeSessionIdAuthenticationStrategy` logo acima: filtro
+montado à mão não recebe o que `.formLogin()` configuraria.
+
+O que o teste também confirmou: todo valor monetário chega como **string**
+(decisão 0026), verificado no JSON cru com `isString()`; nenhum DTO vaza
+`senhaHash` nem `chaveCredencial`; login com senha errada e com e-mail
+inexistente devolvem resposta idêntica; e canal de outro tenant não devolve
+dado. **Nenhuma divergência de nome ou tipo** entre a API real e
+`frontend/src/lib/api/tipos.ts`.
+
 ### O que ainda não foi validado
 
-- **O frontend nunca falou com a API real.** Foi escrito lendo os DTOs Java
-  linha a linha. Suba os dois e confira o fluxo de sessão e os nomes de campo:
-  ```bash
-  make preparar && cd frontend && npm run dev
-  ```
+- **O navegador nunca abriu a interface.** O Tomcat não sobe nesta máquina
+  (falha de loopback no conector NIO — ver `docs/PENDENCIAS.md`). Não é o
+  código: Node escuta em `127.0.0.1` e um `ServerSocket` Java puro funciona.
+  O contrato está coberto pelo `ContratoApiTest`; o que falta é o visual e os
+  atributos do cookie no fio (`HttpOnly`/`SameSite`/`Secure`), que só um
+  container real expõe.
 - **As fixtures continuam sendo hipótese** (a documentação do ML e do Bling
-  respondeu 403/404). Isso só o primeiro payload real resolve.
-- **O banco de desenvolvimento já existente precisa de `make migrate`** para
-  receber a V015.
+  respondeu 403/404). Só o primeiro payload real resolve.
+- **CORS não é exercitado em dev**, por causa do rewrite do Next. Fica para
+  staging, quando frontend e backend estiverem em origens distintas.
+- **Deploy**: nada foi para VPS. Lembrar da condição 2 da decisão 0025 —
+  mesma origem atrás de proxy reverso é requisito de segurança, não preferência.
 
 ### Histórico: o que já era validado antes (12/08/2026)
 
@@ -244,7 +275,7 @@ quebrava exatamente no comprador recorrente. Corrigido com
 
 ## Decisões tomadas
 
-Ver `docs/decisoes/`. **0004 a 0027.**
+Ver `docs/decisoes/`. **0004 a 0028.**
 
 As mais estruturantes, em ordem de peso:
 - **0007** (propagação de tenant) + **0010** (molde de RLS por tabela). As 13
@@ -287,6 +318,9 @@ Duas decisões nasceram de eu ter errado e estão registradas assim: **0011**
 | 2026-08-12 | Frontend inicializado | `create-next-app` abortou o `npm install` por rede transitória, mas já tinha gerado a árvore: bastou completar. Next 16 + React 19 + Tailwind, `npm run build` passa. `CLAUDE.md` atualizado de 15 para 16 (decisão 0022) — documentação que mente sobre a stack é pior que documentação ausente. |
 | 2026-08-12 | 17. Autenticação e sessão | Feito. Spring Security com sessão em cookie, BCrypt custo 12. **O `X-Tenant-Id` foi removido**, não desativado: com sessão existindo, ele seria escalação horizontal trivial. Fecha o `// PROVISÓRIO` aberto na decisão 0007 na Fase 0. A tabela `usuario` (V014) precisou de uma quinta policy para o login enxergar a própria linha antes de haver tenant — decisão 0024, com o que ela expõe dito sem eufemismo. |
 | 2026-08-12 | Endpoints das visões 19 e 20 | Feito. `/api/painel/gestor` e `/api/painel/analista`, construídos **só sobre dado que existe**: pedido por status, evento com `status=ERRO`, devolução aberta, lacuna de custo. Processo, nunca pessoa (decisões 0003 e 0012). 88 testes puros. |
+| 2026-08-13 | **Contrato validado ponta a ponta** | `ContratoApiTest` (11 casos) exercita filtros, Spring Security, controllers e Jackson contra Postgres real. **161 testes, 0 falhas.** Confirmou dinheiro-como-texto no JSON cru, ausência de vazamento em DTO, resposta idêntica para senha errada e e-mail inexistente, e isolamento por canal alheio. Zero divergência entre a API e `tipos.ts` do frontend. |
+| 2026-08-13 | **Bug crítico: login não persistia sessão** | O `FiltroLoginJson`, construído à mão, não recebia `SecurityContextRepository` e ficava com o default de requisição. Login respondia 204, senha era conferida, sessão era criada — e a requisição seguinte chegava **anônima**. O sistema era inacessível por trás do login, em silêncio. Nenhuma das três revisões por leitura pegou. Corrigido com `DelegatingSecurityContextRepository`. |
+| 2026-08-13 | Dados de demonstração | `make dados-demo` (decisão 0028): fora do Flyway, com duas travas contra rodar em produção e senha gerada pelo pgcrypto. Corrigido `valor_repasse_previsto`, cuja ausência faria os dois pedidos saírem `INDETERMINADA` — o script contradizia o próprio comentário. |
 | 2026-08-13 | **Primeira validação real** | **150 testes, 0 falhas, 0 erros contra Postgres real.** As 15 migrations aplicam, o molde de RLS está correto nas 14 tabelas (provado pelo sentinela, não por leitura) e os 5 testes de isolamento que nunca tinham executado passam. Corrigidos: `char(n)`→`varchar` (V015, decisão 0027), Testcontainers 1.19.8→1.21.4 (não falava com Docker Engine 29) e um bug real de reprocessamento. |
 | 2026-08-13 | Bug do reprocessamento | Evento com `status = ERRO` **nunca era reprocessado**: o reenvio idêntico era no-op incondicional, então um payload quebrado ficava travado para sempre, mesmo depois de corrigido o bug que o quebrou. Nenhuma das três revisões por leitura tinha pego. Agora evento em ERRO sempre reprocessa, e o contador de tentativas é preservado entre retentativas do mesmo payload. |
 | 2026-08-13 | Conserto do `definir-senha-app` | `psql` não expande `:variáveis` em comando passado por `-c`, só pela entrada padrão. O alvo falhava ao definir a senha do papel da aplicação. Corrigido pela fundadora e validado contra o banco real. |
