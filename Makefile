@@ -65,10 +65,11 @@ definir-senha-app: ## Define a senha do papel app_aplicacao a partir de APP_DB_P
 	@# ambiente. Rode uma vez, depois do primeiro `make migrate`.
 	@$(CARREGA_ENV) && \
 	  test -n "$$APP_DB_PASSWORD" || { echo "APP_DB_PASSWORD não definida em infra/.env"; exit 1; }
-	@$(CARREGA_ENV) && $(COMPOSE) exec -T postgres \
+	@# psql não interpola :variáveis em comandos passados por -c; só via stdin.
+	@$(CARREGA_ENV) && printf "ALTER ROLE app_aplicacao WITH PASSWORD :'senha';\n" | \
+	  $(COMPOSE) exec -T postgres \
 	  psql -v ON_ERROR_STOP=1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" \
-	  -v senha="$$APP_DB_PASSWORD" \
-	  -c "ALTER ROLE app_aplicacao WITH PASSWORD :'senha';"
+	  -v senha="$$APP_DB_PASSWORD"
 	@echo "Senha de app_aplicacao definida."
 	@echo "Confirme que SPRING_DATASOURCE_PASSWORD tem o mesmo valor."
 
