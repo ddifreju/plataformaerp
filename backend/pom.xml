@@ -55,6 +55,14 @@
              sem depender de eu adivinhar corretamente o nome interno da
              propriedade herdada do parent. -->
         <postgresql.version>42.7.13</postgresql.version>
+
+        <!-- Ultima da linha 1.x. O parent do Spring Boot 3.3.13 gerencia
+             1.19.8, cujo docker-java (3.3.6) nao conversa com o Docker
+             Engine 29 - ver o comentario no dependencyManagement.
+             Mantido em 1.x de proposito: a 2.x e major nova, e trocar a
+             API de teste no mesmo passo em que se conserta a conexao com
+             o Docker misturaria duas causas de falha. -->
+        <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
 
     <dependencyManagement>
@@ -69,6 +77,31 @@
                 <groupId>org.apache.camel.springboot</groupId>
                 <artifactId>camel-spring-boot-bom</artifactId>
                 <version>${camel.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <!-- BOM do Testcontainers, sobrepondo o que o
+                 spring-boot-starter-parent gerencia (1.19.8).
+
+                 PORQUE SOBREPOR: o Testcontainers 1.19.8 traz
+                 docker-java 3.3.6, que nao fala com o Docker Engine 29 -
+                 a estrategia de conexao por named pipe no Windows falha
+                 com "BadRequestException (Status 400)" no GET /info,
+                 mesmo com o pipe funcionando e o docker CLI conversando
+                 com ele normalmente. Resultado pratico: TODO teste de
+                 banco morria em "Failed to load ApplicationContext",
+                 sem relacao nenhuma com o codigo da aplicacao.
+
+                 Fixado aqui em vez de por propriedade porque o BOM
+                 alinha testcontainers, junit-jupiter, postgresql E a
+                 versao do docker-java de uma vez. Mexer so na
+                 propriedade deixaria o docker-java velho, que e
+                 justamente o problema. -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

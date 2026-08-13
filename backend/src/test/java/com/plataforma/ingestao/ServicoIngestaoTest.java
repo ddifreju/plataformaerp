@@ -270,19 +270,25 @@ class ServicoIngestaoTest {
         UUID idPedidoPreExistente = inserirPedidoDiretoComoDono(tenantId, canalId, idExternoDoPedidoNoPayload);
 
         ContextoTenant.definir(tenantId);
-        ResultadoIngestao resultado;
         try {
-            resultado = servicoIngestao.ingerir(canalId, TipoEvento.PEDIDO, "evento-corrida-" + UUID.randomUUID(), payload);
+            ResultadoIngestao resultado = servicoIngestao.ingerir(
+                    canalId, TipoEvento.PEDIDO, "evento-corrida-" + UUID.randomUUID(), payload);
+
+            assertTrue(resultado.processado());
+            assertEquals(idPedidoPreExistente, resultado.idPedido(),
+                    "quando ja existe pedido com a mesma chave natural, o resultado tem que apontar para ELE, "
+                            + "nunca para um pedido novo");
+            // O count() PRECISA rodar DENTRO do contexto de tenant.
+            // Fora dele, o @TenantId resolve para o sentinela SEM_TENANT e
+            // o RLS devolve zero linhas - o teste falharia com "esperava 1,
+            // veio 0" parecendo bug de ingestao, quando na verdade seria o
+            // isolamento funcionando exatamente como projetado.
+            // Foi assim que este teste falhou na primeira execucao real.
+            assertEquals(1, repositorioPedido.count(),
+                    "nao pode ter sido criado um segundo pedido para a mesma chave natural (tenant, canal, id_externo)");
         } finally {
             ContextoTenant.limpar();
         }
-
-        assertTrue(resultado.processado());
-        assertEquals(idPedidoPreExistente, resultado.idPedido(),
-                "quando ja existe pedido com a mesma chave natural, o resultado tem que apontar para ELE, "
-                        + "nunca para um pedido novo");
-        assertEquals(1, repositorioPedido.count(),
-                "nao pode ter sido criado um segundo pedido para a mesma chave natural (tenant, canal, id_externo)");
     }
 
     // ------------------------------------------------------------------

@@ -120,6 +120,27 @@ public class ServicoIngestao {
     //
     // Volta linha -> processa (casos 1 e 3 do cabecalho). Nao volta
     // nada -> reenvio identico, no-op (caso 2).
+    //
+    // O "OR status = 'ERRO'" NO WHERE — bug encontrado na primeira
+    // execucao real da suite:
+    //   So com "hash IS DISTINCT FROM", QUALQUER reenvio identico virava
+    //   no-op, inclusive o de um evento que terminou em ERRO. Ou seja: um
+    //   pedido que falhou ao traduzir ficava travado PARA SEMPRE. Mesmo
+    //   depois de corrigido o bug que causou a falha, reenviar o mesmo
+    //   payload nao reprocessava nada - o sistema respondia "ja vi esse,
+    //   ignorei" e seguia em frente, em silencio.
+    //   Isso esvaziava a divida 2 pela metade: gravar status=ERRO da
+    //   visibilidade, mas sem poder RETENTAR a visibilidade nao serve
+    //   para muita coisa.
+    //   Com o OR, evento em ERRO sempre reprocessa; evento PROCESSADO com
+    //   payload identico continua sendo no-op puro, que e a idempotencia
+    //   que importa preservar.
+    //
+    // O CASE no "tentativas" existe por causa do OR acima:
+    //   zerar sempre apagaria o contador justamente na retentativa. Agora
+    //   payload DIFERENTE zera (e outro conteudo, historia nova) e payload
+    //   IGUAL preserva (e a mesma falha, tentando de novo) - que e o que
+    //   deixa "isto falhou N vezes" legivel para quem for investigar.
     // ---------------------------------------------------------------
     private static final String SQL_UPSERT_EVENTO = """
             INSERT INTO evento_ingerido
@@ -132,10 +153,16 @@ public class ServicoIngestao {
                           status        = 'RECEBIDO',
                           recebido_em   = excluded.recebido_em,
                           processado_em = NULL,
-                          tentativas    = 0,
+                          tentativas    = CASE
+                                              WHEN evento_ingerido.hash_payload
+                                                   IS DISTINCT FROM excluded.hash_payload
+                                              THEN 0
+                                              ELSE evento_ingerido.tentativas
+                                          END,
                           erro_mensagem = NULL,
                           atualizado_em = now()
             WHERE evento_ingerido.hash_payload IS DISTINCT FROM excluded.hash_payload
+               OR evento_ingerido.status = 'ERRO'
             RETURNING id
             """;
 
