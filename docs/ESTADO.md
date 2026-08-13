@@ -55,11 +55,17 @@ depois de reiniciar o computador. Ver `docs/PENDENCIAS.md`.
 
 ### O que JÁ foi validado de verdade (12/08/2026)
 
-- **`./mvnw -B test-compile`: BUILD SUCCESS.** 68 fontes principais + testes,
-  zero erros. O risco nº 1 da Fase 0 — `CurrentTenantIdentifierResolver<UUID>`,
-  que dependia do Hibernate 6.4+ — **compila**.
-- **32 testes sem banco passando, 0 falhas.** Cobrem a regra do dinheiro
-  (`SuporteJsonTest`), os dois adaptadores, o contexto de tenant e as entidades.
+- **`./mvnw -B test-compile`: BUILD SUCCESS.** O risco nº 1 da Fase 0 —
+  `CurrentTenantIdentifierResolver<UUID>`, que dependia do Hibernate 6.4+ —
+  **compila**.
+- **67 testes sem banco passando, 0 falhas** (de 116 casos no projeto; os
+  demais dependem de Testcontainers). Cobrem a regra do dinheiro
+  (`SuporteJsonTest`), os dois adaptadores, o contexto de tenant, as entidades
+  e todo o núcleo puro do motor de margem.
+- **O exemplo numérico do documento fiscal (§2.5) foi conferido à mão contra o
+  teste**: N2 `51,2636`, N3 `44,9636`, 25,64% e 22,49%. O teste usa `compareTo`,
+  exercita os 3 rótulos de teto e rastreia os 7 IDs de custo — não passa por
+  construção.
 - Maven Wrapper (`mvnw`) gerado: o projeto é autossuficiente.
 - Versões do `pom.xml` conferidas no Maven Central.
 - `.gitignore` de fato ignora `infra/.env` e **não** ignora `.env.exemplo`.
