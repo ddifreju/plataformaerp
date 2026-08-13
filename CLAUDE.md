@@ -60,3 +60,10 @@ estimativa apresentada como fato. Se for estimativa, diga que é.
 - O escopo cresceu além do que foi pedido
 - Existe caminho mais simples que resolve 80% do problema
 - A decisão é de negócio, não técnica
+
+## Observação de sessão
+
+No início de toda sessão orientada a tarefa (qualquer trabalho com
+ferramentas que produza entregável), invoque a skill `task-observer` e
+mantenha o log de observações que ela define. A descrição da skill
+sozinha não dispara de forma confiável — esta instrução existe por isso.
