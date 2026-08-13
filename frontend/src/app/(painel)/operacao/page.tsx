@@ -116,7 +116,7 @@ function TabelaContagem<TStatus extends string>({
   rotulos,
   rotuloColunaCategoria,
 }: {
-  linhas: { status: TStatus; quantidade: string }[];
+  linhas: { status: TStatus; quantidade: number }[];
   rotulos: Record<TStatus, string>;
   rotuloColunaCategoria: string;
 }) {

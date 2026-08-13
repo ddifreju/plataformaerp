@@ -51,8 +51,9 @@ const CAMINHOS_SEM_REDIRECIONAMENTO_NO_401 = ["/api/login", "/api/logout"];
  * risco quando essa garantia só existia do lado do frontend; com o
  * contrato do backend fechado, mantê-lo era dívida (~190 linhas sem guarda
  * de profundidade, sem tratar literais malformados) para proteger algo que
- * já está protegido na origem. NÃO reintroduza esse parser sem que a
- * garantia do `ConfiguracaoJackson` deixe de valer.
+ * já está protegido na origem. NÃO reintroduza esse parser sem antes
+ * verificar se `ConfiguracaoJackson` ainda está no lugar — ver
+ * `docs/decisoes/0026-dinheiro-como-texto-vem-do-backend.md`.
  */
 async function requisitar<T>(caminho: string, opcoes: RequestInit = {}): Promise<T> {
   let resposta: Response;

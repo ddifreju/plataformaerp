@@ -1,10 +1,11 @@
 /**
  * Formatação de dinheiro e percentual — a ponta da regra 2 do CLAUDE.md
  * ("dinheiro nunca é float") e da decisão 0022 ("dinheiro nunca vira
- * `number` do JavaScript"). Toda função aqui recebe STRING decimal (o que
- * `parseJsonPreservandoNumeros` devolve, ver `lib/api/jsonSeguro.ts`) e
- * devolve STRING formatada. Nenhuma soma, nenhuma subtração — o motor de
- * margem já fechou a conta, aqui só troca a aparência.
+ * `number` do JavaScript"). Toda função aqui recebe STRING decimal (o
+ * formato em que todo `BigDecimal` chega da API, garantido na origem por
+ * `ConfiguracaoJackson` no backend — ver `lib/api/cliente.ts`) e devolve
+ * STRING formatada. Nenhuma soma, nenhuma subtração — o motor de margem já
+ * fechou a conta, aqui só troca a aparência.
  *
  * `parseFloat`/`Number` só aparecem para VALIDAR o formato do texto
  * (dígito por dígito, sem interpretar o valor) ou para decidir sinal

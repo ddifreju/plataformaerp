@@ -83,7 +83,8 @@ export interface RespostaMargemPeriodo {
   decomposicao: MemoriaCalculoBlocoPeriodo[];
   lacunas: Lacuna[];
   rotulo: RotuloTeto;
-  quantidadePedidos: string;
+  /** `int` no backend (não `BigDecimal`) — chega como `number` de verdade. */
+  quantidadePedidos: number;
   idsPedidoUsados: string[];
   idsCustoUsados: string[];
 }
@@ -102,7 +103,8 @@ export type StatusPedido =
 
 export interface ContagemPorStatusPedido {
   status: StatusPedido;
-  quantidade: string;
+  /** `long` no backend (não `BigDecimal`) — chega como `number` de verdade. */
+  quantidade: number;
 }
 
 export type StatusDevolucao =
@@ -118,14 +120,17 @@ export type StatusDevolucao =
 
 export interface ContagemPorStatusDevolucao {
   status: StatusDevolucao;
-  quantidade: string;
+  /** `long` no backend (não `BigDecimal`) — chega como `number` de verdade. */
+  quantidade: number;
 }
 
 export interface RespostaGargalosProcesso {
   pedidosPorStatus: ContagemPorStatusPedido[];
   devolucoesPorStatus: ContagemPorStatusDevolucao[];
-  eventosIngestaoComErro: string;
-  pedidosSemCustoMercadoria: string;
+  /** `long` no backend (não `BigDecimal`) — chega como `number` de verdade. */
+  eventosIngestaoComErro: number;
+  /** `long` no backend (não `BigDecimal`) — chega como `number` de verdade. */
+  pedidosSemCustoMercadoria: number;
 }
 
 // ---- painel/RespostaFilaPendencias.java (visão "Pendências") --------
@@ -137,7 +142,8 @@ export interface ItemEventoComErro {
   idExterno: string;
   erroMensagem: string | null;
   recebidoEm: string;
-  tentativas: string;
+  /** `int` no backend (não `BigDecimal`) — chega como `number` de verdade. */
+  tentativas: number;
   acao: string;
 }
 
