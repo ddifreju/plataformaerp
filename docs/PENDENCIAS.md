@@ -15,18 +15,21 @@ Revise este arquivo uma vez por dia.
       então o projeto agora é autossuficiente
 - [x] **make 4.4.1** — instalado
 - [x] **Node 24** — instalado (só necessário na Fase 3)
-- [ ] **Docker Desktop** — **instalado, mas o engine não sobe até reiniciar**
-      ("Virtualization support not detected"). É o único bloqueio de validação
-      que resta. Sem ele não roda: `make dev`, `make migrate` e a parte da
-      suíte que usa Testcontainers.
-      **Ação: reiniciar o computador.** Depois: `make preparar && make test`.
+- [x] **Docker Desktop** — Engine 29.7.2 funcionando desde 13/08/2026.
+      (A demora foi por sockets órfãos que o Windows não apagava; resolvido
+      afastando `AppData\Local\Docker\run` e `docker-secrets-engine`.)
 
-Estado da validação em 12/08/2026:
-- `mvn test-compile`: **BUILD SUCCESS**, 68 fontes principais + 12 de teste
-- Testes que não dependem de banco: **26 passando, 0 falhas**
-- O que ainda não foi provado: `ddl-auto: validate` contra o Postgres real
-  (o risco `char(n)` vs `varchar` e o mapeamento `jsonb`) e toda a suíte de
-  isolamento por Testcontainers
+**Toolchain completo. Nenhuma ferramenta bloqueia mais nada.**
+
+Estado da validação em 13/08/2026:
+- **A suíte inteira passa contra Postgres real: 150 testes, 0 falhas, 0 erros**
+- As 15 migrations aplicam num Postgres 16 + pgvector de verdade
+- O molde de RLS está correto nas 14 tabelas, provado pelo teste sentinela
+- Frontend: `build`, `lint` e 20 testes limpos
+
+O que ainda não foi provado: o **frontend contra a API real** (foi escrito
+lendo os DTOs Java, mas ler não é executar) e as **fixtures de Mercado Livre e
+Bling**, que continuam sendo hipótese até o primeiro payload verdadeiro.
 
 ## Repositório remoto — RESOLVIDO
 
