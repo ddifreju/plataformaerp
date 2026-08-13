@@ -51,8 +51,10 @@ decisão de negócio — ver `docs/PENDENCIAS.md`.
 
 ## Validação real — FEITA em 13/08/2026
 
-**A suíte inteira passa contra um Postgres de verdade: 150 testes, 0 falhas,
-0 erros.** Não há mais nada esperando o Docker.
+**A suíte inteira passa contra um Postgres de verdade.** Não há mais nada
+esperando o Docker. Placar atual: **161 testes, 0 falhas, 0 erros** (eram 150
+nesta primeira rodada; os 11 restantes são o `ContratoApiTest`, descrito
+adiante).
 
 O que a primeira execução provou:
 - As **15 migrations aplicam** num Postgres 16 real (pgvector), da primeira vez
