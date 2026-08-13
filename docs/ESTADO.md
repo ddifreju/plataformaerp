@@ -58,10 +58,12 @@ depois de reiniciar o computador. Ver `docs/PENDENCIAS.md`.
 - **`./mvnw -B test-compile`: BUILD SUCCESS.** O risco nº 1 da Fase 0 —
   `CurrentTenantIdentifierResolver<UUID>`, que dependia do Hibernate 6.4+ —
   **compila**.
-- **109 testes sem banco passando, 0 falhas.** Cobrem a regra do dinheiro
-  (`SuporteJsonTest`), os dois adaptadores, o contexto de tenant, as entidades,
-  todo o núcleo puro do motor de margem, o fluxo de login e os painéis.
-  Os demais dependem de Testcontainers.
+- **109 testes de backend sem banco passando, 0 falhas.** Cobrem a regra do
+  dinheiro (`SuporteJsonTest`), os dois adaptadores, o contexto de tenant, as
+  entidades, todo o núcleo puro do motor de margem, o fluxo de login e os
+  painéis. Os demais dependem de Testcontainers.
+- **20 testes de frontend passando** (`node --test`), cobrindo o "vai um" do
+  arredondamento em texto e o mapeamento de lacunas.
 - **Frontend**: `npm run build` e `npm run lint` limpos.
 - **O exemplo numérico do documento fiscal (§2.5) foi conferido à mão contra o
   teste**: N2 `51,2636`, N3 `44,9636`, 25,64% e 22,49%. O teste usa `compareTo`,
@@ -233,7 +235,7 @@ quebrava exatamente no comprador recorrente. Corrigido com
 
 ## Decisões tomadas
 
-Ver `docs/decisoes/`. **0004 a 0021.**
+Ver `docs/decisoes/`. **0004 a 0026.**
 
 As mais estruturantes, em ordem de peso:
 - **0007** (propagação de tenant) + **0010** (molde de RLS por tabela). As 13
@@ -276,6 +278,9 @@ Duas decisões nasceram de eu ter errado e estão registradas assim: **0011**
 | 2026-08-12 | Frontend inicializado | `create-next-app` abortou o `npm install` por rede transitória, mas já tinha gerado a árvore: bastou completar. Next 16 + React 19 + Tailwind, `npm run build` passa. `CLAUDE.md` atualizado de 15 para 16 (decisão 0022) — documentação que mente sobre a stack é pior que documentação ausente. |
 | 2026-08-12 | 17. Autenticação e sessão | Feito. Spring Security com sessão em cookie, BCrypt custo 12. **O `X-Tenant-Id` foi removido**, não desativado: com sessão existindo, ele seria escalação horizontal trivial. Fecha o `// PROVISÓRIO` aberto na decisão 0007 na Fase 0. A tabela `usuario` (V014) precisou de uma quinta policy para o login enxergar a própria linha antes de haver tenant — decisão 0024, com o que ela expõe dito sem eufemismo. |
 | 2026-08-12 | Endpoints das visões 19 e 20 | Feito. `/api/painel/gestor` e `/api/painel/analista`, construídos **só sobre dado que existe**: pedido por status, evento com `status=ERRO`, devolução aberta, lacuna de custo. Processo, nunca pessoa (decisões 0003 e 0012). 88 testes puros. |
+| 2026-08-12 | 18, 19 e 20. As três telas | Feito. **Resultado** (decomposição N0→N3 com origem de cada dedução, rótulo de confiança e lacunas acionáveis), **Operação** e **Pendências**. Seletor de canal obrigatório, sem opção "todos" (decisão 0021) — precisou de `GET /api/canais`, senão a tela pediria UUID digitado à mão. Microcopy vindo literalmente do guia de marca. |
+| 2026-08-12 | Auditoria de segurança (Fase 3) | **Nenhum vazamento.** A auditora verificou uma a uma as quatro afirmações da decisão 0024 sobre a fresta de login e confirmou todas contra o SQL e contra o `IsolamentoLoginTest`. Confirmou também que o `X-Tenant-Id` morreu de fato (nenhum `getHeader` no código de produção) e que nenhum `GET` altera estado — a condição que sustenta o CSRF desligado. Dois achados MÉDIOS corrigidos, ambos de disponibilidade no login. |
+| 2026-08-12 | Revisão de código (Fase 3) | Confirmou que o frontend segue o guia de marca **de fato**, não decorativamente (comparou palavra por palavra). Achado principal: o comentário do parser JSON afirmava que o backend não serializava `BigDecimal` como string — já não era verdade. Resolvido removendo o parser (decisão 0026) e cobrindo a formatação com teste. |
 | 2026-08-12 | Auditoria de segurança (Fase 2) | **Nenhum vazamento entre tenants.** As 3 queries novas são JPQL sobre entidades com `@TenantId`, então recebem o predicado automático. `canalId` vindo do usuário não é vetor: o predicado de tenant é aplicado **antes** do filtro por canal, e canal alheio devolve vazio — indistinguível de "canal vazio no período", sem oráculo de enumeração. Corrigidos: `GRANT UPDATE` largo demais em `taxa_canal` (agora por coluna) e o alerta de repasse que era calculado e descartado. |
 | 2026-08-12 | Revisão de código (Fase 2) | Aprovou o pacote (granularidade adequada, regra do teto sem duplicação, `Rateio` fiel ao §6.3). Achado principal: **nenhuma margem sai `CALCULADA`** porque ninguém grava `custo(MERCADORIA)` — registrado acima como limitação nº 1, não como bug. |
 | 2026-08-12 | Teste de isolamento do motor | `IsolamentoMargemTest` (7 casos) fecha o achado ALTO da auditoria: a regra 1 do CLAUDE.md exige teste de isolamento por query nova. **116 casos de teste no projeto.** O agente verificou minha premissa em vez de repeti-la e descobriu que a sabotagem que sugeri (`nativeQuery = true`) **não** derrubaria o teste sozinha — o RLS, camada independente, continuaria filtrando. Está documentado com a cadeia real de sabotagem. |
