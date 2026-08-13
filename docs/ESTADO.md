@@ -31,9 +31,9 @@ Execute em ordem. Não pergunte antes de começar cada uma.
 
 ### Fase 2 — Motor de margem (o diferencial)
 13. [x] Tabela de taxas por marketplace, versionada por vigência
-14. [ ] Cálculo de custo real por pedido
-15. [ ] Cálculo de margem líquida com memória de cálculo auditável
-16. [ ] Endpoint que responde "quanto sobrou no período X"
+14. [x] Cálculo de custo real por pedido
+15. [x] Cálculo de margem líquida com memória de cálculo auditável
+16. [x] Endpoint que responde "quanto sobrou no período X"
 
 ### Fase 3 — Interface
 17. [ ] Autenticação e sessão
@@ -183,6 +183,12 @@ Duas decisões nasceram de eu ter errado e estão registradas assim: **0011**
 | 2026-08-12 | 7–9. Entidades JPA | Feito. 12 entidades + repositórios, pacote por domínio. Cruzei os 9 maiores enums Java contra os `CHECK` do SQL: batem exatamente. Nenhum `double`/`float` no código. |
 | 2026-08-12 | 10 e 11. Adaptadores ML e Bling | Feito contra fixture. **A documentação oficial das duas APIs respondeu 403/404** — as fixtures são reconstrução do formato conhecido, com cada campo marcado por nível de confiança. Nada foi apresentado como confirmado. Ver `docs/integracoes/`. |
 | 2026-08-12 | 12. Pipeline de ingestão | Feito. UPSERT por chave natural `(tenant_id, canal_id, tipo_evento, id_externo)` numa instrução só, sem janela de corrida. SQL nativo com `tenant_id` explícito e tudo em bind parameter — nativo não recebe o predicado do `@TenantId`. |
+| 2026-08-12 | Toolchain instalado | JDK 21, Maven 3.9.9, make, Node. `mvnw` gerado. **Compilação: BUILD SUCCESS.** O risco nº 1 da Fase 0 (`CurrentTenantIdentifierResolver<UUID>`, que dependia do Hibernate 6.4+) **compila**. Docker instalado mas o engine só sobe após reiniciar. |
+| 2026-08-12 | 13. Tabela de taxas versionada | Feito. `taxa_canal` (V013+U013) com vigência semiaberta, curinga por sentinela `'*'` (não `NULL`, senão o `EXCLUDE` teria buraco), `especificidade` gerada no banco e `EXCLUDE USING gist` impedindo sobreposição. A consulta de seleção vem pronta no cabeçalho. |
+| 2026-08-12 | 14. Custo real por pedido | Feito. `ResolvedorCustoPedido` aplica a hierarquia de 3 níveis da decisão 0019: valor informado pela fonte → taxa vigente **na data do fato gerador** → lacuna declarada. Sem quarto nível: nada de "taxa mais próxima". |
+| 2026-08-12 | 15. Margem com memória de cálculo | Feito. Fórmula N0→N3 com **quatro números nomeados** em vez de um "lucro" genérico. Cada resultado carrega a decomposição por bloco, a origem de cada dedução e os IDs de custo que entraram. Rateio de maior resto com desempate determinístico — recalcular dá o mesmo número, que é o que torna a auditoria possível. |
+| 2026-08-12 | 16. Endpoint do período | Feito. `GET /api/margem/periodo` com `canalId` **obrigatório** (decisão 0021): o backend nunca soma canais potencialmente sobrepostos. Controller com 42 linhas, só delega; tenant vem do contexto, nunca de parâmetro. |
+| 2026-08-12 | Verificação independente do motor | Recalculei o exemplo §2.5 à mão e conferi contra o teste: N2 `51,2636`, N3 `44,9636`, 25,64% e 22,49% batem. O teste usa `compareTo`, exercita os 3 rótulos de teto e rastreia os 7 IDs de custo — não passa por construção. **67 testes puros, 0 falhas.** |
 | 2026-08-12 | Auditoria de segurança (Fase 1) | `revisor-seguranca` **não achou vazamento entre tenants** nas 12 tabelas novas. Corrigido o achado MÉDIO: a ingestão agora valida o canal contra o tenant **antes** de qualquer escrita, com exceção própria, em vez de depender da FK composta estourar no meio do INSERT. Corrigido também vazamento de conteúdo de payload em mensagem de exceção. |
 | 2026-08-12 | Revisão de código (Fase 1) | `revisor-codigo` aprovou o padrão geral (12 entidades uniformes, `SuporteJson` como abstração certa, nenhuma abstração prematura entre os adaptadores). Apontou 2 comportamentos críticos sem teste — ambos cobertos agora. Dívida registrada na seção acima. |
 | 2026-08-12 | Testes de isolamento da Fase 1 | Feito. `IsolamentoFaseUmTest` (comportamental em `canal`, `pedido`, `cliente`), `ChaveCompostaImpedeReferenciaCruzadaTest` (prova que a decisão 0015 não é só comentário: FK cruzada entre tenants é recusada com SQLSTATE 23503) e 3 casos novos no `ServicoIngestaoTest` (canal de outro tenant, dedup de cliente, backstop de corrida). 63 casos de teste no total. **Nenhum executado.** |
