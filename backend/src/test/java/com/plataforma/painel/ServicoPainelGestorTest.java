@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import com.plataforma.custo.NaturezaCusto;
 import com.plataforma.devolucao.ContagemPorStatusDevolucao;
 import com.plataforma.devolucao.RepositorioDevolucao;
 import com.plataforma.devolucao.StatusDevolucao;
@@ -43,7 +44,7 @@ class ServicoPainelGestorTest {
         when(repositorioPedido.contarPorStatus()).thenReturn(pedidosPorStatus);
         when(repositorioDevolucao.contarPorStatus()).thenReturn(devolucoesPorStatus);
         when(repositorioEventoIngerido.countByStatus(StatusEventoIngerido.ERRO)).thenReturn(5L);
-        when(repositorioPedido.contarPedidosSemCustoMercadoria()).thenReturn(7L);
+        when(repositorioPedido.contarPedidosSemCustoDeNatureza(NaturezaCusto.MERCADORIA)).thenReturn(7L);
 
         RespostaGargalosProcesso resposta = servico.gargalos();
 

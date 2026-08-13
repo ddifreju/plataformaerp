@@ -3,6 +3,7 @@ package com.plataforma.painel;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.plataforma.custo.NaturezaCusto;
 import com.plataforma.devolucao.RepositorioDevolucao;
 import com.plataforma.ingestao.RepositorioEventoIngerido;
 import com.plataforma.ingestao.StatusEventoIngerido;
@@ -33,6 +34,6 @@ public class ServicoPainelGestor {
                 repositorioPedido.contarPorStatus(),
                 repositorioDevolucao.contarPorStatus(),
                 repositorioEventoIngerido.countByStatus(StatusEventoIngerido.ERRO),
-                repositorioPedido.contarPedidosSemCustoMercadoria());
+                repositorioPedido.contarPedidosSemCustoDeNatureza(NaturezaCusto.MERCADORIA));
     }
 }

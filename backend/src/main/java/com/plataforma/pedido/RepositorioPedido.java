@@ -8,6 +8,8 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import com.plataforma.custo.NaturezaCusto;
+
 /**
  * Acesso a pedido. Predicado de tenant vem do @TenantId da entidade
  * (decisao 0007) - nenhum metodo aqui deve escrever "WHERE tenant_id = ?"
@@ -45,18 +47,23 @@ public interface RepositorioPedido extends JpaRepository<Pedido, UUID> {
     List<ContagemPorStatusPedido> contarPorStatus();
 
     /**
-     * Pedidos sem NENHUMA linha de custo MERCADORIA - a lacuna #1 do
+     * Pedidos sem NENHUMA linha de custo de uma dada natureza - usado pela
+     * tarefa 19 com {@link NaturezaCusto#MERCADORIA}: e a lacuna #1 do
      * catalogo (secao 9.1 do documento fiscal, ver
-     * {@code CatalogoLacunas.custoMercadoriaNaoCadastrado}): falta a maior
+     * {@code CatalogoLacunas.custoMercadoriaNaoCadastrado}), falta a maior
      * parcela de custo, e sem ela nenhum numero de margem sai confiavel
      * para aquele pedido. E o proxy escolhido para "pedidos com lacuna de
-     * custo" (tarefa 19) - existem outras lacunas possiveis (item sem
-     * variacao, taxa nao cadastrada...), mas esta e a unica com fonte
-     * direta e barata de consultar sem reprocessar o motor de margem
-     * inteiro so para montar um painel.
+     * custo" - existem outras lacunas possiveis (item sem variacao, taxa
+     * nao cadastrada...), mas esta e a unica com fonte direta e barata de
+     * consultar sem reprocessar o motor de margem inteiro so para montar
+     * um painel.
+     *
+     * {@code natureza} entra como PARAMETRO, nao como literal de enum
+     * embutido no JPQL (a forma {@code c.natureza = pacote.Enum.VALOR} e
+     * permitida pela especificacao, mas bind parameter e a forma mais
+     * simples e testada do projeto para JPQL - ver RepositorioTaxaCanal).
      */
     @Query("select count(p) from Pedido p where not exists ("
-            + "select 1 from Custo c where c.pedidoId = p.id and c.natureza = "
-            + "com.plataforma.custo.NaturezaCusto.MERCADORIA)")
-    long contarPedidosSemCustoMercadoria();
+            + "select 1 from Custo c where c.pedidoId = p.id and c.natureza = :natureza)")
+    long contarPedidosSemCustoDeNatureza(NaturezaCusto natureza);
 }

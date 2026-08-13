@@ -36,7 +36,7 @@ Execute em ordem. Não pergunte antes de começar cada uma.
 16. [x] Endpoint que responde "quanto sobrou no período X"
 
 ### Fase 3 — Interface
-17. [ ] Autenticação e sessão
+17. [x] Autenticação e sessão
 18. [ ] Visão do dono: faturamento bruto → lucro real, com decomposição
 19. [ ] Visão do gestor: gargalos do processo
 20. [ ] Visão do analista: fila de pendências
@@ -91,36 +91,30 @@ suíte de isolamento por Testcontainers.
 ter atualizado o teste. Conferi o molde por grep nas 13, mas grep não é o banco:
 essa é a prova real.
 
-### A limitação nº 1 do produto hoje: nenhuma margem sai `CALCULADA`
+### A limitação nº 1 — RESOLVIDA em 12/08/2026
 
-**Não é bug. Não adianta procurar no código.** Encontrado pela revisão da
-Fase 2 e registrado aqui para poupar uma tarde de investigação futura.
+Era: nenhum caminho gravava `custo(MERCADORIA)`, então `RotuloTeto` **nunca**
+devolvia `CALCULADA` e toda margem saía faltando a maior parcela do custo.
 
-Nenhum caminho do sistema grava uma linha `custo(MERCADORIA)`: nem os
-adaptadores, nem o pipeline de ingestão, nem o `ResolvedorCustoPedido`. O custo
-da mercadoria existe em `variacao.custo_unitario_atual`, mas **nada o copia para
-`custo` no momento da venda**.
+**Resolvido** na pré-tarefa da Fase 3. O custo é copiado de
+`variacao.custo_unitario_atual` no momento da venda e **congelado**: nunca
+recalculado depois, para que a memória de cálculo reproduza o número que já foi
+mostrado ao lojista. Se o custo não estiver cadastrado ou o SKU não casar,
+nenhuma linha é criada e a lacuna continua declarada — com códigos distintos
+para "não sei qual produto é" e "sei qual é, mas não sei quanto custou".
 
-Consequência mecânica: o `DetectorDeLacunas` sempre dispara a lacuna
-`custo_mercadoria_nao_cadastrado`, que tem viés `SUPERESTIMA_MARGEM`. Logo,
-`RotuloTeto.calcular` **nunca** devolve `CALCULADA` — todo resultado sai, na
-melhor das hipóteses, `COM_TETO`, faltando o que costuma ser a maior parcela do
-custo.
+O `ResolvedorCustoPedido` (nível 2) passou a ser chamado, e
+`Apresentacao.paraExibicao` foi aplicada na borda de saída (2 casas), sem
+recalcular nada.
 
-O mecanismo está funcionando como projetado: a ausência é **visível**, não é um
-número errado disfarçado. Mas é a peça que falta para o produto cumprir a
-promessa central. **É a primeira tarefa da Fase 3.**
+Critério de aceite verificado:
+`CongelamentoCustoMercadoriaTest.pedidoComVariacaoCasadaECustoCadastradoProduzRotuloCalculada`.
 
-Junto com ela, duas peças que também existem mas não têm quem as chame:
-- `ResolvedorCustoPedido` (nível 2 da hierarquia de taxas) **não tem chamador em
-  produção** — hoje todo pedido sem valor informado cai direto em lacuna, mesmo
-  havendo taxa cadastrada que resolveria. Falha para o lado seguro (mais
-  lacunas, nunca número otimista), mas esvazia parte da V013.
-- `Rateio` está pronto e testado, sem chamador: `EMBALAGEM` e `ADS` ainda não
-  são rateados por ninguém.
-- `Apresentacao.paraExibicao` só é usada em teste. O endpoint devolve os valores
-  com 4 casas (escala de armazenamento), não 2. Quando a Fase 3 ligar a tela,
-  formatar na borda de saída — não recalcular nada.
+**`Rateio` continua sem chamador, de propósito.** `EMBALAGEM` e `ADS` não têm
+origem de dado alguma hoje: nenhum adaptador captura esses gastos e não há
+cadastro manual que gere a linha-mãe de período. Ligar um chamador exigiria
+inventar o dado — o que a regra 5 proíbe. Destrava quando existir (a) captura
+pelo adaptador ou (b) tela de cadastro.
 
 ### A lacuna que o sistema NÃO consegue avisar
 
@@ -237,6 +231,10 @@ Duas decisões nasceram de eu ter errado e estão registradas assim: **0011**
 | 2026-08-12 | 15. Margem com memória de cálculo | Feito. Fórmula N0→N3 com **quatro números nomeados** em vez de um "lucro" genérico. Cada resultado carrega a decomposição por bloco, a origem de cada dedução e os IDs de custo que entraram. Rateio de maior resto com desempate determinístico — recalcular dá o mesmo número, que é o que torna a auditoria possível. |
 | 2026-08-12 | 16. Endpoint do período | Feito. `GET /api/margem/periodo` com `canalId` **obrigatório** (decisão 0021): o backend nunca soma canais potencialmente sobrepostos. Controller com 42 linhas, só delega; tenant vem do contexto, nunca de parâmetro. |
 | 2026-08-12 | Verificação independente do motor | Recalculei o exemplo §2.5 à mão e conferi contra o teste: N2 `51,2636`, N3 `44,9636`, 25,64% e 22,49% batem. O teste usa `compareTo`, exercita os 3 rótulos de teto e rastreia os 7 IDs de custo — não passa por construção. **67 testes puros, 0 falhas.** |
+| 2026-08-12 | Pré-tarefa da Fase 3 | **A margem agora sai `CALCULADA`.** Custo da mercadoria congelado na ingestão, `ResolvedorCustoPedido` ligado, `Apresentacao` na borda de saída. `Rateio` segue sem chamador porque embalagem e Ads não têm origem de dado — inventar violaria a regra 5. 75 testes puros. |
+| 2026-08-12 | Frontend inicializado | `create-next-app` abortou o `npm install` por rede transitória, mas já tinha gerado a árvore: bastou completar. Next 16 + React 19 + Tailwind, `npm run build` passa. `CLAUDE.md` atualizado de 15 para 16 (decisão 0022) — documentação que mente sobre a stack é pior que documentação ausente. |
+| 2026-08-12 | 17. Autenticação e sessão | Feito. Spring Security com sessão em cookie, BCrypt custo 12. **O `X-Tenant-Id` foi removido**, não desativado: com sessão existindo, ele seria escalação horizontal trivial. Fecha o `// PROVISÓRIO` aberto na decisão 0007 na Fase 0. A tabela `usuario` (V014) precisou de uma quinta policy para o login enxergar a própria linha antes de haver tenant — decisão 0024, com o que ela expõe dito sem eufemismo. |
+| 2026-08-12 | Endpoints das visões 19 e 20 | Feito. `/api/painel/gestor` e `/api/painel/analista`, construídos **só sobre dado que existe**: pedido por status, evento com `status=ERRO`, devolução aberta, lacuna de custo. Processo, nunca pessoa (decisões 0003 e 0012). 88 testes puros. |
 | 2026-08-12 | Auditoria de segurança (Fase 2) | **Nenhum vazamento entre tenants.** As 3 queries novas são JPQL sobre entidades com `@TenantId`, então recebem o predicado automático. `canalId` vindo do usuário não é vetor: o predicado de tenant é aplicado **antes** do filtro por canal, e canal alheio devolve vazio — indistinguível de "canal vazio no período", sem oráculo de enumeração. Corrigidos: `GRANT UPDATE` largo demais em `taxa_canal` (agora por coluna) e o alerta de repasse que era calculado e descartado. |
 | 2026-08-12 | Revisão de código (Fase 2) | Aprovou o pacote (granularidade adequada, regra do teto sem duplicação, `Rateio` fiel ao §6.3). Achado principal: **nenhuma margem sai `CALCULADA`** porque ninguém grava `custo(MERCADORIA)` — registrado acima como limitação nº 1, não como bug. |
 | 2026-08-12 | Teste de isolamento do motor | `IsolamentoMargemTest` (7 casos) fecha o achado ALTO da auditoria: a regra 1 do CLAUDE.md exige teste de isolamento por query nova. **116 casos de teste no projeto.** O agente verificou minha premissa em vez de repeti-la e descobriu que a sabotagem que sugeri (`nativeQuery = true`) **não** derrubaria o teste sozinha — o RLS, camada independente, continuaria filtrando. Está documentado com a cadeia real de sabotagem. |
