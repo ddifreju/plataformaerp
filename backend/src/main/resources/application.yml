@@ -87,3 +87,13 @@ management:
         # endpoint do actuator (env, beans, etc.) vaza detalhe interno e
         # nao tem por que estar acessivel.
         include: health,info
+
+app:
+  cors:
+    # Origens autorizadas a chamar a API de outra origem (decisao 0025).
+    # Em DEV: o frontend Next em localhost:3000.
+    # Em PRODUCAO: deixe VAZIO. Frontend e backend ficam na mesma origem
+    # atras de proxy reverso, entao nao existe requisicao cruzada para
+    # autorizar - e origem cruzada autorizada em producao devolveria o
+    # problema que o SameSite=Lax resolve.
+    origens-permitidas: ${APP_CORS_ORIGENS:http://localhost:3000}

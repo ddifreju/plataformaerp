@@ -19,6 +19,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.beans.factory.annotation.Value;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Tarefa 17, item 2: {@code SecurityFilterChain}, BCrypt custo 12,
@@ -33,6 +39,10 @@ import org.springframework.security.web.authentication.session.ChangeSessionIdAu
 @Configuration
 @EnableWebSecurity
 public class ConfiguracaoSeguranca {
+
+    /** Origens de dev autorizadas. Vazio em producao (mesma origem). */
+    @Value("${app.cors.origens-permitidas:}")
+    private String origensPermitidas;
 
     @Bean
     public PasswordEncoder codificadorDeSenha() {
@@ -98,7 +108,20 @@ public class ConfiguracaoSeguranca {
                 // sobraria. Ligar CSRF token exigiria um endpoint so para
                 // distribuir o token e o frontend gerenciar isso a mais,
                 // sem ganho real de protecao neste desenho.
+                // AS TRES CONDICOES QUE SUSTENTAM ISTO (decisao 0025):
+                //   1. Nenhum GET pode alterar estado. Lax PERMITE o cookie
+                //      em navegacao top-level GET, entao um GET que escreve
+                //      seria exploravel mesmo com Lax. Isto virou regra de
+                //      revisao: endpoint GET que muda estado quebra a
+                //      seguranca do sistema, nao so o estilo.
+                //   2. Em producao, frontend e backend na MESMA ORIGEM,
+                //      atras de proxy reverso.
+                //   3. Se algum dia o cookie precisar de SameSite=None,
+                //      a protecao CSRF VOLTA A SER OBRIGATORIA - None
+                //      desliga justamente a defesa em que isto se apoia.
+                // Se qualquer uma cair, esta decisao cai junto.
                 .csrf(AbstractHttpConfigurer::disable)
+                .cors(cors -> cors.configurationSource(fonteDeConfiguracaoCors()))
                 .sessionManagement(sessao -> sessao.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(autorizacao -> autorizacao
                         // MESMA allowlist do FiltroTenant (tarefa 17, item
@@ -121,5 +144,49 @@ public class ConfiguracaoSeguranca {
                 .addFilterAt(filtroLogin, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    /**
+     * CORS para DESENVOLVIMENTO (decisao 0025).
+     *
+     * Em dev o frontend roda em localhost:3000 e o backend em
+     * localhost:8080 - origens diferentes, entao o navegador exige CORS
+     * com credenciais para o cookie de sessao viajar.
+     *
+     * NOTA QUE EVITA CONFUSAO: localhost:3000 e localhost:8080 sao o
+     * MESMO SITE para efeito de SameSite (o atributo olha o dominio
+     * registravel, nao a porta). Ou seja, o cookie flui entre eles sob
+     * Lax normalmente - o que precisa de configuracao aqui e o CORS, nao
+     * o SameSite.
+     *
+     * ALLOWLIST EXPLICITA, NUNCA "*": com allowCredentials(true) o
+     * curinga e proibido pelo proprio padrao, e aceitar qualquer origem
+     * devolveria exatamente o problema que o SameSite resolve.
+     *
+     * Em PRODUCAO o valor esperado desta variavel e VAZIO: frontend e
+     * backend ficam na mesma origem atras de proxy reverso (condicao 2
+     * da decisao 0025), e ai nao existe requisicao de origem cruzada
+     * para autorizar.
+     */
+    @Bean
+    public CorsConfigurationSource fonteDeConfiguracaoCors() {
+        CorsConfiguration configuracao = new CorsConfiguration();
+
+        // Sem default permissivo: se a variavel nao existir, a lista fica
+        // vazia e nenhuma origem cruzada e aceita. Falha fechada.
+        if (!origensPermitidas.isBlank()) {
+            configuracao.setAllowedOrigins(Arrays.stream(origensPermitidas.split(","))
+                    .map(String::trim)
+                    .filter(origem -> !origem.isEmpty())
+                    .toList());
+        }
+        configuracao.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuracao.setAllowedHeaders(List.of("Content-Type", "Accept"));
+        // Sem isto o navegador descarta o cookie de sessao na resposta.
+        configuracao.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource fonte = new UrlBasedCorsConfigurationSource();
+        fonte.registerCorsConfiguration("/api/**", configuracao);
+        return fonte;
     }
 }
