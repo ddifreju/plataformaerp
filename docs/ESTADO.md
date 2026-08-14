@@ -1,8 +1,44 @@
 # Estado do Projeto
 
-**Atualizado em:** 13 de agosto de 2026
-**Fase:** 3 concluída — roadmap inicial completo
+**Atualizado em:** 14 de agosto de 2026
+**Fase:** 3 concluída — roadmap inicial completo, validado de ponta a ponta em dev
 **Modo:** autônomo (gerente decide, registra e segue)
+
+---
+
+## Onde paramos (passagem de máquina, 14/08/2026)
+
+Este resumo existe porque o projeto está migrando de computador. Estado honesto:
+
+**Funcionando, visto no navegador em 14/08/2026:**
+- Pilha completa em dev: Postgres (Docker) → backend Spring Boot na 8080 →
+  frontend Next.js na 3000. Login com sessão real, e as três visões
+  renderizando com os dados de demonstração (Ateliê Bem Posto, 50 pedidos):
+  Resultado (decomposição N0→N3, 30 pedidos e 142 linhas de custo na consulta
+  do ML Clássico, margem 34,49%, lacunas declaradas com ação sugerida),
+  Operação (status, devoluções, eventos com erro) e Pendências (fila acionável).
+- Suíte inteira verde contra Postgres real: 161 testes backend + 20 frontend.
+- 16 migrations aplicando de primeira; molde de RLS provado nas 14 tabelas.
+
+**Quebrado/limitado — nada conhecido quebrado em código.** Limitações abertas:
+- Fixtures de Mercado Livre e Bling são hipótese até a primeira credencial real.
+- CORS nunca exercitado (rewrite do Next em dev) — pendência de staging.
+- Margem: imposto depende do regime tributário do tenant (pendência de negócio);
+  antecipação de recebível é indetectável sem resposta da lojista.
+
+**Próxima tarefa:** não há fila aberta — o roadmap inicial (tarefas 1–20)
+acabou. Os candidatos naturais, em ordem do que destrava valor: (1) credencial
+do Mercado Livre e primeiro payload real contra o adaptador; (2) decisões de
+negócio (nome, nicho, regime tributário do demo→real); (3) deploy em staging
+numa VPS para exercitar CORS e cookies no fio.
+
+**Para subir na máquina nova:** clonar, copiar `infra/.env.exemplo` para
+`infra/.env` e revisar senhas locais, `make preparar`, `make dados-demo`,
+`make backend`, e `cd frontend && npm install && npm run dev`. Logins de
+demonstração no relatório do seed (`infra/dados-demo.sql`).
+Toolchain necessário: JDK 21, Maven (ou o mvnw do repo), Docker Desktop,
+Node 20+, GNU make. Memória do Claude Code e log do task-observer são locais
+por máquina e não migram com o repositório.
 
 ---
 
