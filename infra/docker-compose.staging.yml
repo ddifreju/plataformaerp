@@ -1,0 +1,105 @@
+# Ambiente de STAGING (Fase 4, bloco B - tarefa 29, decisao 0032).
+# Sobe com `make staging-subir`, a partir da raiz do projeto.
+#
+# O QUE ISTO PROVA, numa maquina sem VPS e sem dominio registrado: que
+# frontend e backend funcionam atras de proxy reverso numa origem so, com
+# TLS de verdade no fio (via "tls internal" do Caddy - ver
+# infra/Caddyfile) - exatamente o que a decisao 0025 exige de producao e
+# que nunca foi exercitado antes deste bloco.
+#
+# SO O CADDY PUBLICA PORTA NO HOST. Postgres, backend e frontend so
+# existem na rede interna deste compose - ninguem de fora da maquina (nem
+# o proprio host, fora do Caddy) fala com eles diretamente. Isto e
+# deliberado, nao uma omissao: é a mesma "uma origem so" que sustenta o
+# CSRF desligado (decisao 0025) sendo levada a serio na infraestrutura.
+#
+# Nenhuma senha aqui: tudo vem de infra/.env.staging, que NAO vai para o
+# git. Copie infra/.env.staging.exemplo para infra/.env.staging antes do
+# primeiro uso (make staging-subir faz isso sozinho, na primeira vez).
+#
+# Migration NAO roda sozinha ao subir o backend (decisao 0011,
+# spring.flyway.enabled=false) - aplique manualmente ANTES do primeiro
+# login. O passo exato esta em docs/checklist-deploy.md, porque exige
+# falar com o Postgres deste compose por fora dele (sem porta publicada
+# no host, de proposito - ver acima).
+
+name: plataforma-ecommerce-staging
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: plataforma-postgres-staging
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?defina POSTGRES_DB em infra/.env.staging}
+      POSTGRES_USER: ${POSTGRES_USER:?defina POSTGRES_USER em infra/.env.staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD em infra/.env.staging}
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=pt-BR --encoding=UTF8"
+    # Sem "ports": diferente do compose de dev, nem 127.0.0.1 fica
+    # exposto aqui. Quem precisar falar com este banco (make migrate,
+    # psql de inspecao) faz isso de DENTRO da rede do compose - ver
+    # docs/checklist-deploy.md.
+    volumes:
+      - postgres_dados_staging:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: plataforma-backend-staging
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: staging
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?defina POSTGRES_DB em infra/.env.staging}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-app_aplicacao}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?defina SPRING_DATASOURCE_PASSWORD em infra/.env.staging}
+      # Obrigatoria fora do perfil dev - o boot recusa subir sem ela
+      # (tarefa 30, ValidadorDeAmbiente). Ver docs/PENDENCIAS.md.
+      APP_DOCUMENTO_HMAC_CHAVE: ${APP_DOCUMENTO_HMAC_CHAVE:?defina APP_DOCUMENTO_HMAC_CHAVE em infra/.env.staging}
+      # Vazia por padrao: mesma origem atras do Caddy nao precisa de CORS
+      # (decisao 0025/0032). So preencha para depurar um caso excepcional.
+      APP_CORS_ORIGENS: ${APP_CORS_ORIGENS:-}
+    # Sem "ports": so o Caddy fala com o backend, pela rede interna.
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: plataforma-frontend-staging
+    restart: unless-stopped
+    depends_on:
+      - backend
+    # Sem "ports", mesma razao do backend.
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: plataforma-caddy-staging
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      # Unico servico deste compose com porta publicada no host.
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_dados:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_dados_staging:
+    name: plataforma_postgres_dados_staging
+  caddy_dados:
+    name: plataforma_caddy_dados_staging
+  caddy_config:
+    name: plataforma_caddy_config_staging

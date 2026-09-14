@@ -65,6 +65,14 @@ export interface MemoriaCalculoBlocoPeriodo {
   contemEstimativa: boolean;
 }
 
+// ---- margem/RequisicaoMargemPeriodo.java (corpo de POST /api/margem/periodo, decisão 0034) ----
+
+export interface RequisicaoMargemPeriodo {
+  inicio: string;
+  fim: string;
+  canalId: string;
+}
+
 // ---- margem/RespostaMargemPeriodo.java -------------------------------
 
 export interface RespostaMargemPeriodo {

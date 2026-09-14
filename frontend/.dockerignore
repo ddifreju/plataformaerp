@@ -1,0 +1,24 @@
+# Build context do frontend/Dockerfile (tarefa 28).
+node_modules/
+.next/
+out/
+build/
+
+.git/
+.gitignore
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+.env
+.env.*
+!*.env.exemplo
+
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+README.md
+Dockerfile
+.dockerignore

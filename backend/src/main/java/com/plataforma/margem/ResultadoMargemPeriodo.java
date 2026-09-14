@@ -9,7 +9,7 @@ import java.util.UUID;
 
 /**
  * Resposta do endpoint "quanto sobrou no periodo X" (tarefa 16,
- * {@code GET /api/margem/periodo}).
+ * {@code POST /api/margem/periodo} - verbo corrigido pela decisao 0034).
  *
  * {@code escopoCanal} declara em TEXTO a decisao 0017 tomada por
  * {@code ServicoMargemPeriodo} (canal unico, obrigatorio - nunca soma de

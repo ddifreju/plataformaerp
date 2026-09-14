@@ -11,6 +11,16 @@ import type { NextConfig } from "next";
 const ENDERECO_BACKEND = process.env.BACKEND_URL ?? "http://localhost:8080";
 
 const nextConfig: NextConfig = {
+  // Empacota só o necessário para rodar em produção (server.js +
+  // node_modules mínimos), usado pelo estágio "runtime" de
+  // frontend/Dockerfile (tarefa 28). Não muda nada em `next dev`.
+  output: "standalone",
+  // O rewrite abaixo só existe para `next dev` local (localhost:3000 ->
+  // localhost:8080). EM STAGING/PRODUÇÃO (infra/docker-compose.staging.yml)
+  // quem decide se uma requisição é `/api/*` (vai pro backend) ou não
+  // (vai pro frontend) é o CADDY (infra/Caddyfile, decisão 0032) — o Next
+  // roda atrás dele na mesma origem e nunca recebe uma chamada de
+  // `/api/*` para reescrever. BACKEND_URL não é lido em produção.
   async rewrites() {
     return [
       {

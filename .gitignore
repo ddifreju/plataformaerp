@@ -4,6 +4,12 @@
 .env.*
 !.env.exemplo
 !*.env.exemplo
+# ".env.*" acima também casa com "infra/.env.staging.exemplo" (o "*.env.exemplo"
+# de cima não pega, porque o nome termina em ".staging.exemplo", não em
+# ".env.exemplo") - reabre explicitamente só o arquivo de exemplo da
+# tarefa 29, mantendo "infra/.env.staging" (o de verdade) ignorado.
+!.env.staging.exemplo
+!*.env.staging.exemplo
 *.pem
 *.key
 

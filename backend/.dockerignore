@@ -1,0 +1,22 @@
+# Build context do backend/Dockerfile (tarefa 27). Mesma logica do
+# .gitignore da raiz: nao mande para o daemon Docker nada que nao seja
+# codigo-fonte ou o que o build precisa.
+target/
+*.class
+*.log
+hs_err_pid*
+
+.git/
+.gitignore
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+.DS_Store
+Thumbs.db
+
+Dockerfile
+.dockerignore

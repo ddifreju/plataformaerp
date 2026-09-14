@@ -1,5 +1,6 @@
 import type {
   ErroApi,
+  RequisicaoMargemPeriodo,
   RespostaCanal,
   RespostaFilaPendencias,
   RespostaGargalosProcesso,
@@ -116,16 +117,18 @@ export async function sair(): Promise<void> {
 }
 
 /**
- * GET /api/margem/periodo — `canalId` é OBRIGATÓRIO (decisão 0021: nunca
+ * POST /api/margem/periodo — `canalId` é OBRIGATÓRIO (decisão 0021: nunca
  * "todos os canais"). `inicio`/`fim` são `OffsetDateTime` ISO-8601.
+ *
+ * É POST, não GET: `ServicoMargemPeriodo.calcular` grava uma linha de
+ * auditoria a cada chamada, então a operação altera estado (decisão 0034;
+ * ver o comentário equivalente em `MargemController.java`).
  */
-export function buscarMargemPeriodo(parametros: {
-  inicio: string;
-  fim: string;
-  canalId: string;
-}): Promise<RespostaMargemPeriodo> {
-  const query = new URLSearchParams(parametros);
-  return requisitar<RespostaMargemPeriodo>(`/api/margem/periodo?${query.toString()}`);
+export function buscarMargemPeriodo(parametros: RequisicaoMargemPeriodo): Promise<RespostaMargemPeriodo> {
+  return requisitar<RespostaMargemPeriodo>("/api/margem/periodo", {
+    method: "POST",
+    body: JSON.stringify(parametros),
+  });
 }
 
 /** GET /api/painel/gestor — visão "Operação": gargalos de processo, nunca de pessoa (decisão 0003). */

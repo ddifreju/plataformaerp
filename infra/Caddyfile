@@ -1,0 +1,29 @@
+# Proxy reverso do ambiente de staging (decisao 0032). Curto de proposito
+# - cada bloco tem comentario porque um Caddyfile errado falha em
+# silencio (rota que nunca casa), nao com um erro alto.
+
+# Redireciona HTTP para HTTPS. Sem isto, quem digitar "http://" cai numa
+# porta sem TLS nenhum em vez de ser levado para a origem certa.
+:80 {
+	redir https://{host}{uri} permanent
+}
+
+# A origem unica de verdade. "tls internal" emite certificado LOCAL
+# confiavel sem depender de dominio registrado nem de internet - troque
+# ":443" pelo dominio de verdade quando a VPS existir e apague esta
+# diretiva: o Caddy passa a buscar certificado real (Let's Encrypt)
+# sozinho, sem mais nenhuma mudanca aqui.
+:443 {
+	tls internal
+
+	# /api/* vai para o backend. O prefixo "/api" e mantido (nao
+	# removido) porque os controllers do Spring ja esperam ele.
+	handle /api/* {
+		reverse_proxy backend:8080
+	}
+
+	# Qualquer outro caminho e o frontend Next.js.
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

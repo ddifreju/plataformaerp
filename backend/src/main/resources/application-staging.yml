@@ -1,0 +1,34 @@
+# Perfil STAGING (Fase 4, bloco B - tarefa 29, decisao 0032).
+# Ativado com SPRING_PROFILES_ACTIVE=staging (ver
+# infra/docker-compose.staging.yml). Spring aplica isto POR CIMA de
+# application.yml - só o que muda entre dev e staging está aqui.
+
+server:
+  servlet:
+    session:
+      cookie:
+        # Fixo em true, sem variavel de ambiente por tras: staging so
+        # existe para provar que o cookie viaja com os atributos certos
+        # atras de TLS (decisao 0032). Nao ha "modo staging sem TLS".
+        #
+        # ATENCAO, ISTO ANDA JUNTO COM O CADDY: secure=true faz o
+        # navegador DESCARTAR o cookie em qualquer resposta que nao
+        # tenha vindo por HTTPS. Se este perfil rodar sem o Caddy na
+        # frente (ou com "make backend" direto, em HTTP puro), o login
+        # PARECE funcionar (204 de sucesso) e a sessao nunca persiste -
+        # a MESMA armadilha silenciosa descrita em ConfiguracaoSeguranca
+        # sobre o SecurityContextRepository, so que na infraestrutura em
+        # vez do codigo. Sempre suba este perfil via
+        # "make staging-subir" (compose completo, com Caddy).
+        secure: true
+
+app:
+  cors:
+    # Sobrescreve o default de application.yml (que traz localhost:3000
+    # para dev). Em staging, frontend e backend ficam atras do Caddy na
+    # MESMA ORIGEM (decisao 0032) - nao existe requisicao cross-origin
+    # para autorizar, entao o default aqui e VAZIO. Ainda dirigido por
+    # variavel de ambiente (decisao 0025): so preencha para depurar um
+    # caso excepcional, e NUNCA com "*" (ConfiguracaoSeguranca recusa
+    # subir se alguem tentar).
+    origens-permitidas: ${APP_CORS_ORIGENS:}

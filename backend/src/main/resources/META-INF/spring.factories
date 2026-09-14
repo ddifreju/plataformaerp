@@ -1,0 +1,8 @@
+# Tarefa 30 (Fase 4, bloco B): registra o ValidadorDeAmbiente para rodar
+# ANTES do contexto Spring ser criado, no boot da aplicacao. Este arquivo
+# e o mecanismo classico do Spring Boot para EnvironmentPostProcessor -
+# diferente do arquivo de autoconfiguracao de bean
+# (META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports),
+# que nao existe neste projeto porque nao ha autoconfiguracao propria.
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.plataforma.comum.ambiente.ValidadorDeAmbiente

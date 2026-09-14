@@ -44,8 +44,15 @@ import java.util.List;
 public class ConfiguracaoSeguranca {
 
     /** Origens de dev autorizadas. Vazio em producao (mesma origem). */
-    @Value("${app.cors.origens-permitidas:}")
-    private String origensPermitidas;
+    private final String origensPermitidas;
+
+    // Injecao por construtor (em vez de campo com @Value) de proposito:
+    // e o que permite ao FonteDeConfiguracaoCorsTest instanciar esta
+    // classe direto, com o valor que quiser, sem subir contexto Spring
+    // nem banco - teste PURO, como pede a tarefa 29.
+    public ConfiguracaoSeguranca(@Value("${app.cors.origens-permitidas:}") String origensPermitidas) {
+        this.origensPermitidas = origensPermitidas;
+    }
 
     @Bean
     public PasswordEncoder codificadorDeSenha() {
@@ -191,10 +198,11 @@ public class ConfiguracaoSeguranca {
      * curinga e proibido pelo proprio padrao, e aceitar qualquer origem
      * devolveria exatamente o problema que o SameSite resolve.
      *
-     * Em PRODUCAO o valor esperado desta variavel e VAZIO: frontend e
-     * backend ficam na mesma origem atras de proxy reverso (condicao 2
-     * da decisao 0025), e ai nao existe requisicao de origem cruzada
-     * para autorizar.
+     * Em PRODUCAO/STAGING o valor esperado desta variavel e VAZIO: frontend
+     * e backend ficam na mesma origem atras do Caddy (decisao 0032,
+     * condicao 2 da decisao 0025), e ai nao existe requisicao de origem
+     * cruzada para autorizar - uma allowlist vazia e o desenho, nao uma
+     * pendencia.
      */
     @Bean
     public CorsConfigurationSource fonteDeConfiguracaoCors() {
@@ -202,11 +210,27 @@ public class ConfiguracaoSeguranca {
 
         // Sem default permissivo: se a variavel nao existir, a lista fica
         // vazia e nenhuma origem cruzada e aceita. Falha fechada.
-        if (!origensPermitidas.isBlank()) {
-            configuracao.setAllowedOrigins(Arrays.stream(origensPermitidas.split(","))
-                    .map(String::trim)
-                    .filter(origem -> !origem.isEmpty())
-                    .toList());
+        List<String> origens = Arrays.stream(origensPermitidas.split(","))
+                .map(String::trim)
+                .filter(origem -> !origem.isEmpty())
+                .toList();
+
+        // "*" nunca pode chegar aqui, nem por engano de quem preenche a
+        // variavel de ambiente: com allowCredentials(true) (abaixo) o
+        // proprio padrao CORS proibiria a combinacao em tempo de
+        // requisicao (o Spring lancaria IllegalArgumentException dentro do
+        // ciclo HTTP) - preferimos falhar AGORA, na subida da aplicacao,
+        // com uma mensagem que diz exatamente qual variavel corrigir.
+        if (origens.contains("*")) {
+            throw new OrigemCorsInvalidaException(
+                    "app.cors.origens-permitidas (variavel de ambiente APP_CORS_ORIGENS) nao pode conter \"*\". "
+                            + "Com allowCredentials=true isso e proibido pelo padrao CORS e devolveria o problema "
+                            + "que o cookie SameSite=Lax resolve (decisao 0025). Liste as origens exatas, "
+                            + "separadas por virgula, ou deixe vazio em staging/producao.");
+        }
+
+        if (!origens.isEmpty()) {
+            configuracao.setAllowedOrigins(origens);
         }
         configuracao.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuracao.setAllowedHeaders(List.of("Content-Type", "Accept"));

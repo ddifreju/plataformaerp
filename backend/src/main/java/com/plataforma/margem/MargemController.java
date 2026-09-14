@@ -1,15 +1,13 @@
 package com.plataforma.margem;
 
-import java.time.OffsetDateTime;
-import java.util.UUID;
+import jakarta.validation.Valid;
 
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Tarefa 16: {@code GET /api/margem/periodo}. Sem logica de negocio aqui
+ * Tarefa 16: {@code POST /api/margem/periodo}. Sem logica de negocio aqui
  * (CLAUDE.md) - recebe os parametros, delega para
  * {@link ServicoMargemPeriodo} e devolve o resultado.
  *
@@ -28,6 +26,18 @@ import org.springframework.web.bind.annotation.RestController;
  * (secao 6.1/6.2 do documento fiscal) acontece NA BORDA DE SAIDA, aqui -
  * {@link ServicoMargemPeriodo} continua devolvendo escala de armazenamento
  * (4 casas), que e o que o resto do sistema espera reusar/somar.
+ *
+ * <h2>Por que e POST, e nao GET (decisao 0034)</h2>
+ * Esta rota parecia leitura e era GET ate a decisao 0034 corrigir isso:
+ * {@link ServicoMargemPeriodo#calcular} GRAVA uma {@code ConsultaAuditada}
+ * a cada chamada (regra 3 do CLAUDE.md), ou seja, ALTERA ESTADO a cada
+ * chamada. Isso quebrava a condicao 1 da decisao 0025 ("nenhum GET pode
+ * alterar estado"), que e a premissa que sustenta o CSRF desligado em
+ * {@link com.plataforma.autenticacao.ConfiguracaoSeguranca}: com
+ * {@code SameSite=Lax}, uma navegacao de topo GET ainda leva o cookie de
+ * sessao, entao um site hostil conseguia forcar essa gravacao em nome da
+ * lojista logada. Ver o mesmo raciocinio, escrito em detalhe, em
+ * {@link com.plataforma.pergunta.PerguntaController}.
  */
 @RestController
 public class MargemController {
@@ -38,12 +48,10 @@ public class MargemController {
         this.servicoMargemPeriodo = servicoMargemPeriodo;
     }
 
-    @GetMapping("/api/margem/periodo")
-    public RespostaMargemPeriodo periodo(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime inicio,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime fim,
-            @RequestParam UUID canalId) {
-        ResultadoMargemPeriodo resultado = servicoMargemPeriodo.calcular(inicio, fim, canalId);
+    @PostMapping("/api/margem/periodo")
+    public RespostaMargemPeriodo periodo(@RequestBody @Valid RequisicaoMargemPeriodo requisicao) {
+        ResultadoMargemPeriodo resultado = servicoMargemPeriodo.calcular(
+                requisicao.inicio(), requisicao.fim(), requisicao.canalId());
         return RespostaMargemPeriodo.de(resultado);
     }
 }

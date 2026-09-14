@@ -8,6 +8,12 @@
 
 COMPOSE := docker compose -f infra/docker-compose.yml --env-file infra/.env
 
+# Ambiente de STAGING (tarefa 29, decisao 0032) - compose separado, com
+# Caddy na frente, mesma origem, TLS local. Nunca reusa infra/.env: as
+# credenciais de staging moram em infra/.env.staging, que também não vai
+# para o git.
+COMPOSE_STAGING := docker compose -f infra/docker-compose.staging.yml --env-file infra/.env.staging
+
 # O Flyway e a aplicação leem credenciais de variável de ambiente
 # (FLYWAY_URL, SPRING_DATASOURCE_*). Elas moram em infra/.env, que o docker
 # compose lê sozinho mas o Maven não — por isso exportamos aqui antes de
@@ -135,6 +141,46 @@ test-isolamento: ## Roda só os testes de isolamento entre tenants
 .PHONY: build
 build: ## Compila e empacota o backend
 	$(MAVEN) package
+
+# -------------------------------------------------------------- staging -----
+# Fase 4, bloco B (tarefa 29, decisao 0032): prova, numa máquina sem VPS,
+# que frontend e backend funcionam atrás de proxy reverso numa origem só,
+# com TLS de verdade no fio. Requer Docker.
+
+.PHONY: staging-subir
+staging-subir: infra/.env.staging ## Sobe o staging inteiro (Postgres + backend + frontend + Caddy), reconstruindo as imagens
+	$(COMPOSE_STAGING) up -d --build
+	@echo ""
+	@echo "Staging no ar em https://localhost (certificado local do Caddy - o navegador vai avisar que não confia nele, é esperado com 'tls internal')."
+	@echo "Migration NÃO roda sozinha (decisão 0011): aplique antes do primeiro login. Veja docs/checklist-deploy.md."
+
+.PHONY: staging-parar
+staging-parar: ## Para o ambiente de staging, preservando os dados
+	$(COMPOSE_STAGING) down
+
+.PHONY: staging-logs
+staging-logs: ## Acompanha os logs do ambiente de staging
+	$(COMPOSE_STAGING) logs -f
+
+.PHONY: staging-conferir-cookie
+staging-conferir-cookie: ## Faz um login via curl contra o Caddy e mostra o Set-Cookie (confere Secure/HttpOnly/SameSite no fio)
+	@# "-k" aceita o certificado local emitido por "tls internal" (não há
+	@# CA pública por trás dele). O objetivo aqui é o CABEÇALHO da
+	@# resposta, não o login ter sucesso - um 401 também mostra o
+	@# Set-Cookie da sessão anônima inicial, então isto funciona mesmo
+	@# sem um usuário de teste cadastrado.
+	@echo "POST https://localhost/api/login (via Caddy) - conferindo Secure / HttpOnly / SameSite no Set-Cookie:"
+	@curl -k -s -D - -o /dev/null \
+	  -X POST https://localhost/api/login \
+	  -H "Content-Type: application/json" \
+	  -d "{\"email\":\"$${EMAIL_TESTE:-teste@exemplo.com}\",\"senha\":\"$${SENHA_TESTE:-troque-me}\"}" \
+	  | grep -i "^set-cookie" || echo "Nenhum Set-Cookie na resposta - staging está no ar?"
+
+# Cria infra/.env.staging na primeira execução em vez de falhar com erro obscuro.
+infra/.env.staging:
+	@echo "infra/.env.staging não existe. Criando a partir de infra/.env.staging.exemplo."
+	@cp infra/.env.staging.exemplo infra/.env.staging
+	@echo "Revise infra/.env.staging antes de seguir (gere um APP_DOCUMENTO_HMAC_CHAVE de teste)."
 
 # --------------------------------------------------------------- limpeza ----
 

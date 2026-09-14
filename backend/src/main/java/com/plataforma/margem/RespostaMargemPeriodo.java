@@ -8,7 +8,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * DTO de resposta de {@code GET /api/margem/periodo} (tarefa 16) -
+ * DTO de resposta de {@code POST /api/margem/periodo} (tarefa 16, verbo
+ * corrigido pela decisao 0034) -
  * FORMATADO NA BORDA DE SAIDA (secao 6.1/6.2 do documento fiscal:
  * "arredonde para 2, HALF_UP, apenas na borda de saida - nunca antes").
  *
