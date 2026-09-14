@@ -5,8 +5,7 @@ package com.plataforma.pergunta;
  * {@link ServicoPergunta#TAMANHO_MAXIMO_PERGUNTA} caracteres. Tipada,
  * nunca {@code IllegalArgumentException} genérica saindo direto do
  * controller - a tradução para {@code 400} fica em
- * {@code com.plataforma.comum.web.TratadorGlobalDeErros} (tarefa 24; não
- * criada aqui de propósito - ver relatório final da tarefa).
+ * {@code com.plataforma.comum.web.TratadorGlobalDeErros} (tarefa 24).
  */
 public class PerguntaInvalidaException extends RuntimeException {
 

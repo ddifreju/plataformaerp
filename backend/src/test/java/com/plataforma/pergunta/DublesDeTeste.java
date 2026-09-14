@@ -13,6 +13,10 @@ import com.plataforma.canal.TipoCanal;
 import com.plataforma.margem.Lacuna;
 import com.plataforma.margem.ResultadoMargemPeriodo;
 import com.plataforma.margem.RotuloTeto;
+import com.plataforma.painel.ItemDevolucaoAberta;
+import com.plataforma.painel.ItemEventoComErro;
+import com.plataforma.painel.ItemPedidoSemVariacao;
+import com.plataforma.painel.ItemVariacaoSemCusto;
 
 /**
  * Fábricas de objetos de domínio usadas por {@link ServicoPerguntaTest} e
@@ -39,5 +43,24 @@ final class DublesDeTeste {
         return new ResultadoMargemPeriodo(canalId, inicio, fim, "escopo de teste", n0, n1, n2, n3, n4,
                 percentualContribuicao, percentualLiquida, List.of(), lacunas, rotulo, quantidadePedidos,
                 idsPedido, idsCusto);
+    }
+
+    static ItemEventoComErro itemEventoComErro() {
+        return new ItemEventoComErro(UUID.randomUUID(), UUID.randomUUID(), "PEDIDO_CRIADO", "ext-1",
+                "erro de teste", OffsetDateTime.now(), 1, "acao");
+    }
+
+    static ItemPedidoSemVariacao itemPedidoSemVariacao() {
+        return new ItemPedidoSemVariacao(UUID.randomUUID(), UUID.randomUUID(), "sku-1", "titulo",
+                OffsetDateTime.now(), "acao");
+    }
+
+    static ItemVariacaoSemCusto itemVariacaoSemCusto() {
+        return new ItemVariacaoSemCusto(UUID.randomUUID(), "sku-1", "descricao", OffsetDateTime.now(), "acao");
+    }
+
+    static ItemDevolucaoAberta itemDevolucaoAberta() {
+        return new ItemDevolucaoAberta(UUID.randomUUID(), UUID.randomUUID(), "ABERTA", "ARREPENDIMENTO",
+                OffsetDateTime.now(), "acao");
     }
 }

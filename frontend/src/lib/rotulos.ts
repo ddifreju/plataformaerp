@@ -41,3 +41,25 @@ export const ROTULO_STATUS_DEVOLUCAO: Record<StatusDevolucao, string> = {
   CONCLUIDA: "Concluída",
   CANCELADA: "Cancelada",
 };
+
+/**
+ * `CodigoIntencao.java` (catálogo fechado da decisão 0030), em texto para
+ * a área "Como cheguei nesse número" da tela Perguntar (tarefa 26) — a
+ * lojista não deveria precisar reconhecer o nome de uma constante Java
+ * para entender qual pergunta o sistema respondeu.
+ */
+export const ROTULO_CODIGO_INTENCAO: Record<string, string> = {
+  MARGEM_DO_PERIODO: "Margem do período (quanto sobrou, por canal e período)",
+  LACUNAS_DA_MARGEM: "O que falta para calcular a margem com confiança",
+  GARGALOS_DA_OPERACAO: "Onde a operação está travando",
+  FILA_DE_PENDENCIAS: "O que precisa ser resolvido",
+  CANAIS_DISPONIVEIS: "Canais cadastrados",
+};
+
+/** Chaves de `RespostaPergunta.parametrosUsados`, em texto — mesmo motivo do mapa acima. */
+export const ROTULO_PARAMETRO_PERGUNTA: Record<string, string> = {
+  canal: "Canal",
+  periodoInicio: "Início do período",
+  periodoFim: "Fim do período",
+  periodoRelativo: "Período (expressão reconhecida)",
+};

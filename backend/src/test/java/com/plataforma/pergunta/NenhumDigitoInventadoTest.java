@@ -25,9 +25,6 @@ import com.plataforma.margem.Lacuna;
 import com.plataforma.margem.ResultadoMargemPeriodo;
 import com.plataforma.margem.RotuloTeto;
 import com.plataforma.margem.ServicoMargemPeriodo;
-import com.plataforma.painel.ItemEventoComErro;
-import com.plataforma.painel.ItemPedidoSemVariacao;
-import com.plataforma.painel.ItemVariacaoSemCusto;
 import com.plataforma.painel.RespostaFilaPendencias;
 import com.plataforma.painel.RespostaGargalosProcesso;
 import com.plataforma.painel.ServicoPainelAnalista;
@@ -60,6 +57,14 @@ class NenhumDigitoInventadoTest {
     // Únicos literais numéricos que o template pode escrever sem vir do
     // resultado da consulta: os rótulos N0..N4 (BlocoMargem/ResultadoMargemPeriodo
     // não tem "N0" como valor, é texto fixo do template de apresentação).
+    //
+    // CORREÇÃO (revisão de código, ponto cego): a allowlist não pode ser "o
+    // VALOR do dígito é 0..4 em qualquer posição do texto" - isso deixa
+    // passar qualquer contagem pequena solta (ex.: "Faltam 1 coisa(s)"
+    // quando deveriam ser 2). A allowlist só pode valer para a OCORRÊNCIA
+    // LITERAL do rótulo estrutural: dígito 0..4 imediatamente precedido do
+    // caractere 'N' no texto gerado (o "N" de "(N0)", "(N1)" etc. em
+    // ServicoPergunta.numerosDaMargem). Ver assertTodoDigitoRastreavel.
     private static final Set<String> ALLOWLIST_ESTRUTURAL = Set.of("0", "1", "2", "3", "4");
 
     private static final UUID CANAL_ID = UUID.randomUUID();
@@ -93,8 +98,19 @@ class NenhumDigitoInventadoTest {
     private void assertTodoDigitoRastreavel(String texto, String pergunta, Set<String> poolDaConsulta) {
         Set<String> poolCompleto = new HashSet<>(poolDaConsulta);
         poolCompleto.addAll(digitosDe(pergunta));
-        for (String digito : digitosDe(texto)) {
-            assertTrue(poolCompleto.contains(digito) || ALLOWLIST_ESTRUTURAL.contains(digito),
+        Matcher matcher = DIGITOS.matcher(texto);
+        while (matcher.find()) {
+            String digito = matcher.group();
+            // Estrutural só vale para a OCORRÊNCIA LITERAL do rótulo N0..N4:
+            // dígito de um caractere só, cujo caractere imediatamente
+            // anterior no texto é 'N'. Um "2" solto em "Faltam 2 coisa(s)"
+            // ou em "Pedidos no período: 2" NÃO casa aqui - só entra pelo
+            // pool da consulta.
+            boolean rotuloEstrutural = digito.length() == 1
+                    && ALLOWLIST_ESTRUTURAL.contains(digito)
+                    && matcher.start() > 0
+                    && texto.charAt(matcher.start() - 1) == 'N';
+            assertTrue(poolCompleto.contains(digito) || rotuloEstrutural,
                     "digito '" + digito + "' no texto de resposta nao rastreia a nenhuma origem permitida. "
                             + "Texto: " + texto);
         }
@@ -242,6 +258,17 @@ class NenhumDigitoInventadoTest {
         pool.addAll(digitosDe(lacuna2.descricao()));
 
         assertTodoDigitoRastreavel(resposta.texto(), pergunta, pool);
+
+        // Nota sobre a regra 5 do CLAUDE.md ("nunca invente dado"): o texto
+        // concatena "Faltam " + lacunasDescricao.size() dentro de
+        // ServicoPergunta.construirTextoLacunas. Isso NÃO é dado inventado -
+        // o número vem de List.size() de uma lista real do resultado da
+        // consulta, calculado em Java, não redigido por um modelo. O que
+        // faltava era só uma trava forte o bastante para PROVAR essa conta:
+        // a asserção abaixo casa o texto contra resultado.lacunas().size()
+        // diretamente, então uma sabotagem tipo "size() - 1" quebra aqui.
+        assertTrue(resposta.texto().contains("Faltam " + resultado.lacunas().size()),
+                "o texto deveria conter 'Faltam ' seguido da contagem real de lacunas do resultado");
     }
 
     // ------------------------------------------------------------------
@@ -284,9 +311,10 @@ class NenhumDigitoInventadoTest {
                 CodigoIntencao.FILA_DE_PENDENCIAS.name(), Map.of(), new BigDecimal("0.90"));
 
         RespostaFilaPendencias resultado = new RespostaFilaPendencias(
-                List.of(itemEventoComErro(), itemEventoComErro()),
-                List.of(itemPedidoSemVariacao()),
-                List.of(itemVariacaoSemCusto(), itemVariacaoSemCusto(), itemVariacaoSemCusto()),
+                List.of(DublesDeTeste.itemEventoComErro(), DublesDeTeste.itemEventoComErro()),
+                List.of(DublesDeTeste.itemPedidoSemVariacao()),
+                List.of(DublesDeTeste.itemVariacaoSemCusto(), DublesDeTeste.itemVariacaoSemCusto(),
+                        DublesDeTeste.itemVariacaoSemCusto()),
                 List.of());
         when(servicoPainelAnalista.pendencias()).thenReturn(resultado);
 
@@ -300,20 +328,6 @@ class NenhumDigitoInventadoTest {
         pool.addAll(digitosDe(String.valueOf(resultado.devolucoesAbertas().size())));
 
         assertTodoDigitoRastreavel(resposta.texto(), pergunta, pool);
-    }
-
-    private ItemEventoComErro itemEventoComErro() {
-        return new ItemEventoComErro(UUID.randomUUID(), UUID.randomUUID(), "PEDIDO_CRIADO", "ext-1",
-                "erro de teste", OffsetDateTime.now(), 1, "acao");
-    }
-
-    private ItemPedidoSemVariacao itemPedidoSemVariacao() {
-        return new ItemPedidoSemVariacao(UUID.randomUUID(), UUID.randomUUID(), "sku-1", "titulo",
-                OffsetDateTime.now(), "acao");
-    }
-
-    private ItemVariacaoSemCusto itemVariacaoSemCusto() {
-        return new ItemVariacaoSemCusto(UUID.randomUUID(), "sku-1", "descricao", OffsetDateTime.now(), "acao");
     }
 
     // ------------------------------------------------------------------

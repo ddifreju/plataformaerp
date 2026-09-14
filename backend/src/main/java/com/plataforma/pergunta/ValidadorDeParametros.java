@@ -3,6 +3,7 @@ package com.plataforma.pergunta;
 import java.text.Normalizer;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.time.Period;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
@@ -29,6 +30,24 @@ import com.plataforma.canal.RepositorioCanal;
  */
 @Component
 public class ValidadorDeParametros {
+
+    /**
+     * Teto de tamanho do período EXPLÍCITO ({@code inicio}/{@code fim})
+     * que este parâmetro aceita (auditoria de segurança, ALTO). Existe por
+     * causa da TROCA FUTURA de adaptador, não por capricho hoje:
+     * {@link ModeloHeuristico} nunca produz {@code inicio}/{@code fim} - só
+     * {@code periodoRelativo}, que já é limitado pelo enum fechado
+     * {@link PeriodoRelativo}. Mas a decisão 0030 promete que trocar para
+     * {@code ModeloAnthropic} não muda mais nada no pacote, e nesse dia
+     * este caminho fica ativo sem nenhum outro teto - {@code
+     * ServicoMargemPeriodo.calcular} não tem {@code LIMIT} nem teto
+     * próprio. Um ano é o maior {@link PeriodoRelativo} que existe hoje
+     * ({@code ANO_ATUAL}); o período explícito não deveria poder pedir
+     * mais do que o maior atalho relativo já oferece. Acima do teto é
+     * ESCLARECIMENTO ("consigo olhar no máximo X de cada vez"), nunca
+     * exceção - mesmo padrão de todo outro parâmetro desta classe.
+     */
+    static final Period TETO_PERIODO_EXPLICITO = Period.ofYears(1);
 
     private final RepositorioCanal repositorioCanal;
     private final Clock relogio;
@@ -101,6 +120,12 @@ public class ValidadorDeParametros {
         if (!inicio.isBefore(fim)) {
             return ResultadoParametro.esclarecimento(
                     "O início do período precisa ser antes do fim - recebi início " + inicio + " e fim " + fim + ".");
+        }
+        if (fim.isAfter(inicio.plus(TETO_PERIODO_EXPLICITO))) {
+            return ResultadoParametro.esclarecimento(
+                    "Consigo olhar no máximo " + TETO_PERIODO_EXPLICITO.getYears()
+                            + " ano(s) de cada vez - o período de " + inicio + " a " + fim
+                            + " é maior que isso. Peça um intervalo menor.");
         }
         return ResultadoParametro.valido(new Periodo(inicio, fim));
     }

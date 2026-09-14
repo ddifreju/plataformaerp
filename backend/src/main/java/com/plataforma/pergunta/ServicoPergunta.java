@@ -278,11 +278,11 @@ public class ServicoPergunta {
 
         String pedidosPorStatus = resultado.pedidosPorStatus().isEmpty() ? "nenhum pedido registrado"
                 : resultado.pedidosPorStatus().stream()
-                        .map(item -> item.status().name() + ": " + item.quantidade())
+                        .map(item -> RotulosDeExibicao.de(item.status()) + ": " + item.quantidade())
                         .collect(Collectors.joining(", "));
         String devolucoesPorStatus = resultado.devolucoesPorStatus().isEmpty() ? "nenhuma devolução registrada"
                 : resultado.devolucoesPorStatus().stream()
-                        .map(item -> item.status().name() + ": " + item.quantidade())
+                        .map(item -> RotulosDeExibicao.de(item.status()) + ": " + item.quantidade())
                         .collect(Collectors.joining(", "));
 
         String texto = "Gargalos da operação. Pedidos por status: " + pedidosPorStatus + ". Devoluções por status: "
@@ -291,9 +291,11 @@ public class ServicoPergunta {
 
         List<NumeroCitado> numeros = new ArrayList<>();
         resultado.pedidosPorStatus().forEach(item ->
-                numeros.add(new NumeroCitado("Pedidos " + item.status().name(), String.valueOf(item.quantidade()))));
+                numeros.add(new NumeroCitado("Pedidos " + RotulosDeExibicao.de(item.status()),
+                        String.valueOf(item.quantidade()))));
         resultado.devolucoesPorStatus().forEach(item ->
-                numeros.add(new NumeroCitado("Devoluções " + item.status().name(), String.valueOf(item.quantidade()))));
+                numeros.add(new NumeroCitado("Devoluções " + RotulosDeExibicao.de(item.status()),
+                        String.valueOf(item.quantidade()))));
         numeros.add(new NumeroCitado("Eventos de ingestão com erro", String.valueOf(resultado.eventosIngestaoComErro())));
         numeros.add(new NumeroCitado("Pedidos sem custo de mercadoria", String.valueOf(resultado.pedidosSemCustoMercadoria())));
 

@@ -175,6 +175,34 @@ class ValidadorDeParametrosTest {
     }
 
     // ------------------------------------------------------------------
+    // periodo explicito - teto de tamanho (auditoria de seguranca, ALTO)
+    // ------------------------------------------------------------------
+
+    @Test
+    void periodoExplicitoNoTetoDeUmAnoEhAceito() {
+        Map<String, String> parametros = Map.of(
+                "inicio", "2025-09-14T00:00:00-03:00",
+                "fim", "2026-09-14T00:00:00-03:00");
+
+        ResultadoParametro<Periodo> resultado = validador.validarPeriodo(parametros);
+
+        assertTrue(resultado.valido(), "exatamente 1 ano de intervalo e o teto, e o teto e aceito");
+    }
+
+    @Test
+    void periodoExplicitoUmDiaAcimaDoTetoViraEsclarecimento() {
+        Map<String, String> parametros = Map.of(
+                "inicio", "2025-09-14T00:00:00-03:00",
+                "fim", "2026-09-15T00:00:00-03:00");
+
+        ResultadoParametro<Periodo> resultado = validador.validarPeriodo(parametros);
+
+        assertFalse(resultado.valido(), "1 ano e 1 dia deveria virar esclarecimento, nunca excecao");
+        assertTrue(resultado.esclarecimento().toLowerCase(Locale.ROOT).contains("no máximo")
+                || resultado.esclarecimento().toLowerCase(Locale.ROOT).contains("no maximo"));
+    }
+
+    // ------------------------------------------------------------------
     // periodo - relativo, com Clock FIXO (determinismo e requisito)
     // ------------------------------------------------------------------
 

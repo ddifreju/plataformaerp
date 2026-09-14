@@ -1,5 +1,6 @@
 import type { Lacuna, RotuloTeto } from "@/lib/api/tipos";
 import { formatarDinheiro, formatarPercentual } from "@/lib/dinheiro";
+import { BadgeConfianca } from "./BadgeConfianca";
 import { ListaLacunas } from "./ListaLacunas";
 
 interface PropriedadesRotuloConfianca {
@@ -21,9 +22,7 @@ export function RotuloConfianca({ rotulo, lacunas, valorTeto, percentualTeto }: 
   if (rotulo === "CALCULADA") {
     return (
       <div className="rounded border border-borda bg-background p-4">
-        <span className="inline-block rounded-full border border-valor-positivo px-3 py-1 text-sm font-medium text-valor-positivo">
-          Calculada
-        </span>
+        <BadgeConfianca rotulo={rotulo} />
         <p className="mt-2 text-base italic text-texto-secundario">Nenhum dado faltando neste período.</p>
       </div>
     );
@@ -33,9 +32,7 @@ export function RotuloConfianca({ rotulo, lacunas, valorTeto, percentualTeto }: 
     const percentualTexto = percentualTeto ? ` (${formatarPercentual(percentualTeto)})` : "";
     return (
       <div className="rounded border border-dado-estimado bg-dado-estimado-bg p-4">
-        <span className="inline-block rounded-full border border-dado-estimado px-3 py-1 text-sm font-medium text-dado-estimado">
-          Com teto
-        </span>
+        <BadgeConfianca rotulo={rotulo} />
         <p className="mt-2 text-base font-medium text-foreground">
           {formatarDinheiro(valorTeto)}
           {percentualTexto} é o teto — a margem real é menor.
@@ -48,9 +45,7 @@ export function RotuloConfianca({ rotulo, lacunas, valorTeto, percentualTeto }: 
 
   return (
     <div className="rounded border border-dado-ausente bg-dado-ausente-bg p-4">
-      <span className="inline-block rounded-full border border-dado-ausente px-3 py-1 text-sm font-medium text-dado-ausente">
-        Indeterminada
-      </span>
+      <BadgeConfianca rotulo={rotulo} />
       <p className="mt-2 text-base font-medium text-foreground">Não dá para calcular esta margem com confiança.</p>
       <p className="mt-2 text-sm text-texto-secundario">
         Faltam (abaixo). Alguns desses fazem o número subir, outros descer — por isso não existe um teto seguro

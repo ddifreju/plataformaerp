@@ -2,11 +2,14 @@ package com.plataforma.pergunta;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import com.plataforma.auditoria.ConsultaAuditada;
 import com.plataforma.auditoria.RepositorioConsultaAuditada;
@@ -17,6 +20,11 @@ import com.plataforma.margem.Lacuna;
 import com.plataforma.margem.ResultadoMargemPeriodo;
 import com.plataforma.margem.RotuloTeto;
 import com.plataforma.margem.ServicoMargemPeriodo;
+import com.plataforma.painel.RespostaFilaPendencias;
+import com.plataforma.painel.ItemDevolucaoAberta;
+import com.plataforma.painel.ItemEventoComErro;
+import com.plataforma.painel.ItemPedidoSemVariacao;
+import com.plataforma.painel.ItemVariacaoSemCusto;
 import com.plataforma.painel.ServicoPainelAnalista;
 import com.plataforma.painel.ServicoPainelGestor;
 
@@ -69,12 +77,26 @@ class ServicoPerguntaTest {
                 CodigoIntencao.MARGEM_DO_PERIODO.name(), Map.of(), new BigDecimal("0.10"));
         ServicoPergunta servico = novoServico(porta);
 
-        RespostaPergunta resposta = servico.responder("quanto sobrou no mes passado?");
+        String textoDaPergunta = "quanto sobrou no mes passado?";
+        RespostaPergunta resposta = servico.responder(textoDaPergunta);
 
         assertEquals(TipoResposta.RECUSA, resposta.tipo());
         assertNotNull(resposta.consultaAuditadaId());
         assertFalse(resposta.perguntasQueSeiResponder().isEmpty());
-        verify(repositorioConsultaAuditada, times(1)).save(any(ConsultaAuditada.class));
+
+        // Conteúdo da auditoria, não só a existência dela (regra 3 do
+        // CLAUDE.md): mesmo em RECUSA a pergunta é gravada, o sqlExecutado
+        // descreve a recusa (não fica vazio nem genérico), e não há ID nem
+        // linha nenhuma - não houve consulta de domínio nenhuma para provar.
+        ArgumentCaptor<ConsultaAuditada> captor = ArgumentCaptor.forClass(ConsultaAuditada.class);
+        verify(repositorioConsultaAuditada, times(1)).save(captor.capture());
+        ConsultaAuditada auditoria = captor.getValue();
+        assertEquals(textoDaPergunta, auditoria.getPergunta(),
+                "a pergunta recusada precisa ser gravada mesmo assim - alimenta a decisao 0031");
+        assertTrue(auditoria.getSqlExecutado().contains("PerguntaRecusada"),
+                "sqlExecutado deveria descrever a recusa: " + auditoria.getSqlExecutado());
+        assertEquals(0, auditoria.getIdsRetornados().length);
+        assertEquals(0, auditoria.getLinhasRetornadas());
     }
 
     // ------------------------------------------------------------------
@@ -137,7 +159,8 @@ class ServicoPerguntaTest {
         when(servicoMargemPeriodo.calcular(INICIO, FIM, canal.getId())).thenReturn(resultado);
 
         ServicoPergunta servico = novoServico(porta);
-        RespostaPergunta resposta = servico.responder("quanto sobrou no Mercado Livre mes passado?");
+        String textoDaPergunta = "quanto sobrou no Mercado Livre mes passado?";
+        RespostaPergunta resposta = servico.responder(textoDaPergunta);
 
         assertEquals(TipoResposta.RESPOSTA, resposta.tipo());
         assertNotNull(resposta.consultaAuditadaId());
@@ -147,6 +170,22 @@ class ServicoPerguntaTest {
         assertTrue(resposta.texto().contains("R$ 350,00"), "esperava o N4 formatado no texto: " + resposta.texto());
         assertTrue(resposta.numeros().stream().anyMatch(n -> n.valor().equals("R$ 1000,00")));
         assertTrue(resposta.numeros().stream().anyMatch(n -> n.valor().equals("3")));
+
+        // Conteúdo da auditoria, não só a existência dela (regra 3 do
+        // CLAUDE.md): os ids gravados são exatamente a união de
+        // idsPedidoUsados/idsCustoUsados do RESULTADO da consulta (nunca um
+        // subconjunto, nunca ids inventados), linhasRetornadas bate com o
+        // tamanho dessa união, a pergunta gravada é o texto do usuário, e
+        // executadoPor é sempre "ServicoPergunta" (nunca o usuário, decisão 0012).
+        ArgumentCaptor<ConsultaAuditada> captor = ArgumentCaptor.forClass(ConsultaAuditada.class);
+        verify(repositorioConsultaAuditada, times(1)).save(captor.capture());
+        ConsultaAuditada auditoria = captor.getValue();
+        Set<UUID> idsEsperados = new HashSet<>(resultado.idsPedidoUsados());
+        idsEsperados.addAll(resultado.idsCustoUsados());
+        assertEquals(idsEsperados, Set.of(auditoria.getIdsRetornados()));
+        assertEquals(idsEsperados.size(), auditoria.getLinhasRetornadas());
+        assertEquals(textoDaPergunta, auditoria.getPergunta());
+        assertEquals("ServicoPergunta", auditoria.getExecutadoPor());
     }
 
     // ------------------------------------------------------------------
@@ -213,7 +252,48 @@ class ServicoPerguntaTest {
     }
 
     // ------------------------------------------------------------------
-    // (g) texto invalido -> PerguntaInvalidaException
+    // (g) fila de pendencias -> RESPOSTA, auditoria com os ids dos itens
+    // ------------------------------------------------------------------
+
+    @Test
+    void filaDePendenciasGravaAuditoriaComOsIdsDosItensRetornados() {
+        PortaModeloLinguagem porta = (pergunta, cat) -> new IntencaoDetectada(
+                CodigoIntencao.FILA_DE_PENDENCIAS.name(), Map.of(), new BigDecimal("0.90"));
+
+        ItemEventoComErro eventoComErro = DublesDeTeste.itemEventoComErro();
+        ItemPedidoSemVariacao itemSemVariacao = DublesDeTeste.itemPedidoSemVariacao();
+        ItemVariacaoSemCusto variacaoSemCusto = DublesDeTeste.itemVariacaoSemCusto();
+        ItemDevolucaoAberta devolucaoAberta = DublesDeTeste.itemDevolucaoAberta();
+        RespostaFilaPendencias resultado = new RespostaFilaPendencias(
+                List.of(eventoComErro), List.of(itemSemVariacao), List.of(variacaoSemCusto),
+                List.of(devolucaoAberta));
+        when(servicoPainelAnalista.pendencias()).thenReturn(resultado);
+
+        ServicoPergunta servico = novoServico(porta);
+        String textoDaPergunta = "o que eu preciso resolver hoje?";
+        RespostaPergunta resposta = servico.responder(textoDaPergunta);
+
+        assertEquals(TipoResposta.RESPOSTA, resposta.tipo());
+        assertEquals(CodigoIntencao.FILA_DE_PENDENCIAS.name(), resposta.intencao());
+
+        // Conteúdo da auditoria, não só a existência dela (regra 3 do
+        // CLAUDE.md): os ids gravados são exatamente os ids dos QUATRO itens
+        // devolvidos (um de cada categoria da fila), linhasRetornadas bate
+        // com essa contagem, a pergunta gravada é o texto do usuário, e
+        // executadoPor é sempre "ServicoPergunta".
+        ArgumentCaptor<ConsultaAuditada> captor = ArgumentCaptor.forClass(ConsultaAuditada.class);
+        verify(repositorioConsultaAuditada, times(1)).save(captor.capture());
+        ConsultaAuditada auditoria = captor.getValue();
+        Set<UUID> idsEsperados = Set.of(
+                eventoComErro.id(), itemSemVariacao.id(), variacaoSemCusto.id(), devolucaoAberta.id());
+        assertEquals(idsEsperados, Set.of(auditoria.getIdsRetornados()));
+        assertEquals(4, auditoria.getLinhasRetornadas());
+        assertEquals(textoDaPergunta, auditoria.getPergunta());
+        assertEquals("ServicoPergunta", auditoria.getExecutadoPor());
+    }
+
+    // ------------------------------------------------------------------
+    // (h) texto invalido -> PerguntaInvalidaException
     // ------------------------------------------------------------------
 
     @Test

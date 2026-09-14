@@ -9,6 +9,7 @@ const ITENS_DE_NAVEGACAO = [
   { href: "/resultado", rotulo: "Resultado" },
   { href: "/operacao", rotulo: "Operação" },
   { href: "/pendencias", rotulo: "Pendências" },
+  { href: "/perguntar", rotulo: "Perguntar" },
 ] as const;
 
 interface PropriedadesNavegacao {
@@ -17,9 +18,14 @@ interface PropriedadesNavegacao {
 }
 
 /**
- * Navegação principal — três rótulos, sem submenu de "papéis" (guia,
- * seção 5): a mesma pessoa entra em "Pendências" de manhã, olha
- * "Resultado" no fim do mês e usa "Operação" quando algo trava.
+ * Navegação principal — os três rótulos de papel da decisão de negócio
+ * (guia, seção 5: "Resultado · Operação · Pendências", sem submenu de
+ * "papéis") mais "Perguntar" (tarefa 26, camada de IA da decisão 0030):
+ * não é um quarto "papel", é uma porta de entrada por texto livre para as
+ * mesmas perguntas que as outras três telas já respondem por formulário.
+ * A mesma pessoa entra em "Pendências" de manhã, olha "Resultado" no fim
+ * do mês, usa "Operação" quando algo trava, e "Perguntar" quando é mais
+ * rápido escrever a pergunta do que navegar até o filtro certo.
  */
 export function Navegacao({ nomeUsuario, tenantNome }: PropriedadesNavegacao) {
   const caminhoAtual = usePathname();

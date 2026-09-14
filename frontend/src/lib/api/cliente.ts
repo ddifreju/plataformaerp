@@ -1,10 +1,12 @@
 import type {
   ErroApi,
   RequisicaoMargemPeriodo,
+  RequisicaoPergunta,
   RespostaCanal,
   RespostaFilaPendencias,
   RespostaGargalosProcesso,
   RespostaMargemPeriodo,
+  RespostaPergunta,
   RespostaSessao,
 } from "./tipos";
 
@@ -150,4 +152,19 @@ export function buscarPainelAnalista(): Promise<RespostaFilaPendencias> {
  */
 export function listarCanais(): Promise<RespostaCanal[]> {
   return requisitar<RespostaCanal[]>("/api/canais");
+}
+
+/**
+ * POST /api/pergunta — camada de IA da decisão 0030. É POST, não GET:
+ * {@code ServicoPergunta.responder} grava uma {@code ConsultaAuditada} a
+ * cada chamada, inclusive em RECUSA e ESCLARECIMENTO (ver o Javadoc de
+ * `PerguntaController.java`) — a rota altera estado mesmo parecendo uma
+ * leitura.
+ */
+export function perguntar(texto: string): Promise<RespostaPergunta> {
+  const corpo: RequisicaoPergunta = { texto };
+  return requisitar<RespostaPergunta>("/api/pergunta", {
+    method: "POST",
+    body: JSON.stringify(corpo),
+  });
 }

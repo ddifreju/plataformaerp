@@ -205,3 +205,50 @@ export interface RespostaCanal {
   categoria: string;
   ativo: boolean;
 }
+
+// ---- pergunta: camada de IA (decisão 0030) -----------------------------
+
+/** RequisicaoPergunta.java — corpo de `POST /api/pergunta`. */
+export interface RequisicaoPergunta {
+  texto: string;
+}
+
+/**
+ * TipoResposta.java — os três caminhos de primeira classe da decisão 0030.
+ * Nenhum é erro HTTP: os três chegam como `200 OK`.
+ */
+export type TipoResposta = "RESPOSTA" | "ESCLARECIMENTO" | "RECUSA";
+
+/**
+ * NumeroCitado.java — `valor` já chega FORMATADO PARA EXIBIÇÃO
+ * (`FormatadorDeTexto.moeda`/`percentual`, ou uma contagem simples como
+ * `"12"`), não um decimal cru como em `RespostaMargemPeriodo`. NUNCA passe
+ * este campo por `ValorMonetario`/`formatarDinheiro` — o texto já pode
+ * conter `"R$"`, `","` e `"%"`, o que quebraria o parser de decimal deles;
+ * e mesmo que não quebrasse, reformatar por cima de um formato que a
+ * origem já fechou é o que a decisão 0026 proíbe.
+ */
+export interface NumeroCitado {
+  nome: string;
+  valor: string;
+}
+
+/**
+ * RespostaPergunta.java — o contrato inteiro da camada de IA. `lacunas`
+ * aqui é `string[]` (só a descrição já pronta, via
+ * `Lacuna::descricao`) — diferente do `Lacuna[]` completo (com `codigo` e
+ * `direcaoVies`) de `RespostaMargemPeriodo`. `rotuloConfianca` só vem
+ * preenchido quando a intenção é `MARGEM_DO_PERIODO`/`LACUNAS_DA_MARGEM`;
+ * `intencao` é `null` em `RECUSA` (nenhuma intenção do catálogo casou).
+ */
+export interface RespostaPergunta {
+  tipo: TipoResposta;
+  texto: string;
+  numeros: NumeroCitado[];
+  rotuloConfianca: RotuloTeto | null;
+  lacunas: string[];
+  consultaAuditadaId: string;
+  intencao: string | null;
+  parametrosUsados: Record<string, string>;
+  perguntasQueSeiResponder: string[];
+}

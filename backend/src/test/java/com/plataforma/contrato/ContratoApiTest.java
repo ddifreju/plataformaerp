@@ -11,6 +11,8 @@ import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -45,6 +47,9 @@ import com.plataforma.pedido.Pedido;
 import com.plataforma.pedido.RepositorioItemPedido;
 import com.plataforma.pedido.RepositorioPedido;
 import com.plataforma.pedido.StatusPedido;
+import com.plataforma.pergunta.CodigoIntencao;
+import com.plataforma.pergunta.IntencaoDetectada;
+import com.plataforma.pergunta.PortaModeloLinguagem;
 import com.plataforma.suporte.PostgresDeTeste;
 
 import org.junit.jupiter.api.BeforeAll;
@@ -54,6 +59,9 @@ import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -236,9 +244,79 @@ class ContratoApiTest {
 
     private static final String SENHA_DONO_A = "SenhaForteDeTeste-123!";
 
+    /**
+     * Marcador que a pergunta de teste embute no texto para escolher a
+     * intenção, e marcadores para os dois parâmetros. Ver o Javadoc de
+     * {@link ConfiguracaoDubleDeModeloDeLinguagem} sobre por que este
+     * arquivo PRECISA de um dublê aqui, em vez do {@code ModeloHeuristico}
+     * real que roda em produção.
+     */
+    private static final String MARCADOR_INTENCAO = "__INTENCAO";
+    private static final Pattern PADRAO_INTENCAO = Pattern.compile("__INTENCAO\\[(.*?)\\]__");
+    private static final Pattern PADRAO_CANAL = Pattern.compile("__CANAL\\[(.*?)\\]__");
+    private static final Pattern PADRAO_PERIODO_RELATIVO = Pattern.compile("__PERIODO_RELATIVO\\[(.*?)\\]__");
+
     @DynamicPropertySource
     static void configurarBanco(DynamicPropertyRegistry registro) {
         PostgresDeTeste.configurarPropriedades(registro);
+    }
+
+    /**
+     * Substitui {@code ModeloHeuristico} (o único {@link PortaModeloLinguagem}
+     * registrado em produção) por um dublê determinístico, SÓ para os casos
+     * de {@code POST /api/pergunta} deste arquivo.
+     *
+     * <h2>Por que isto é necessário, e não um atalho preguiçoso</h2>
+     * {@code ModeloHeuristico} hoje extrai {@code canal} e
+     * {@code periodoRelativo}, mas só casando contra um conjunto FECHADO de
+     * expressões de período e contra os canais REALMENTE cadastrados do
+     * tenant (ver o Javadoc dele) - não dá para escrever, no texto da
+     * pergunta, um valor arbitrário de canal ou período e ter certeza de
+     * qual vai casar sem depender do estado exato do seed de canal deste
+     * teste. Um teste de CONTRATO (decisão 0026, o caso mais importante
+     * desta seção) precisa de controle total e explícito sobre o parâmetro
+     * que chega em {@link ServicoPergunta}, independente de qualquer canal
+     * cadastrado - por isso o dublê aqui continua sendo o {@code Primary},
+     * mesmo com o {@code ModeloHeuristico} real já sabendo extrair.
+     *
+     * O dublê é PROPOSITALMENTE bobo: só reconhece marcadores literais
+     * ({@code __INTENCAO[...]__}, {@code __CANAL[...]__},
+     * {@code __PERIODO_RELATIVO[...]__}) que os próprios testes escrevem no
+     * texto da pergunta - nenhuma tentativa de interpretar português. Ele
+     * prova o CONTRATO (rota, serialização, formato de erro, isolamento),
+     * não a qualidade de interpretação de linguagem natural - essa
+     * responsabilidade é de {@code ModeloHeuristico}/{@code ModeloAnthropic}
+     * e dos testes deles próprios ({@code ModeloHeuristicoTest}).
+     */
+    @TestConfiguration
+    static class ConfiguracaoDubleDeModeloDeLinguagem {
+
+        @Bean
+        @Primary
+        PortaModeloLinguagem modeloDeLinguagemDeContrato() {
+            return (perguntaDoUsuario, catalogo) -> {
+                Matcher intencaoMatcher = PADRAO_INTENCAO.matcher(perguntaDoUsuario);
+                if (!perguntaDoUsuario.contains(MARCADOR_INTENCAO) || !intencaoMatcher.find()) {
+                    // Nenhum marcador reconhecido: mesmo comportamento de
+                    // "nenhuma intenção identificada" do ModeloHeuristico
+                    // real - confiança baixa, cai em RECUSA.
+                    return new IntencaoDetectada("NENHUMA_INTENCAO_IDENTIFICADA_TESTE", Map.of(),
+                            new BigDecimal("0.05"));
+                }
+
+                Map<String, String> parametros = new HashMap<>();
+                Matcher canalMatcher = PADRAO_CANAL.matcher(perguntaDoUsuario);
+                if (canalMatcher.find()) {
+                    parametros.put("canal", canalMatcher.group(1));
+                }
+                Matcher periodoMatcher = PADRAO_PERIODO_RELATIVO.matcher(perguntaDoUsuario);
+                if (periodoMatcher.find()) {
+                    parametros.put("periodoRelativo", periodoMatcher.group(1));
+                }
+
+                return new IntencaoDetectada(intencaoMatcher.group(1), parametros, new BigDecimal("0.95"));
+            };
+        }
     }
 
     @Autowired
@@ -284,6 +362,7 @@ class ContratoApiTest {
     private UUID tenantAId;
     private UUID tenantBId;
     private UUID canalAId;
+    private String nomeCanalA;
     private UUID canalBId;
     private String skuVariacaoSemCusto;
     private String idExternoEventoErro;
@@ -304,7 +383,8 @@ class ContratoApiTest {
         nomeDonoA = "Dona da Loja de Teste";
         usuarioDonoAId = criarUsuario(tenantAId, emailDonoA, SENHA_DONO_A, nomeDonoA, "DONO");
 
-        canalAId = criarCanal(tenantAId, "Canal Contrato A " + marcador,
+        nomeCanalA = "Canal Contrato A " + marcador;
+        canalAId = criarCanal(tenantAId, nomeCanalA,
                 "cred-secreta-nunca-deveria-vazar-" + marcador);
         canalBId = criarCanal(tenantBId, "Canal Contrato B " + marcador, "cred-do-tenant-b-" + marcador);
 
@@ -375,20 +455,40 @@ class ContratoApiTest {
 
     @Test
     void semSessaoTodasAsRotasProtegidasDevolvem401() throws Exception {
-        String[] rotasProtegidas = {
+        String[] rotasProtegidasGet = {
                 "/api/sessao",
                 "/api/canais",
-                "/api/margem/periodo",
                 "/api/painel/gestor",
                 "/api/painel/analista"
         };
 
-        for (String rota : rotasProtegidas) {
+        for (String rota : rotasProtegidasGet) {
             mockMvc.perform(get(rota))
                     .andExpect(status().isUnauthorized())
                     .andExpect(jsonPath("$.erro").value("nao_autenticado"))
                     .andExpect(jsonPath("$.mensagem").isString());
         }
+
+        // /api/pergunta e /api/margem/periodo sao POST (ver o Javadoc de
+        // PerguntaController e, para margem, a decisao 0034), entao precisam
+        // de corpo e content-type - sem sessao, o
+        // FiltroTenant/PontoEntradaNaoAutenticado barra ANTES de qualquer
+        // validacao de corpo rodar, entao um corpo minimo valido basta para
+        // isolar o que este teste quer provar (401, nunca 400).
+        mockMvc.perform(post("/api/pergunta")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoPergunta("Quais canais eu tenho cadastrados?")))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.erro").value("nao_autenticado"))
+                .andExpect(jsonPath("$.mensagem").isString());
+
+        mockMvc.perform(post("/api/margem/periodo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoMargemPeriodo(OffsetDateTime.now().minusDays(1), OffsetDateTime.now(),
+                                UUID.randomUUID())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.erro").value("nao_autenticado"))
+                .andExpect(jsonPath("$.mensagem").isString());
     }
 
     @Test
@@ -507,8 +607,8 @@ class ContratoApiTest {
     }
 
     // ==================================================================
-    // 5. GET /api/margem/periodo - o ponto mais importante do arquivo:
-    //    todo valor monetario e STRING no JSON cru, nunca numero
+    // 5. POST /api/margem/periodo (decisao 0034) - o ponto mais importante
+    //    do arquivo: todo valor monetario e STRING no JSON cru, nunca numero
     // ==================================================================
 
     @Test
@@ -517,11 +617,10 @@ class ContratoApiTest {
         OffsetDateTime inicio = feitoEmCalculada.minusMinutes(1);
         OffsetDateTime fim = feitoEmCalculada.plusMinutes(1);
 
-        mockMvc.perform(get("/api/margem/periodo")
+        mockMvc.perform(post("/api/margem/periodo")
                         .session(sessao)
-                        .param("inicio", inicio.toString())
-                        .param("fim", fim.toString())
-                        .param("canalId", canalAId.toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoMargemPeriodo(inicio, fim, canalAId)))
                 .andExpect(status().isOk())
                 // O ponto central: isString(), NUNCA so o valor - conferir
                 // so o valor deixaria passar um numero JSON com o mesmo
@@ -552,11 +651,10 @@ class ContratoApiTest {
         OffsetDateTime inicio = feitoEmComTeto.minusMinutes(1);
         OffsetDateTime fim = feitoEmComTeto.plusMinutes(1);
 
-        mockMvc.perform(get("/api/margem/periodo")
+        mockMvc.perform(post("/api/margem/periodo")
                         .session(sessao)
-                        .param("inicio", inicio.toString())
-                        .param("fim", fim.toString())
-                        .param("canalId", canalAId.toString()))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoMargemPeriodo(inicio, fim, canalAId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.faturamentoBrutoN0").isString())
                 .andExpect(jsonPath("$.faturamentoBrutoN0").value("149.90"))
@@ -610,15 +708,14 @@ class ContratoApiTest {
         OffsetDateTime inicio = OffsetDateTime.now().minusDays(30);
         OffsetDateTime fim = OffsetDateTime.now().plusDays(1);
 
-        mockMvc.perform(get("/api/margem/periodo")
+        mockMvc.perform(post("/api/margem/periodo")
                         .session(sessao)
-                        .param("inicio", inicio.toString())
-                        .param("fim", fim.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
                         // canalBId e um canal_id REAL e VALIDO - pertence a
                         // tenant B, nao a A. De proposito: se a resposta
                         // saisse vazia so porque o canal "nao existe", isto
                         // nao provaria isolamento nenhum.
-                        .param("canalId", canalBId.toString()))
+                        .content(corpoMargemPeriodo(inicio, fim, canalBId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.quantidadePedidos").value(0))
                 .andExpect(jsonPath("$.idsPedidoUsados").isEmpty())
@@ -627,6 +724,137 @@ class ContratoApiTest {
                         org.hamcrest.Matchers.containsString(pedidoCalculadaId.toString()))))
                 .andExpect(content().string(org.hamcrest.Matchers.not(
                         org.hamcrest.Matchers.containsString(pedidoComTetoId.toString()))));
+    }
+
+    // ==================================================================
+    // 8. POST /api/pergunta (tarefa 24) - ver Javadoc de
+    //    ConfiguracaoDubleDeModeloDeLinguagem sobre por que estes casos
+    //    dependem do dublê de PortaModeloLinguagem, e nao do
+    //    ModeloHeuristico real.
+    // ==================================================================
+
+    /**
+     * (a) Pergunta que casa com margem devolve 200, {@code tipo=RESPOSTA},
+     * {@code consultaAuditadaId} preenchido, e TODO valor monetário como
+     * STRING no JSON cru (decisão 0026) - mesma técnica {@code isString()}
+     * já usada em {@link #margemPeriodoPedidoCalculadaTrazValoresMonetariosComoStringComDuasCasas()}.
+     *
+     * NUANCE que vale registrar: aqui a garantia de "string" NÃO vem do
+     * serializador Jackson de {@code BigDecimal} (
+     * {@code ConfiguracaoJackson}, o mecanismo do teste de
+     * {@code /api/margem/periodo}) - {@link com.plataforma.pergunta.RespostaPergunta}
+     * não carrega nenhum campo {@code BigDecimal}. Ela vem de
+     * {@code ServicoPergunta} já ter formatado cada número como
+     * {@code String} (via {@code FormatadorDeTexto}) antes de montar
+     * {@code NumeroCitado} - ver o Javadoc de {@code RespostaPergunta}. É um
+     * mecanismo DIFERENTE chegando na mesma garantia; por isso este caso é
+     * testado separadamente, não reaproveitado do teste de margem.
+     *
+     * Janela ULTIMOS_30_DIAS (em vez de MES_PASSADO) de propósito: os dois
+     * pedidos do cenário (calculada = agora-10 dias, com teto = agora-5
+     * dias) sempre caem dentro dela, qualquer que seja o dia em que a suíte
+     * rodar - MES_PASSADO dependeria de em que dia do mês o teste executa.
+     */
+    @Test
+    void perguntaDeMargemDevolveRespostaComValoresMonetariosComoString() throws Exception {
+        MockHttpSession sessao = sessaoDoDonoA();
+        String pergunta = "__INTENCAO[MARGEM_DO_PERIODO]__ __CANAL[" + nomeCanalA + "]__ "
+                + "__PERIODO_RELATIVO[ULTIMOS_30_DIAS]__ quanto sobrou?";
+
+        mockMvc.perform(post("/api/pergunta")
+                        .session(sessao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoPergunta(pergunta)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipo").value("RESPOSTA"))
+                .andExpect(jsonPath("$.consultaAuditadaId").isString())
+                .andExpect(jsonPath("$.intencao").value("MARGEM_DO_PERIODO"))
+                // Filtro JSONPath com predicado ("$..[?(@.nome == 'x')].valor")
+                // sempre devolve um ARRAY (mesmo casando uma linha so) -
+                // Matchers.contains(...) e quem confere "exatamente um
+                // elemento, e esse elemento e String" ao mesmo tempo; usar
+                // isString() aqui compararia tipo errado (array, nao string).
+                // Os dois pedidos do cenario usam canalA e caem nos ultimos
+                // 30 dias - contagem exata, nao "pelo menos um".
+                .andExpect(jsonPath("$.numeros[?(@.nome == 'Pedidos no período')].valor")
+                        .value(org.hamcrest.Matchers.contains("2")))
+                .andExpect(jsonPath("$.numeros[?(@.nome == 'Faturamento bruto (N0)')].valor")
+                        .value(org.hamcrest.Matchers.contains(org.hamcrest.Matchers.instanceOf(String.class))))
+                .andExpect(jsonPath("$.numeros[?(@.nome == 'Resultado do período (N3)')].valor")
+                        .value(org.hamcrest.Matchers.contains(org.hamcrest.Matchers.instanceOf(String.class))))
+                .andExpect(jsonPath("$.texto").value(org.hamcrest.Matchers.containsString("R$")))
+                .andExpect(jsonPath("$.tenantId").doesNotExist());
+    }
+
+    /**
+     * (b) Pergunta fora do domínio (nenhum marcador reconhecido pelo dublê,
+     * equivalente a "nenhuma intenção identificada" do modelo real) devolve
+     * {@code tipo=RECUSA}, com {@code perguntasQueSeiResponder} não vazia -
+     * a recusa é caminho de primeira classe (decisão 0030), nunca um erro
+     * HTTP.
+     */
+    @Test
+    void perguntaForaDoDominioDevolveRecusaComSugestoesDePergunta() throws Exception {
+        MockHttpSession sessao = sessaoDoDonoA();
+
+        mockMvc.perform(post("/api/pergunta")
+                        .session(sessao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoPergunta("Qual é a capital da Bulgária?")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipo").value("RECUSA"))
+                .andExpect(jsonPath("$.consultaAuditadaId").isString())
+                .andExpect(jsonPath("$.perguntasQueSeiResponder").isNotEmpty())
+                .andExpect(jsonPath("$.tenantId").doesNotExist());
+    }
+
+    /**
+     * (c) Corpo com {@code texto} vazio devolve 400 no formato
+     * {@link com.plataforma.comum.web.ErroApi} - {@code @Valid} em
+     * {@code RequisicaoPergunta} barra na borda HTTP, antes de
+     * {@code ServicoPergunta.responder} rodar (ver
+     * {@code TratadorGlobalDeErros.tratarCorpoInvalido}).
+     */
+    @Test
+    void perguntaComTextoVazioDevolve400NoFormatoErroApi() throws Exception {
+        MockHttpSession sessao = sessaoDoDonoA();
+
+        mockMvc.perform(post("/api/pergunta")
+                        .session(sessao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoPergunta("")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.erro").value("requisicao_invalida"))
+                .andExpect(jsonPath("$.mensagem").isString());
+    }
+
+    /**
+     * (d) A resposta de {@code /api/pergunta} nunca traz {@code tenantId}
+     * nem a credencial de canal - mesma checagem de vazamento que
+     * {@link #canaisListaOCanalDoTenantSemExporChaveCredencial()} já faz
+     * para {@code /api/canais}, repetida aqui porque
+     * {@code responderCanaisDisponiveis} monta a resposta de um jeito
+     * diferente (texto livre + {@link com.plataforma.pergunta.NumeroCitado}),
+     * nao {@code RespostaCanal}).
+     */
+    @Test
+    void perguntaDeCanaisDisponiveisNuncaExpoeTenantIdOuCredencial() throws Exception {
+        MockHttpSession sessao = sessaoDoDonoA();
+
+        MvcResult resultado = mockMvc.perform(post("/api/pergunta")
+                        .session(sessao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoPergunta("__INTENCAO[CANAIS_DISPONIVEIS]__ quais canais eu tenho?")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipo").value("RESPOSTA"))
+                .andExpect(jsonPath("$.tenantId").doesNotExist())
+                .andReturn();
+
+        String corpo = resultado.getResponse().getContentAsString();
+        assertFalse(corpo.contains("cred-secreta-nunca-deveria-vazar"),
+                "a credencial do canal jamais pode aparecer na resposta de /api/pergunta");
+        assertFalse(corpo.contains(tenantAId.toString()),
+                "o id do tenant jamais pode aparecer na resposta de /api/pergunta");
     }
 
     // ==================================================================
@@ -706,6 +934,25 @@ class ContratoApiTest {
         Map<String, String> corpo = new HashMap<>();
         corpo.put("email", email);
         corpo.put("senha", senha);
+        return objectMapper.writeValueAsString(corpo);
+    }
+
+    private String corpoPergunta(String texto) throws Exception {
+        Map<String, String> corpo = new HashMap<>();
+        corpo.put("texto", texto);
+        return objectMapper.writeValueAsString(corpo);
+    }
+
+    /**
+     * Corpo de {@code POST /api/margem/periodo} (decisao 0034 - os
+     * parametros saem da query string e vao para o corpo). Mesmo formato de
+     * {@link com.plataforma.margem.RequisicaoMargemPeriodo}.
+     */
+    private String corpoMargemPeriodo(OffsetDateTime inicio, OffsetDateTime fim, UUID canalId) throws Exception {
+        Map<String, String> corpo = new HashMap<>();
+        corpo.put("inicio", inicio.toString());
+        corpo.put("fim", fim.toString());
+        corpo.put("canalId", canalId.toString());
         return objectMapper.writeValueAsString(corpo);
     }
 
