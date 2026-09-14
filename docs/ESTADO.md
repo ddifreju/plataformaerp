@@ -96,13 +96,14 @@ Execute em ordem. Não pergunte antes de começar cada uma.
 **Bloco A — Camada de IA sobre dados operacionais** (decisão 0030: o modelo
 interpreta a pergunta; número nenhum passa pela geração do modelo)
 
-21. [ ] `PortaModeloLinguagem` + duas implementações sem chave: `ModeloHeuristico`
-    (conservador, roda em dev) e `ModeloGravado` (fixture, inclusive adversária)
-22. [ ] Catálogo fechado de perguntas respondíveis, com parâmetros tipados e
+21. [x] `PortaModeloLinguagem` + duas implementações sem chave: `ModeloHeuristico`
+    (conservador, roda em dev, extrai canal e período de texto livre) e
+    `ModeloGravado` (fixture, inclusive adversária)
+22. [x] Catálogo fechado de perguntas respondíveis, com parâmetros tipados e
     validação determinística (canal do tenant, período, ausência → esclarecimento)
-23. [ ] Executor: intenção → serviço já existente → `ConsultaAuditada` → resposta
+23. [x] Executor: intenção → serviço já existente → `ConsultaAuditada` → resposta
     por template, com rótulo de confiança e memória de cálculo
-24. [ ] `POST /api/pergunta` + teste de isolamento de tenant + auditoria de segurança
+24. [x] `POST /api/pergunta` + teste de isolamento de tenant + auditoria de segurança
 25. [ ] Suíte de avaliação com limiar (regra 4) e asserção dura nas travas
 26. [ ] Tela de perguntas, com "como cheguei nesse número" e a recusa honesta
 
@@ -119,6 +120,31 @@ casamento, descartada na decisão 0029)
 
 31. [ ] A lojista declara o escopo de cada canal — sem heurística, sem adivinhar
 32. [ ] Soma entre canais permitida apenas sobre conjunto declarado disjunto
+33. [ ] A camada de IA passa a responder sem exigir canal, quando a declaração
+    permitir — é o que torna "quanto sobrou no mês?" respondível
+
+---
+
+## Placar de testes da Fase 4 (14/09/2026)
+
+**Docker não subiu nesta máquina nesta sessão** (o daemon não respondeu; o
+Docker Desktop desta máquina está em `AppData\Local\Programs\DockerDesktop`,
+instalação por usuário — e já há pastas `run-quebrado-*` de sockets órfãos
+afastados antes, exatamente o padrão descrito no `CONTEXTO-HANDOFF.md`).
+Seguindo o padrão já provado nas Fases 0 e 1: escrever o teste, rodar o que
+roda sem banco, e registrar o que fica esperando.
+
+Nota de ambiente aprendida hoje: **não exporte `TMP=C:\Temp` ao rodar o
+Maven** nesta máquina — o surefire 3.2.5 morre com
+`ExceptionInInitializerError` antes de executar teste nenhum. O `TMP` do
+handoff serve para **subir o backend** (o pipe AF_UNIX do Tomcat), não para
+rodar a suíte.
+
+| | |
+|---|---|
+| Testes puros rodados e verdes (pacote `pergunta`) | **61** |
+| `./mvnw -B test-compile` do projeto inteiro | BUILD SUCCESS |
+| Aguardando Docker | `IsolamentoPerguntaTest` (3 casos) e os casos novos de `/api/pergunta` no `ContratoApiTest` |
 
 ---
 
@@ -342,6 +368,45 @@ bom para a segurança (o navegador só fala com a própria origem), mas signific
 que **testar em dev não exercita a configuração de CORS**. Um erro nela só
 apareceria em produção ou numa chamada direta fora do rewrite.
 
+### Invariante novo, de sangue (decisão 0034)
+
+**`GET` que chama serviço que grava `consulta_auditada` é bug de segurança,
+não de estilo.** A auditoria da Fase 4 encontrou que `GET /api/margem/periodo`
+gravava auditoria desde a tarefa 16 — ou seja, a condição 1 da decisão 0025
+("nenhum GET altera estado"), que é o que sustenta o CSRF desligado, era falsa
+havia um mês. Corrigido trocando o verbo para POST.
+
+O que isso ensina sobre revisão: o invariante estava escrito nesta mesma
+seção desde a Fase 3, e três auditorias passaram por ele. Só apareceu quando a
+pergunta foi feita de forma específica — "confirme que nenhum GET, **inclusive
+os antigos**, alterou-se para gravar estado". Invariante escrito não se
+verifica sozinho; a pergunta precisa mirar o código antigo, não só o novo.
+
+### Dívida da Fase 4 (registrada nas revisões de 14/09, não bloqueia)
+
+Da revisão de código do pacote `pergunta`:
+
+1. **`GARGALOS_DA_OPERACAO`, `FILA_DE_PENDENCIAS` e `LACUNAS_DA_MARGEM` sem
+   teste de contrato HTTP.** 3 dos 5 itens do catálogo sem prova de
+   serialização ponta a ponta. O `ContratoApiTest` cobre só margem, recusa,
+   texto vazio e canais.
+2. **Esclarecimento com canal E período inválidos ao mesmo tempo não é
+   testado.** As duas mensagens são coladas com espaço; pode sair frase
+   estranha e ninguém notaria.
+3. **`DescricaoIntencao.parametrosObrigatorios` e `parametrosOpcionais` são
+   dados mortos** — populados no catálogo e lidos por ninguém. Ou some até a
+   tela precisar, ou ganha um consumidor. Enquanto estiver assim, pode
+   desatualizar em silêncio.
+4. **Gatilho de extração do `ServicoPergunta`:** ~400 linhas e 5 caminhos está
+   no limite. Quando entrar a 6ª pergunta no catálogo, extrair o bloco de
+   margem (hoje mais da metade do arquivo) para classe própria. Antes disso,
+   não.
+5. **Molde de `RespostaPergunta` repetido em 3 caminhos curtos** (gargalos,
+   fila, canais). Na régua do "duplicou 3x, extraia", mas de risco baixo.
+6. **`500` duplicado** entre `ServicoPergunta.TAMANHO_MAXIMO_PERGUNTA` e o
+   `@Size(max = 500)` de `RequisicaoPergunta`, sem teste amarrando os dois.
+   A duplicação é proposital (defesa nas duas bordas); a falta do teste não é.
+
 ### Dívida conhecida (não bloqueia)
 
 - `ConsultaAuditada` tem `@Id` sem `@GeneratedValue`, então `save()` chama
@@ -400,6 +465,10 @@ Duas decisões nasceram de eu ter errado e estão registradas assim: **0011**
 
 | Data | Tarefa | Resultado |
 |---|---|---|
+| 2026-09-14 | Fase 4 definida | Decisões 0029 (escopo e ordem), 0030 (arquitetura da camada de IA) e 0031 (pgvector segue sem uso). A reconciliação ML × Bling por casamento de pares foi **descartada** por contradizer a 0017 — com gatilho escrito para retomar. No lugar entrou o escopo de canal declarado, que a própria 0017 chamava de "provavelmente a resposta certa". |
+| 2026-09-14 | 21, 22 e 23. Núcleo da camada de pergunta | Feito, **sem migration nenhuma**. `PortaModeloLinguagem` com `ModeloHeuristico` (casa intenção por vocabulário derivado do próprio catálogo, e extrai canal e período de texto livre), catálogo fechado de 5 perguntas, `ValidadorDeParametros` determinístico com `Clock` injetado, e `ServicoPergunta` executando sobre `ServicoMargemPeriodo`/`ServicoPainelGestor`/`ServicoPainelAnalista`/`RepositorioCanal`. **`ConsultaAuditada` é gravada em toda chamada — inclusive recusa e esclarecimento**, porque o texto cru das perguntas recusadas é o insumo para decidir o que entra no catálogo. 61 testes puros. |
+| 2026-09-14 | O buraco que quase passou | O `ModeloHeuristico` classificava a intenção mas **não extraía parâmetro nenhum**, então as duas perguntas que interessam (margem e lacunas) nunca chegavam a RESPOSTA pela API real — só com dublê de teste. Passava despercebido porque todo teste de contrato usa dublê. Corrigido: a heurística injeta `RepositorioCanal` (já filtrado por `@TenantId` + RLS) e casa nome/código de canal e um conjunto fechado de expressões de período. Dois canais casando → parâmetro ausente e esclarecimento, nunca escolha. |
+| 2026-09-14 | 24. `POST /api/pergunta` | Feito. É POST de propósito e está comentado no código: a rota grava `consulta_auditada`, ou seja, altera estado — um GET aqui quebraria a condição 1 da decisão 0025, que é o que sustenta o CSRF desligado. Nenhuma alteração em `ConfiguracaoSeguranca` foi necessária: `.anyRequest().authenticated()` já cobre rota nova. `PerguntaInvalidaException` e `MethodArgumentNotValidException` → 400 em `ErroApi`, sem ecoar o texto da pergunta. |
 | 2026-08-12 | 1. Estrutura do monorepo | Feito. `backend/`, `frontend/`, `infra/`, `docs/` + Makefile na raiz. Git inicializado (decisão 0009). `frontend/` é placeholder documentado: sem Node, o scaffold do Next.js é gerado, não escrito à mão. |
 | 2026-08-12 | 2. Docker Compose com Postgres 16 + pgvector | Feito. Imagem `pgvector/pgvector:pg16`, healthcheck, portas presas a `127.0.0.1`, segredos só via `infra/.env`. Adminer em perfil opcional. **Não executado** (sem Docker). |
 | 2026-08-12 | 3. Esqueleto Spring Boot com tenant no filtro | Feito. Quatro camadas da decisão 0007: `FiltroTenant` → `ContextoTenant` → Hibernate `@TenantId` → `DataSourceComTenant` (GUC). Todas falham fechadas. **Não compilado.** |

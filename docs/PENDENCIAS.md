@@ -76,6 +76,38 @@ construída contra mock até a credencial chegar (ver "Como usar", no fim).
 
 ## Decisões de negócio pendentes
 
+- [ ] **Mandar nome de canal para um LLM externo (quando `ModeloAnthropic` existir)**
+      `ModeloHeuristico` já extrai `canal` e `periodoRelativo` de texto livre
+      hoje, mas de forma 100% determinística e local: casa o texto contra os
+      canais do próprio tenant, e nada sai da máquina (ver Javadoc da classe).
+      Quando existir chave de LLM e `ModeloAnthropic` entrar, colocar nome de
+      canal (dado do tenant) dentro de um prompt significa mandar esse dado a
+      um provedor de IA externo - é a exceção que a fundadora reservou para
+      si (`docs/CONTEXTO-HANDOFF.md`, "provedores de IA externos"), não uma
+      decisão técnica.
+- [ ] **O texto INTEIRO da pergunta sai do país quando o LLM entrar**
+      Maior que o item acima, e descoberto na auditoria da Fase 4. A lojista
+      digita texto livre em `POST /api/pergunta`, e esse texto pode conter nome
+      ou CPF do consumidor final dela ("quanto o Fulano, CPF tal, comprou?").
+      Hoje nada sai da máquina. Com `ModeloAnthropic`, o texto **integral**
+      precisa ir ao provedor para a interpretação funcionar — transferência
+      internacional de dado pessoal de **titular terceiro**, que nunca teve
+      relação com a plataforma. Não é o mesmo risco do nome de canal; é outra
+      categoria de dado e outro titular. Precisa de base legal antes de ligar.
+- [ ] **PII de consumidor final em `consulta_auditada.pergunta`**
+      Mesmo sem LLM nenhum, esse texto livre já é gravado em toda chamada,
+      numa tabela append-only e sem prazo de expurgo. A pendência de retenção
+      logo abaixo cobre `executado_por` (dado de empregado do cliente); esta
+      cobre dado de terceiro. Decidir junto: prazo, expurgo e base legal.
+- [ ] **`papel` vira autorização de verdade? E quem vê o quê?**
+      DONO/GESTOR/ANALISTA existe como campo e **não autoriza nada** — qualquer
+      usuário autenticado alcança qualquer endpoint. A camada de pergunta
+      herdou isso: um ANALISTA pode perguntar "onde a operação está travando" e
+      receber a visão de gestor. Não é regressão (o endpoint direto já era
+      assim desde a tarefa 19), mas é mais uma porta para o mesmo dado.
+      A parte técnica é simples (matriz papel×operação e testes de negação);
+      **quem pode ver qual número é decisão de produto**, e é por isso que está
+      aqui e não no ESTADO.
 - [ ] Nome definitivo da marca
 - [ ] Nicho inicial: moda ou pet/suplementos
 - [ ] Modelo e valores de precificação
