@@ -55,6 +55,13 @@ Podem não se aplicar à máquina nova, mas o padrão de diagnóstico vale:
    Windows não conseguia apagar (erro 1920). Correção: parar o Docker,
    RENOMEAR as pastas (apagar os arquivos é impossível), relançar. Limpar
    todas de uma vez, senão cada tentativa deixa sockets novos para trás.
+   **CONFIRMADO NA MÁQUINA NOVA (14/09/2026):** aconteceu de novo, com o
+   mesmo sintoma (o processo sobe e morre em silêncio, sem janela de erro) e
+   a mesma cura. Duas notas que economizam tempo: o executável desta máquina
+   está em `AppData\Local\Programs\DockerDesktop\Docker Desktop.exe`
+   (instalação por usuário), **não** em `Program Files`; e `docker version`
+   responde normalmente com o cliente mesmo sem daemon — quem diz a verdade
+   é `docker info`.
 2. **Tomcat não subia** ("Unable to establish loopback connection"):
    duas causas empilhadas. (a) Reserva de portas do winnat/Hyper-V —
    corrigido pela Juliana com `net stop winnat && net start winnat` +
@@ -64,6 +71,11 @@ Podem não se aplicar à máquina nova, mas o padrão de diagnóstico vale:
    EINVAL, porque o driver afunix.sys não resolve caminho 8.3. Correção:
    exportar `TMP`/`TEMP` num caminho sem forma 8.3 (ex.: `C:\Temp`) para o
    processo Java. PowerShell da Juliana não sofre disso; Git Bash sim.
+   **CORREÇÃO DE ESCOPO (14/09/2026):** esse `TMP` vale para **subir o
+   backend**, e NÃO para rodar o Maven. Exportar `TMP=C:\Temp` antes de
+   `./mvnw test` mata o maven-surefire 3.2.5 com
+   `ExceptionInInitializerError` antes de executar teste nenhum. Rode a
+   suíte sem tocar em `TMP`.
    Princípio: mesmo binário funcionando num shell e falhando noutro → o
    diff é o ambiente herdado; reduza ao caso mínimo (`Selector.open()`)
    antes de culpar firewall/antivírus.
