@@ -3,8 +3,11 @@
 -- =====================================================================
 -- Popula um tenant ficticio com volume suficiente para as tres telas
 -- ficarem interessantes: 3 canais, catalogo com variacoes, ~50 pedidos
--- espalhados por 90 dias, devolucoes com motivo, eventos de ingestao em
--- erro, e os TRES rotulos de margem representados de proposito.
+-- primarios espalhados por 90 dias (mais um punhado de pedidos
+-- espelhados no Bling - ver a secao "Escopo declarado de canal" e o
+-- bloco de pedidos do Bling mais abaixo), devolucoes com motivo, eventos
+-- de ingestao em erro, e os TRES rotulos de margem representados de
+-- proposito.
 --
 -- ISTO NAO E MIGRATION. Vive em infra/, fora de db/migration/, e o
 -- Flyway nunca o enxerga. Migration descreve ESTRUTURA; isto e CONTEUDO
@@ -122,17 +125,41 @@ VALUES
 -- ---------------------------------------------------------------------
 -- Canais
 -- ---------------------------------------------------------------------
--- Dois canais de venda (marketplace) e um ERP. O ERP existe para a tela
--- deixar visivel que ele NAO e somado aos outros: a decisao 0017 proibe
--- somar canais que podem espelhar a mesma venda.
-INSERT INTO canal (id, tenant_id, codigo, nome, tipo, categoria, ativo)
+-- Dois canais de venda (marketplace) e um ERP. Desde a tarefa 31/decisao
+-- 0033 os tres tem ESCOPO DECLARADO (V016): ml-classico e ml-premium sao
+-- FONTE_PRIMARIA (os pedidos deles nascem ali); bling-erp e declarado
+-- ESPELHO de ml-classico. E o proprio dado que impede a soma entre
+-- canais sobrepostos agora - nao mais so a convencao implicita da
+-- decisao 0017 ("o ERP nao aparece no seletor de soma").
+--
+-- escopo_declarado_por fica NULL nas tres: "declarado fora da aplicacao"
+-- (seed/provisionamento) e um estado REAL, nao uma ausencia a preencher
+-- (secao 4 do cabecalho da V016) - nao ha usuario logado rodando este
+-- script.
+--
+-- DUAS INSTRUCOES, NAO UMA: fk_canal_espelha_canal (FK composta,
+-- decisao 0015) exige que o alvo do espelho (ml-classico) ja exista
+-- fisicamente na tabela antes do INSERT da linha que aponta para ele.
+INSERT INTO canal (id, tenant_id, codigo, nome, tipo, categoria, ativo,
+    escopo_declarado, escopo_declarado_em, escopo_declarado_por)
 VALUES
     ('33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111',
-     'ml-classico', 'Mercado Livre — Clássico', 'MERCADO_LIVRE', 'MARKETPLACE', true),
+     'ml-classico', 'Mercado Livre — Clássico', 'MERCADO_LIVRE', 'MARKETPLACE', true,
+     'FONTE_PRIMARIA', now() - interval '30 days', NULL),
     ('33333333-3333-3333-3333-333333333334', '11111111-1111-1111-1111-111111111111',
-     'ml-premium', 'Mercado Livre — Premium', 'MERCADO_LIVRE', 'MARKETPLACE', true),
+     'ml-premium', 'Mercado Livre — Premium', 'MERCADO_LIVRE', 'MARKETPLACE', true,
+     'FONTE_PRIMARIA', now() - interval '30 days', NULL);
+
+-- bling-erp: ESPELHO de ml-classico. Continua ingerindo e continua
+-- consultavel individualmente (0033, "ESPELHO nao apaga nem funde
+-- nada") - so fica de fora de qualquer SOMA entre canais
+-- (POST /api/margem/periodo/consolidado, tarefa 32).
+INSERT INTO canal (id, tenant_id, codigo, nome, tipo, categoria, ativo,
+    escopo_declarado, espelha_canal_id, escopo_declarado_em, escopo_declarado_por)
+VALUES
     ('33333333-3333-3333-3333-333333333335', '11111111-1111-1111-1111-111111111111',
-     'bling-erp', 'Bling (ERP)', 'ERP_BLING', 'ERP', true);
+     'bling-erp', 'Bling (ERP)', 'ERP_BLING', 'ERP', true,
+     'ESPELHO', '33333333-3333-3333-3333-333333333333', now() - interval '30 days', NULL);
 
 
 -- ---------------------------------------------------------------------
@@ -256,12 +283,12 @@ FROM (
     SELECT
         n,
         ('77777777-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid AS pedido_id,
-        -- Distribuicao entre os tres canais. O Bling recebe poucos
-        -- pedidos, de venda propria: sao pedidos DELE, nao espelho dos
-        -- do Mercado Livre - por isso somar canais continua proibido
-        -- (decisao 0017), mas o canal nao aparece vazio no seletor.
-        CASE WHEN n % 8 = 0 THEN '33333333-3333-3333-3333-333333333335'::uuid
-             WHEN n % 3 = 0 THEN '33333333-3333-3333-3333-333333333334'::uuid
+        -- Distribuicao entre os DOIS canais primarios (ml-classico e
+        -- ml-premium). bling-erp NAO recebe pedido proprio aqui: ele e
+        -- ESPELHO de ml-classico (ver canal.escopo_declarado acima), e os
+        -- pedidos dele sao COPIAS de um subconjunto dos de ml-classico,
+        -- inseridas mais abaixo, na secao "Pedidos espelhados no Bling".
+        CASE WHEN n % 3 = 0 THEN '33333333-3333-3333-3333-333333333334'::uuid
              ELSE                '33333333-3333-3333-3333-333333333333'::uuid END AS canal_id,
         -- Espalha por 90 dias, mais denso no passado recente.
         (CURRENT_DATE - ((n * 89 / 50) % 90) - (n % 3))::timestamptz
@@ -288,6 +315,58 @@ FROM (
         SELECT (79.90 + ((n * 7) % 23) * 10)::numeric(18,4) AS valor_total
     ) AS v
 ) AS p;
+
+
+-- ---------------------------------------------------------------------
+-- Pedidos espelhados no Bling (ESPELHO declarado de ml-classico)
+-- ---------------------------------------------------------------------
+-- Tarefa 31/decisao 0033: o Bling deixou de ter "pedidos proprios" no
+-- seed (versao anterior deste script dizia, no comentario, que eram
+-- "pedidos DELE, nao espelho" - contradicao que a declaracao de escopo
+-- expos: com bling-erp declarado ESPELHO, pedido proprio seria mentira).
+-- O integrador do lojista grava no Bling o MESMO pedido que nasceu no
+-- Mercado Livre - por isso estas linhas sao COPIAS de um subconjunto dos
+-- pedidos de ml-classico: MESMO valor_total_pedido, MESMA feito_em,
+-- MESMO valor_repasse_previsto. Só id, id_externo, codigo_exibicao e
+-- canal_id sao proprios do Bling - exatamente o padrao de duplicacao que
+-- a decisao 0033 existe para impedir na soma (somar ml-classico com
+-- bling-erp contaria esta venda duas vezes).
+--
+-- Subconjunto escolhido: pedidos de ml-classico (canal_id explicito no
+-- JOIN, para nunca pegar um pedido que a distribuicao acima mandou para
+-- ml-premium) com indice multiplo de 8 - n = 8, 16, 32, 40 (24 e 48 sao
+-- excluidos por tambem serem multiplos de 3, ou seja, ml-premium).
+-- Poucos pedidos de proposito: o bastante para o efeito de dupla
+-- contagem aparecer numa soma indevida, sem dominar a demo.
+INSERT INTO pedido (
+    id, tenant_id, canal_id, cliente_id, id_externo, codigo_exibicao,
+    status, feito_em, pago_em, valor_bruto_itens, valor_frete_cobrado,
+    valor_total_pedido, valor_repasse_previsto, moeda, forma_pagamento,
+    cidade_entrega, uf_entrega)
+SELECT
+    ('77777777-1111-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+    origem.tenant_id,
+    '33333333-3333-3333-3333-333333333335'::uuid, -- bling-erp
+    origem.cliente_id,
+    'BLING-' || lpad(n::text, 5, '0'),
+    'PED-BLING-' || lpad(n::text, 4, '0'),
+    origem.status,
+    origem.feito_em,
+    origem.pago_em,
+    origem.valor_bruto_itens,
+    origem.valor_frete_cobrado,
+    origem.valor_total_pedido,
+    origem.valor_repasse_previsto,
+    origem.moeda,
+    origem.forma_pagamento,
+    origem.cidade_entrega,
+    origem.uf_entrega
+FROM generate_series(1, 50) AS n
+JOIN pedido origem
+  ON origem.id = ('77777777-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
+ AND origem.canal_id = '33333333-3333-3333-3333-333333333333'
+WHERE n % 8 = 0
+  AND n % 3 <> 0;
 
 
 -- ---------------------------------------------------------------------
@@ -325,6 +404,31 @@ CROSS JOIN LATERAL (
                       ELSE ((n * 3) % 14) + 1    -- variacoes COM custo
                  END AS idx) AS escolha
 ) AS var;
+
+-- Itens dos pedidos espelhados no Bling: MESMA variacao, MESMO valor do
+-- item de origem em ml-classico (mesma venda, mesmo produto - ver a
+-- secao "Pedidos espelhados no Bling" acima). Isto tambem faz os custos
+-- genericos abaixo (MERCADORIA/COMISSAO/FRETE/IMPOSTO/EMBALAGEM, que
+-- consultam `pedido`/`item_pedido` por tenant_id, sem filtrar canal)
+-- cobrirem estes pedidos automaticamente, sem precisar duplicar logica.
+INSERT INTO item_pedido (
+    id, tenant_id, pedido_id, variacao_id, sku_origem, titulo_origem,
+    quantidade, valor_unitario_bruto, valor_total_linha)
+SELECT
+    ('88888888-1111-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+    origem.tenant_id,
+    ('77777777-1111-0000-0000-' || lpad(n::text, 12, '0'))::uuid,
+    origem.variacao_id,
+    origem.sku_origem,
+    origem.titulo_origem,
+    origem.quantidade,
+    origem.valor_unitario_bruto,
+    origem.valor_total_linha
+FROM generate_series(1, 50) AS n
+JOIN item_pedido origem
+  ON origem.id = ('88888888-0000-0000-0000-' || lpad(n::text, 12, '0'))::uuid
+WHERE n % 8 = 0
+  AND n % 3 <> 0;
 
 
 -- ---------------------------------------------------------------------
@@ -511,6 +615,9 @@ END $$;
 \echo '    analista@demo.plataforma / demo1234'
 \echo ''
 \echo '  3 canais - Mercado Livre Classico, Premium e Bling (ERP)'
-\echo '  Escolha UM canal por consulta: somar canais sobrepostos'
-\echo '  contaria a mesma venda duas vezes (decisao 0017).'
+\echo '  Escopo declarado (decisao 0033): Classico e Premium sao'
+\echo '  FONTE_PRIMARIA; Bling e ESPELHO do Classico.'
+\echo '  POST /api/margem/periodo/consolidado soma Classico + Premium'
+\echo '  com seguranca. Incluir o Bling na soma e recusado: ele contaria'
+\echo '  a mesma venda duas vezes.'
 \echo ''

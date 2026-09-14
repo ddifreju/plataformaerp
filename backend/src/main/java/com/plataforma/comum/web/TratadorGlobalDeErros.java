@@ -1,7 +1,10 @@
 package com.plataforma.comum.web;
 
+import com.plataforma.canal.CadeiaDeEspelhoInvalidaException;
 import com.plataforma.comum.tenant.TenantDesconhecidoException;
 import com.plataforma.comum.tenant.TenantNaoResolvidoException;
+import com.plataforma.ingestao.CanalDesconhecidoException;
+import com.plataforma.margem.ConjuntoDeCanaisNaoDisjuntoException;
 import com.plataforma.margem.PeriodoInvalidoException;
 import com.plataforma.margem.TaxaCanalAmbiguaException;
 import com.plataforma.pergunta.PerguntaInvalidaException;
@@ -60,6 +63,66 @@ public class TratadorGlobalDeErros {
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(new ErroApi("periodo_invalido", erro.getMessage()));
+    }
+
+    /**
+     * Canal informado (o proprio, ou o alvo de um espelho) nao existe ou
+     * nao pertence ao tenant da requisicao ({@code com.plataforma.canal},
+     * tarefa 31). Reaproveitada de {@code com.plataforma.ingestao}: os
+     * dois casos ("nao existe" / "e de outro tenant") ja eram
+     * deliberadamente indistinguiveis nessa excecao (ver o Javadoc dela) -
+     * o mesmo raciocinio vale aqui.
+     */
+    @ExceptionHandler(CanalDesconhecidoException.class)
+    public ResponseEntity<ErroApi> tratarCanalDesconhecido(CanalDesconhecidoException erro) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new ErroApi("canal_desconhecido", erro.getMessage()));
+    }
+
+    /**
+     * Declaracao de ESPELHO formaria uma cadeia invalida - espelho de
+     * espelho ou ciclo de tres ou mais ({@code com.plataforma.canal},
+     * tarefa 31). 409 pelo MESMO motivo de
+     * {@link #tratarTaxaCanalAmbigua}: o problema esta no estado dos
+     * dados/da declaracao proposta, nao na sintaxe da requisicao - a
+     * mesma chamada volta a funcionar assim que a lojista apontar para a
+     * fonte primaria correta, sem mudar o formato de nada.
+     */
+    @ExceptionHandler(CadeiaDeEspelhoInvalidaException.class)
+    public ResponseEntity<ErroApi> tratarCadeiaDeEspelhoInvalida(CadeiaDeEspelhoInvalidaException erro) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ErroApi("cadeia_de_espelho_invalida", erro.getMessage()));
+    }
+
+    /**
+     * Tarefa 32 (decisao 0033): o conjunto de canais pedido para a soma
+     * consolidada nao e comprovadamente disjunto - algum canal esta
+     * {@code NAO_DECLARADO}, e {@code ESPELHO}, ou e espelhado por outro
+     * canal do mesmo conjunto. 409, MESMO racional de
+     * {@link #tratarCadeiaDeEspelhoInvalida}/{@link #tratarTaxaCanalAmbigua}
+     * acima: o problema e o ESTADO da declaracao de canal, nao a forma da
+     * requisicao.
+     *
+     * FORMATO DA RECUSA - DECISAO TOMADA E JUSTIFICADA AQUI: continua
+     * {@link ErroApi} (nao um corpo estruturado a parte), pelo MESMO
+     * padrao ja usado por {@link TaxaCanalAmbiguaException} (que tambem
+     * carrega dois ids e "nomeia o par" so dentro do texto de
+     * {@code mensagem}). Introduzir um segundo formato de erro so para
+     * este endpoint obrigaria todo cliente da API a lidar com DOIS
+     * formatos de recusa em vez de um - pior para quem consome do que o
+     * ganho de ter os ids em campos JSON separados. {@code getMessage()}
+     * ja e construido por {@code ServicoMargemConsolidada} nomeando CADA
+     * canal bloqueado e o motivo, INCLUSIVE o par completo quando o
+     * motivo e "espelhado por outro canal do proprio conjunto" - nunca um
+     * numero, so a explicacao (regra 5 do CLAUDE.md).
+     */
+    @ExceptionHandler(ConjuntoDeCanaisNaoDisjuntoException.class)
+    public ResponseEntity<ErroApi> tratarConjuntoDeCanaisNaoDisjunto(ConjuntoDeCanaisNaoDisjuntoException erro) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ErroApi("conjunto_de_canais_nao_disjunto", erro.getMessage()));
     }
 
     /**

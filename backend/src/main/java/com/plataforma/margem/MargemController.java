@@ -43,9 +43,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class MargemController {
 
     private final ServicoMargemPeriodo servicoMargemPeriodo;
+    private final ServicoMargemPeriodoConsolidada servicoMargemPeriodoConsolidada;
 
-    public MargemController(ServicoMargemPeriodo servicoMargemPeriodo) {
+    public MargemController(ServicoMargemPeriodo servicoMargemPeriodo,
+            ServicoMargemPeriodoConsolidada servicoMargemPeriodoConsolidada) {
         this.servicoMargemPeriodo = servicoMargemPeriodo;
+        this.servicoMargemPeriodoConsolidada = servicoMargemPeriodoConsolidada;
     }
 
     @PostMapping("/api/margem/periodo")
@@ -53,5 +56,21 @@ public class MargemController {
         ResultadoMargemPeriodo resultado = servicoMargemPeriodo.calcular(
                 requisicao.inicio(), requisicao.fim(), requisicao.canalId());
         return RespostaMargemPeriodo.de(resultado);
+    }
+
+    /**
+     * Tarefa 32 (decisao 0033): o modo agregado que a decisao 0021 previu
+     * como evolucao ADITIVA do endpoint acima - {@code canalId} unico
+     * continua obrigatorio em {@code /api/margem/periodo}; este e um
+     * recurso NOVO e SEPARADO, com pre-condicao verificada
+     * ({@link ServicoMargemPeriodoConsolidada}), nao um relaxamento da
+     * regra antiga. POST pelo MESMO motivo do endpoint acima (decisao
+     * 0034: grava {@code ConsultaAuditada}, logo altera estado).
+     */
+    @PostMapping("/api/margem/periodo/consolidado")
+    public RespostaMargemConsolidada periodoConsolidado(@RequestBody @Valid RequisicaoMargemConsolidada requisicao) {
+        ResultadoMargemConsolidada resultado = servicoMargemPeriodoConsolidada.calcular(
+                requisicao.inicio(), requisicao.fim(), requisicao.canais());
+        return RespostaMargemConsolidada.de(resultado);
     }
 }

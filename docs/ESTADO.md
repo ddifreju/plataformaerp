@@ -104,47 +104,62 @@ interpreta a pergunta; número nenhum passa pela geração do modelo)
 23. [x] Executor: intenção → serviço já existente → `ConsultaAuditada` → resposta
     por template, com rótulo de confiança e memória de cálculo
 24. [x] `POST /api/pergunta` + teste de isolamento de tenant + auditoria de segurança
-25. [ ] Suíte de avaliação com limiar (regra 4) e asserção dura nas travas
-26. [ ] Tela de perguntas, com "como cheguei nesse número" e a recusa honesta
+25. [x] Suíte de avaliação com limiar (regra 4) e asserção dura nas travas
+26. [x] Tela de perguntas, com "como cheguei nesse número" e a recusa honesta
 
 **Bloco B — Preparo de produção** (nada aqui é deploy; deploy é da fundadora)
 
-27. [ ] Dockerfile do backend: multi-stage, JRE 21, usuário sem privilégio
-28. [ ] Dockerfile do frontend: build standalone do Next
-29. [ ] Perfil de staging com proxy reverso de mesma origem (condição 2 da
+27. [x] Dockerfile do backend: multi-stage, JRE 21, usuário sem privilégio
+28. [x] Dockerfile do frontend: build standalone do Next
+29. [x] Perfil de staging com proxy reverso de mesma origem (condição 2 da
     decisão 0025): cookie `Secure`/`SameSite` exercitado no fio, CORS resolvido
-30. [ ] Checklist de deploy + falha no boot quando faltar variável obrigatória
+30. [x] Checklist de deploy + falha no boot quando faltar variável obrigatória
+
+Nenhuma imagem foi construída e nada subiu: falta `docker build` e
+`make staging-subir` para provar os Dockerfiles, o `Caddyfile` e o
+`Set-Cookie` no fio. Está listado em `docs/checklist-deploy.md`.
 
 **Bloco C — Escopo de canal declarado** (substitui a reconciliação por
 casamento, descartada na decisão 0029)
 
-31. [ ] A lojista declara o escopo de cada canal — sem heurística, sem adivinhar
-32. [ ] Soma entre canais permitida apenas sobre conjunto declarado disjunto
+31. [x] A lojista declara o escopo de cada canal — sem heurística, sem adivinhar
+    *(backend, seed e endpoint prontos; a TELA de declaração é a tarefa 34)*
+32. [x] Soma entre canais permitida apenas sobre conjunto declarado disjunto
 33. [ ] A camada de IA passa a responder sem exigir canal, quando a declaração
     permitir — é o que torna "quanto sobrou no mês?" respondível
+34. [ ] Tela de declaração de escopo de canal (aberta na tarefa 31)
 
 ---
 
 ## Placar de testes da Fase 4 (14/09/2026)
 
-**Docker não subiu nesta máquina nesta sessão** (o daemon não respondeu; o
-Docker Desktop desta máquina está em `AppData\Local\Programs\DockerDesktop`,
-instalação por usuário — e já há pastas `run-quebrado-*` de sockets órfãos
-afastados antes, exatamente o padrão descrito no `CONTEXTO-HANDOFF.md`).
-Seguindo o padrão já provado nas Fases 0 e 1: escrever o teste, rodar o que
-roda sem banco, e registrar o que fica esperando.
+**293 testes no backend, 0 falhas, 0 erros. 35 no frontend, 0 falhas.**
+`npm run lint` e `npm run build` limpos. Rodado contra Postgres real: os
+testes de Testcontainers executaram, incluindo os de isolamento novos
+(`IsolamentoPerguntaTest`, `IsolamentoMargemConsolidadaTest`).
 
-Nota de ambiente aprendida hoje: **não exporte `TMP=C:\Temp` ao rodar o
-Maven** nesta máquina — o surefire 3.2.5 morre com
-`ExceptionInInitializerError` antes de executar teste nenhum. O `TMP` do
-handoff serve para **subir o backend** (o pipe AF_UNIX do Tomcat), não para
-rodar a suíte.
+Eram 161 no fim da Fase 3 — a Fase 4 somou 132 testes até aqui.
 
-| | |
-|---|---|
-| Testes puros rodados e verdes (pacote `pergunta`) | **61** |
-| `./mvnw -B test-compile` do projeto inteiro | BUILD SUCCESS |
-| Aguardando Docker | `IsolamentoPerguntaTest` (3 casos) e os casos novos de `/api/pergunta` no `ContratoApiTest` |
+### Duas lições de ambiente desta máquina (para a próxima sessão)
+
+1. **Docker Desktop está instalado por usuário**, em
+   `AppData\Local\Programs\DockerDesktop\Docker Desktop.exe` — não em
+   `Program Files`. Ele subiu na primeira tentativa e morreu em silêncio; o
+   que resolveu foi exatamente a receita do `CONTEXTO-HANDOFF.md`: renomear
+   `AppData\Local\Docker\run` e `AppData\Local\docker-secrets-engine` (não dá
+   para apagar) e relançar. A receita da máquina antiga valeu para a nova.
+2. **Não exporte `TMP=C:\Temp` ao rodar o Maven.** O surefire 3.2.5 morre com
+   `ExceptionInInitializerError` antes de executar teste nenhum. O `TMP` do
+   handoff serve para **subir o backend** (o pipe AF_UNIX do Tomcat), não para
+   rodar a suíte. Rodar `./mvnw` sem tocar em `TMP` funciona.
+
+### O que continua sem prova de execução
+
+- **Nenhuma imagem Docker foi construída** e o staging nunca subiu: os dois
+  `Dockerfile`, o `Caddyfile` e o `Set-Cookie` no fio estão escritos e
+  revisados, não exercitados. `docs/checklist-deploy.md` lista isso.
+- A tela `/perguntar` **não foi vista no navegador** — build e lint passam, a
+  validação visual é da fundadora.
 
 ---
 
@@ -468,6 +483,12 @@ Duas decisões nasceram de eu ter errado e estão registradas assim: **0011**
 | 2026-09-14 | Fase 4 definida | Decisões 0029 (escopo e ordem), 0030 (arquitetura da camada de IA) e 0031 (pgvector segue sem uso). A reconciliação ML × Bling por casamento de pares foi **descartada** por contradizer a 0017 — com gatilho escrito para retomar. No lugar entrou o escopo de canal declarado, que a própria 0017 chamava de "provavelmente a resposta certa". |
 | 2026-09-14 | 21, 22 e 23. Núcleo da camada de pergunta | Feito, **sem migration nenhuma**. `PortaModeloLinguagem` com `ModeloHeuristico` (casa intenção por vocabulário derivado do próprio catálogo, e extrai canal e período de texto livre), catálogo fechado de 5 perguntas, `ValidadorDeParametros` determinístico com `Clock` injetado, e `ServicoPergunta` executando sobre `ServicoMargemPeriodo`/`ServicoPainelGestor`/`ServicoPainelAnalista`/`RepositorioCanal`. **`ConsultaAuditada` é gravada em toda chamada — inclusive recusa e esclarecimento**, porque o texto cru das perguntas recusadas é o insumo para decidir o que entra no catálogo. 61 testes puros. |
 | 2026-09-14 | O buraco que quase passou | O `ModeloHeuristico` classificava a intenção mas **não extraía parâmetro nenhum**, então as duas perguntas que interessam (margem e lacunas) nunca chegavam a RESPOSTA pela API real — só com dublê de teste. Passava despercebido porque todo teste de contrato usa dublê. Corrigido: a heurística injeta `RepositorioCanal` (já filtrado por `@TenantId` + RLS) e casa nome/código de canal e um conjunto fechado de expressões de período. Dois canais casando → parâmetro ausente e esclarecimento, nunca escolha. |
+| 2026-09-14 | 25. Suíte de avaliação | Feita, e é a parte da Fase 4 que mais vale reler. `ModeloGravado` alimenta 15 saídas **adversárias** de propósito (código de intenção inexistente, confiança 1,0 com parâmetro lixo, canal de outro tenant, período invertido, tipo errado, chave desconhecida, injeção de instrução, emoji, 500 e 501 caracteres) e a asserção é **dura**: ou recusa, ou esclarecimento, ou resposta do tenant certo — e auditoria gravada em todos. Separada disso, a avaliação por **limiar** (regra 4) contra corpus de 51 perguntas escritas como a lojista escreve: 82,4% de intenção correta (limiar ≥80%), 100% de parâmetro (≥90%), 3,9% de erro perigoso (≤6%). Os limiares foram medidos, não estimados, e ficam colados no medido de propósito: a heurística é determinística, então qualquer regressão real derruba o teste. |
+| 2026-09-14 | 26. Tela de perguntas | Feita. Os três tipos de resposta são três estados visuais distintos: RESPOSTA, ESCLARECIMENTO (não é erro — as sugestões viram atalho clicável) e RECUSA (também não é erro; nunca "não entendi sua pergunta"). "Como cheguei nesse número" mostra intenção, parâmetros e o id da consulta auditada — é a regra 3 virando interface. A tela também transforma o erro mais provável do sistema (confundir margem com lacunas) num clique, em vez de numa resposta errada sem saída. |
+| 2026-09-14 | Revisão de marca da Fase 4 | Seis correções reais, todas na **prosa que o backend gera** — que é o que a lojista lê. N3 saía como "Resultado do período" enquanto a tela irmã chama o mesmo campo de "Resultado do pedido"; N4 saía como "Lucro operacional" sem a nota exigida pelo guia de que ele não é a soma simples de N3; as frases de teto começavam com "Atenção:", que o guia proíbe; e o esclarecimento de período listava **nome de enum Java** para a lojista (`MES_ATUAL, ULTIMOS_7_DIAS`) — a mesma classe de bug que `RotulosDeExibicao` tinha acabado de corrigir em outro lugar. Fechada também a lacuna que o próprio guia declarava em aberto: erro de sistema ganhou token `erro-sistema` próprio, em vez de pegar emprestado o `valor-negativo` do motor de margem, nas quatro telas. |
+| 2026-09-14 | 27–30. Preparo de produção | Feito, **nada construído nem subido**. Dockerfile do backend (multi-stage, JRE 21 alpine, usuário sem privilégio, healthcheck), do frontend (standalone), compose de staging onde **só o Caddy publica porta** — backend, frontend e Postgres ficam na rede interna —, `Caddyfile` com `tls internal` para exercitar cookie `Secure` sem VPS nem domínio, e perfil `staging` com `Secure`/`HttpOnly`/`SameSite`. CORS virou lista por variável, **vazia por padrão**, e a aplicação recusa subir se alguém puser `*`. `ValidadorDeAmbiente` derruba o boot fora de dev quando falta variável obrigatória, dizendo qual. `make staging-conferir-cookie` lê o `Set-Cookie` no fio. |
+| 2026-09-14 | 31 e 32. Escopo de canal e soma consolidada | Feito (decisão 0033). V016 com FK composta e **índice único parcial sobre o par não ordenado**, que impede o ciclo de dois sem gatilho; o ciclo de 3+ fica na aplicação, com limite de profundidade explícito, e está dito na migration que o banco não pega. `POST /api/canais/{id}/escopo` e `POST /api/margem/periodo/consolidado`, que **recusa com 409 nomeando os dois lados do par** quando o conjunto não é provadamente disjunto. Percentuais recalculados a partir das somas, nunca média de percentuais; rótulo do conjunto é o pior dos canais; lacunas são união. |
+| 2026-09-14 | O seed passou a mentir menos | A demo dizia, em comentário, que os pedidos do Bling "são pedidos DELE, não espelho" — o que tornaria desonesto declarar o Bling como espelho. Os pedidos do Bling agora **são cópias** de 4 pedidos do ML Clássico (mesmo valor, mesma data, `id_externo` próprio). Isso torna a demo mais forte, não mais fraca: dá para mostrar que somar os três infla o faturamento, e que o valor inflado é exatamente a mesma venda contada duas vezes. Bloco de conferência dos três rótulos continua passando, agora com 54 pedidos. |
 | 2026-09-14 | 24. `POST /api/pergunta` | Feito. É POST de propósito e está comentado no código: a rota grava `consulta_auditada`, ou seja, altera estado — um GET aqui quebraria a condição 1 da decisão 0025, que é o que sustenta o CSRF desligado. Nenhuma alteração em `ConfiguracaoSeguranca` foi necessária: `.anyRequest().authenticated()` já cobre rota nova. `PerguntaInvalidaException` e `MethodArgumentNotValidException` → 400 em `ErroApi`, sem ecoar o texto da pergunta. |
 | 2026-08-12 | 1. Estrutura do monorepo | Feito. `backend/`, `frontend/`, `infra/`, `docs/` + Makefile na raiz. Git inicializado (decisão 0009). `frontend/` é placeholder documentado: sem Node, o scaffold do Next.js é gerado, não escrito à mão. |
 | 2026-08-12 | 2. Docker Compose com Postgres 16 + pgvector | Feito. Imagem `pgvector/pgvector:pg16`, healthcheck, portas presas a `127.0.0.1`, segredos só via `infra/.env`. Adminer em perfil opcional. **Não executado** (sem Docker). |

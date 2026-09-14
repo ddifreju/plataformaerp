@@ -212,7 +212,7 @@ export default function PaginaResultado() {
       )}
 
       {erroDeConsulta && (
-        <p role="alert" className="rounded border border-valor-negativo bg-valor-negativo-bg p-4 text-sm text-valor-negativo">
+        <p role="alert" className="rounded border border-erro-sistema bg-erro-sistema-bg p-4 text-sm text-erro-sistema">
           {erroDeConsulta}
         </p>
       )}

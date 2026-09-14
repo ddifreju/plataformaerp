@@ -229,14 +229,20 @@ public class ServicoPergunta {
         for (NumeroCitado numero : numerosDaMargem(resultado)) {
             texto.append(numero.nome()).append(": ").append(numero.valor()).append(". ");
         }
+        texto.append("O lucro operacional do período (N4) não é a soma simples do Resultado do pedido (N3) - ele "
+                + "também desconta custo de período que não foi rateado entre pedidos. ");
         texto.append(escopo);
 
         if (resultado.rotulo() == RotuloTeto.COM_TETO) {
-            texto.append(" Atenção: este valor é um teto - a margem real é menor. Faltam: ")
+            String percentualTexto = resultado.margemContribuicaoPercentual()
+                    .map(p -> " (" + FormatadorDeTexto.percentual(p) + ")").orElse("");
+            texto.append(" ").append(FormatadorDeTexto.moeda(resultado.margemContribuicaoN2())).append(percentualTexto)
+                    .append(" é o teto - a margem real é menor. Faltam: ")
                     .append(String.join("; ", lacunasDescricao)).append(".");
         } else if (resultado.rotulo() == RotuloTeto.INDETERMINADA) {
-            texto.append(" Atenção: não dá para calcular esta margem com confiança. Faltam: ")
-                    .append(String.join("; ", lacunasDescricao)).append(".");
+            texto.append(" Não dá para calcular esta margem com confiança. Faltam: ")
+                    .append(String.join("; ", lacunasDescricao))
+                    .append(". Alguns desses fazem o número subir, outros descer - por isso não existe um teto seguro para mostrar aqui.");
         }
         return texto.toString();
     }
@@ -246,8 +252,8 @@ public class ServicoPergunta {
         numeros.add(new NumeroCitado("Faturamento bruto (N0)", FormatadorDeTexto.moeda(resultado.faturamentoBrutoN0())));
         numeros.add(new NumeroCitado("Receita líquida (N1)", FormatadorDeTexto.moeda(resultado.receitaLiquidaN1())));
         numeros.add(new NumeroCitado("Margem por pedido (N2)", FormatadorDeTexto.moeda(resultado.margemContribuicaoN2())));
-        numeros.add(new NumeroCitado("Resultado do período (N3)", FormatadorDeTexto.moeda(resultado.resultadoPeriodoN3())));
-        numeros.add(new NumeroCitado("Lucro operacional (N4)", FormatadorDeTexto.moeda(resultado.lucroOperacionalN4())));
+        numeros.add(new NumeroCitado("Resultado do pedido (N3)", FormatadorDeTexto.moeda(resultado.resultadoPeriodoN3())));
+        numeros.add(new NumeroCitado("Lucro operacional do período (N4)", FormatadorDeTexto.moeda(resultado.lucroOperacionalN4())));
         resultado.margemContribuicaoPercentual()
                 .ifPresent(p -> numeros.add(new NumeroCitado("Margem por pedido (%)", FormatadorDeTexto.percentual(p))));
         resultado.margemLiquidaPercentual()

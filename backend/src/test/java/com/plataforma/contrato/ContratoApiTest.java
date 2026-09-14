@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -354,8 +355,13 @@ class ContratoApiTest {
 
     // Estado do cenario, montado uma unica vez em iniciarCenario() e
     // reaproveitado (SOMENTE LEITURA daqui em diante) por todos os testes -
-    // nenhum teste desta classe escreve dado, entao compartilhar a fixture
-    // entre @Test (via @TestInstance(PER_CLASS)) e seguro.
+    // ATUALIZADO na tarefa 31/32: os testes de escopo de canal SAO
+    // excecao (POST altera estado por definicao). Cada um deles cria e
+    // usa um canal PROPRIO (nunca um da fixture compartilhada aqui) -
+    // exatamente para que esta afirmacao continue valendo para TODOS OS
+    // OUTROS testes: nenhum @Test muta um dado que outro @Test tambem lê,
+    // entao compartilhar a fixture entre eles (via @TestInstance(PER_CLASS))
+    // continua seguro.
     private String emailDonoA;
     private UUID usuarioDonoAId;
     private String nomeDonoA;
@@ -371,6 +377,21 @@ class ContratoApiTest {
     private UUID pedidoComTetoId;
     private OffsetDateTime feitoEmComTeto;
     private UUID pedidoDevolucaoId;
+
+    // Escopo declarado (tarefa 31/32, decisao 0033). canalAId vira
+    // FONTE_PRIMARIA (reaproveita os dois pedidos ja fixturados: soma
+    // consolidada com canalSecundarioId prova soma ENTRE canais de
+    // verdade). canalSecundarioId e um segundo FONTE_PRIMARIA sem pedido
+    // proprio (contribui zero, so para provar que DOIS canais entraram na
+    // soma). canalEspelhoId e ESPELHO de canalAId (par para o caminho de
+    // recusa). canalNaoDeclaradoId nunca e declarado (o outro caminho de
+    // recusa). Todos declarados UMA VEZ aqui, nunca por um @Test - os
+    // testes de leitura desta classe nao escrevem dado (ver o Javadoc da
+    // classe); so declararEscopoFontePrimariaAtualizaCanal escreve, e usa
+    // um canal PROPRIO, criado dentro do proprio teste.
+    private UUID canalSecundarioId;
+    private UUID canalEspelhoId;
+    private UUID canalNaoDeclaradoId;
 
     @BeforeAll
     void iniciarCenario() throws SQLException {
@@ -447,6 +468,20 @@ class ContratoApiTest {
         idExternoEventoErro = "ML-CONTRATO-QUEBRADO-" + marcador;
         criarEventoIngeridoComErro(tenantAId, canalAId, idExternoEventoErro);
         criarDevolucaoAberta(tenantAId, pedidoCalculadaId);
+
+        // --------------------------------------------------------------
+        // Escopo declarado (tarefa 31/32, decisao 0033) - ver o comentario
+        // do campo acima sobre por que isto e feito aqui, uma vez so.
+        // --------------------------------------------------------------
+        declararFontePrimariaComoTenantA(canalAId);
+        canalSecundarioId = criarCanal(tenantAId, "Canal Secundario Consolidado " + marcador,
+                "cred-secundario-" + marcador);
+        declararFontePrimariaComoTenantA(canalSecundarioId);
+        canalEspelhoId = criarCanal(tenantAId, "Canal Espelho Consolidado " + marcador,
+                "cred-espelho-" + marcador);
+        declararEspelhoComoTenantA(canalEspelhoId, canalAId);
+        canalNaoDeclaradoId = criarCanal(tenantAId, "Canal Nao Declarado " + marcador,
+                "cred-nao-declarado-" + marcador);
     }
 
     // ==================================================================
@@ -486,6 +521,23 @@ class ContratoApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(corpoMargemPeriodo(OffsetDateTime.now().minusDays(1), OffsetDateTime.now(),
                                 UUID.randomUUID())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.erro").value("nao_autenticado"))
+                .andExpect(jsonPath("$.mensagem").isString());
+
+        // Tarefa 31/32: as duas rotas novas, mesmo padrao acima (POST,
+        // corpo minimo valido so para isolar "401", nunca "400").
+        mockMvc.perform(post("/api/margem/periodo/consolidado")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoMargemConsolidada(OffsetDateTime.now().minusDays(1), OffsetDateTime.now(),
+                                null)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.erro").value("nao_autenticado"))
+                .andExpect(jsonPath("$.mensagem").isString());
+
+        mockMvc.perform(post("/api/canais/" + UUID.randomUUID() + "/escopo")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoDeclaracaoEscopo("FONTE_PRIMARIA", null)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.erro").value("nao_autenticado"))
                 .andExpect(jsonPath("$.mensagem").isString());
@@ -780,7 +832,7 @@ class ContratoApiTest {
                         .value(org.hamcrest.Matchers.contains("2")))
                 .andExpect(jsonPath("$.numeros[?(@.nome == 'Faturamento bruto (N0)')].valor")
                         .value(org.hamcrest.Matchers.contains(org.hamcrest.Matchers.instanceOf(String.class))))
-                .andExpect(jsonPath("$.numeros[?(@.nome == 'Resultado do período (N3)')].valor")
+                .andExpect(jsonPath("$.numeros[?(@.nome == 'Resultado do pedido (N3)')].valor")
                         .value(org.hamcrest.Matchers.contains(org.hamcrest.Matchers.instanceOf(String.class))))
                 .andExpect(jsonPath("$.texto").value(org.hamcrest.Matchers.containsString("R$")))
                 .andExpect(jsonPath("$.tenantId").doesNotExist());
@@ -855,6 +907,160 @@ class ContratoApiTest {
                 "a credencial do canal jamais pode aparecer na resposta de /api/pergunta");
         assertFalse(corpo.contains(tenantAId.toString()),
                 "o id do tenant jamais pode aparecer na resposta de /api/pergunta");
+    }
+
+    // ==================================================================
+    // 9. POST /api/canais/{id}/escopo (tarefa 31, decisao 0033)
+    // ==================================================================
+
+    /**
+     * Caminho feliz: declara FONTE_PRIMARIA num canal PROPRIO deste teste
+     * (nunca um da fixture compartilhada - ver o comentario dos campos
+     * canalSecundarioId&amp;cia: nenhum outro teste desta classe pode
+     * depender do estado de um canal que um @Test mutou).
+     */
+    @Test
+    void declararEscopoFontePrimariaAtualizaCanal() throws Exception {
+        MockHttpSession sessao = sessaoDoDonoA();
+        UUID canalProprioId = criarCanal(tenantAId, "Canal Declaracao Teste " + UUID.randomUUID(),
+                "cred-declaracao-teste");
+
+        mockMvc.perform(post("/api/canais/" + canalProprioId + "/escopo")
+                        .session(sessao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoDeclaracaoEscopo("FONTE_PRIMARIA", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(canalProprioId.toString()))
+                .andExpect(jsonPath("$.escopoDeclarado").value("FONTE_PRIMARIA"))
+                .andExpect(jsonPath("$.espelhaCanalId").doesNotExist())
+                .andExpect(jsonPath("$.escopoDeclaradoEm").isString())
+                .andExpect(jsonPath("$.escopoDeclaradoPor").doesNotExist());
+    }
+
+    /**
+     * Espelho de espelho (tarefa 31): declarar um canal como ESPELHO de
+     * {@code canalEspelhoId} (que ja e ESPELHO de {@code canalAId}) tem
+     * que ser recusado - 409, formato {@code ErroApi}, mensagem nomeando
+     * a cadeia.
+     */
+    @Test
+    void declararEspelhoDeUmEspelhoDevolve409ComACadeiaNaMensagem() throws Exception {
+        MockHttpSession sessao = sessaoDoDonoA();
+        UUID canalProprioId = criarCanal(tenantAId, "Canal Cadeia Teste " + UUID.randomUUID(),
+                "cred-cadeia-teste");
+
+        mockMvc.perform(post("/api/canais/" + canalProprioId + "/escopo")
+                        .session(sessao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoDeclaracaoEscopo("ESPELHO", canalEspelhoId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.erro").value("cadeia_de_espelho_invalida"))
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString(canalEspelhoId.toString())));
+    }
+
+    // ==================================================================
+    // 10. POST /api/margem/periodo/consolidado (tarefa 32, decisao 0033)
+    // ==================================================================
+
+    /**
+     * Caminho feliz: canalAId (FONTE_PRIMARIA, com os dois pedidos da
+     * fixture) + canalSecundarioId (FONTE_PRIMARIA, sem pedido - contribui
+     * zero) somados. Prova DUAS coisas ao mesmo tempo: a soma bate com o
+     * que se sabe dos dois pedidos de canalAId (349.80 = 199.90 + 149.90),
+     * e {@code canaisIncluidos} nomeia OS DOIS canais que entraram, nao so
+     * o que tinha pedido.
+     */
+    @Test
+    void margemPeriodoConsolidadoSomaDoisCanaisDisjuntosENomeiaOsDois() throws Exception {
+        MockHttpSession sessao = sessaoDoDonoA();
+        OffsetDateTime inicio = feitoEmCalculada.minusMinutes(1);
+        OffsetDateTime fim = feitoEmComTeto.plusMinutes(1);
+
+        mockMvc.perform(post("/api/margem/periodo/consolidado")
+                        .session(sessao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoMargemConsolidada(inicio, fim, List.of(canalAId, canalSecundarioId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.faturamentoBrutoN0").isString())
+                .andExpect(jsonPath("$.faturamentoBrutoN0").value("349.80"))
+                .andExpect(jsonPath("$.rotulo").value("COM_TETO"))
+                .andExpect(jsonPath("$.quantidadePedidos").value(2))
+                .andExpect(jsonPath("$.canaisIncluidos", org.hamcrest.Matchers.containsInAnyOrder(
+                        canalAId.toString(), canalSecundarioId.toString())))
+                .andExpect(jsonPath("$.idsPedidoUsados", org.hamcrest.Matchers.containsInAnyOrder(
+                        pedidoCalculadaId.toString(), pedidoComTetoId.toString())));
+    }
+
+    /**
+     * Caminho de recusa 1: um dos canais pedidos esta NAO_DECLARADO.
+     * Nunca um numero - 409, formato {@code ErroApi}, mensagem nomeando o
+     * canal bloqueado.
+     */
+    @Test
+    void margemPeriodoConsolidadoComCanalNaoDeclaradoDevolve409SemSomarNada() throws Exception {
+        MockHttpSession sessao = sessaoDoDonoA();
+        OffsetDateTime inicio = feitoEmCalculada.minusMinutes(1);
+        OffsetDateTime fim = feitoEmComTeto.plusMinutes(1);
+
+        mockMvc.perform(post("/api/margem/periodo/consolidado")
+                        .session(sessao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoMargemConsolidada(inicio, fim, List.of(canalAId, canalNaoDeclaradoId))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.erro").value("conjunto_de_canais_nao_disjunto"))
+                .andExpect(jsonPath("$.mensagem",
+                        org.hamcrest.Matchers.containsString(canalNaoDeclaradoId.toString())))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("349.80"))));
+    }
+
+    /**
+     * Caminho de recusa 2: o par espelho/primaria dentro do MESMO
+     * conjunto pedido ({@code canalAId} e FONTE_PRIMARIA,
+     * {@code canalEspelhoId} e ESPELHO dele). A mensagem precisa nomear os
+     * DOIS lados do par - e o ramo ESPELHADO_POR_OUTRO_DO_CONJUNTO da
+     * consulta de disjuncao (ver o Javadoc de
+     * {@code RepositorioDisjuncaoDeCanais}) que faz isso.
+     */
+    @Test
+    void margemPeriodoConsolidadoComParEspelhoEPrimariaDevolve409NomeandoOsDoisLados() throws Exception {
+        MockHttpSession sessao = sessaoDoDonoA();
+        OffsetDateTime inicio = feitoEmCalculada.minusMinutes(1);
+        OffsetDateTime fim = feitoEmComTeto.plusMinutes(1);
+
+        mockMvc.perform(post("/api/margem/periodo/consolidado")
+                        .session(sessao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoMargemConsolidada(inicio, fim, List.of(canalAId, canalEspelhoId))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.erro").value("conjunto_de_canais_nao_disjunto"))
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString(canalAId.toString())))
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString(canalEspelhoId.toString())));
+    }
+
+    /**
+     * Isolamento pela API: canal de outro tenant na lista de
+     * {@code POST /api/margem/periodo/consolidado} vira
+     * {@code CANAL_INEXISTENTE} (recusa), nunca soma nem vaza dado de B -
+     * mesmo padrao de {@link #margemPeriodoComCanalIdDeOutroTenantDevolveVazioNuncaDadoDeB()},
+     * agora para a consulta de disjuncao nativa (SQL cru, sem o predicado
+     * automatico de {@code @TenantId} - ver o Javadoc de
+     * {@code RepositorioDisjuncaoDeCanais}).
+     */
+    @Test
+    void margemPeriodoConsolidadoComCanalIdDeOutroTenantDevolve409ComoCanalInexistente() throws Exception {
+        MockHttpSession sessao = sessaoDoDonoA();
+        OffsetDateTime inicio = feitoEmCalculada.minusMinutes(1);
+        OffsetDateTime fim = feitoEmComTeto.plusMinutes(1);
+
+        mockMvc.perform(post("/api/margem/periodo/consolidado")
+                        .session(sessao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoMargemConsolidada(inicio, fim, List.of(canalAId, canalBId))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.erro").value("conjunto_de_canais_nao_disjunto"))
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString(canalBId.toString())))
+                .andExpect(jsonPath("$.mensagem", org.hamcrest.Matchers.containsString("nao existe")));
     }
 
     // ==================================================================
@@ -956,6 +1162,34 @@ class ContratoApiTest {
         return objectMapper.writeValueAsString(corpo);
     }
 
+    /**
+     * Corpo de {@code POST /api/margem/periodo/consolidado} (tarefa 32).
+     * {@code canais} pode ser {@code null} - omitido do JSON quando for o
+     * caso, ao inves de serializar a chave com valor null, para exercitar
+     * o mesmo corpo que um cliente real mandaria ao pedir "todos os
+     * canais ativos" (ver {@code RequisicaoMargemConsolidada}).
+     */
+    private String corpoMargemConsolidada(OffsetDateTime inicio, OffsetDateTime fim, List<UUID> canais)
+            throws Exception {
+        Map<String, Object> corpo = new HashMap<>();
+        corpo.put("inicio", inicio.toString());
+        corpo.put("fim", fim.toString());
+        if (canais != null) {
+            corpo.put("canais", canais.stream().map(UUID::toString).toList());
+        }
+        return objectMapper.writeValueAsString(corpo);
+    }
+
+    /** Corpo de {@code POST /api/canais/{id}/escopo} (tarefa 31). */
+    private String corpoDeclaracaoEscopo(String escopo, UUID espelhaCanalId) throws Exception {
+        Map<String, String> corpo = new HashMap<>();
+        corpo.put("escopo", escopo);
+        if (espelhaCanalId != null) {
+            corpo.put("espelhaCanalId", espelhaCanalId.toString());
+        }
+        return objectMapper.writeValueAsString(corpo);
+    }
+
     // ==================================================================
     // Auxiliares - fixture via repositorio JPA (caminho legitimo, exercita
     // ContextoTenant -> DataSourceComTenant -> RLS -> @TenantId), mesmo
@@ -970,6 +1204,34 @@ class ContratoApiTest {
                     nomeMarcador, TipoCanal.MERCADO_LIVRE, CategoriaCanal.MARKETPLACE,
                     null, chaveCredencial, null));
             return canal.getId();
+        } finally {
+            ContextoTenant.limpar();
+        }
+    }
+
+    /**
+     * Declara FONTE_PRIMARIA via a MESMA pilha legitima que
+     * {@code ServicoEscopoDeCanal} usa (findById + metodo de intencao +
+     * save), sempre no tenant A - as chamadas de setup deste arquivo so
+     * precisam desse unico tenant.
+     */
+    private void declararFontePrimariaComoTenantA(UUID canalId) {
+        ContextoTenant.definir(tenantAId);
+        try {
+            Canal canal = repositorioCanal.findById(canalId).orElseThrow();
+            canal.declararFontePrimaria(usuarioDonoAId);
+            repositorioCanal.save(canal);
+        } finally {
+            ContextoTenant.limpar();
+        }
+    }
+
+    private void declararEspelhoComoTenantA(UUID canalId, UUID espelhaCanalId) {
+        ContextoTenant.definir(tenantAId);
+        try {
+            Canal canal = repositorioCanal.findById(canalId).orElseThrow();
+            canal.declararEspelhoDe(espelhaCanalId, usuarioDonoAId);
+            repositorioCanal.save(canal);
         } finally {
             ContextoTenant.limpar();
         }

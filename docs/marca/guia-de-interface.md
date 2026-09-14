@@ -107,6 +107,10 @@ mesmo arquivo, no mesmo padrão, em vez de introduzir um segundo sistema.
   --dado-estimado-bg: #fffbeb;   /* amber-50 */
   --dado-ausente: #57534e;       /* stone-600 — propositalmente NÃO é vermelho */
   --dado-ausente-bg: #f5f5f4;    /* stone-100 */
+
+  /* Estado do sistema — falha técnica, não julgamento sobre um número. */
+  --erro-sistema: #b91c1c;       /* red-700 */
+  --erro-sistema-bg: #fef2f2;    /* red-50 */
 }
 
 @theme inline {
@@ -127,6 +131,9 @@ mesmo arquivo, no mesmo padrão, em vez de introduzir um segundo sistema.
   --color-dado-estimado-bg: var(--dado-estimado-bg);
   --color-dado-ausente: var(--dado-ausente);
   --color-dado-ausente-bg: var(--dado-ausente-bg);
+
+  --color-erro-sistema: var(--erro-sistema);
+  --color-erro-sistema-bg: var(--erro-sistema-bg);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -150,7 +157,7 @@ isso ainda não foi desenhado. Ativar o dark mode automático do sistema
 operacional agora aplicaria cores não pensadas aos números de dinheiro. Fica
 registrado como pendência de design, não decidido por conta própria aqui.
 
-### 2.2 As quatro cores semânticas — o motivo de existir deste documento
+### 2.2 As quatro cores semânticas de dado, mais uma de estado — o motivo de existir deste documento
 
 | Token | Uso | Regra de aparência |
 |---|---|---|
@@ -158,14 +165,19 @@ registrado como pendência de design, não decidido por conta própria aqui.
 | `valor-negativo` | número medido, desfavorável (margem negativa, prejuízo) | vermelho, mesma regra |
 | `dado-estimado` | número que passou por cálculo nosso (rateio, alíquota aplicada), `eh_estimativa = true` | âmbar/mostarda — cor de "atenção ao dado", não de erro. Sempre acompanhado de indicador não-só-cor (ver 2.3) |
 | `dado-ausente` | lacuna: não existe informação, não existe linha (`custo` não gravado) | cinza-pedra, nunca vermelho. Cor deliberadamente "morta", sem energia — não briga visualmente com um erro real do sistema |
+| `erro-sistema` | falha técnica de carregamento (API fora do ar, rede instável, tempo esgotado) — nunca uma cor de *dado* | vermelho — mesmo tom de `valor-negativo`, de propósito (é uma falha real, merece o mesmo peso visual), mas em variável própria |
 
 **Regra dura de uso:** `valor-positivo` e `valor-negativo` só se aplicam a
 número que veio do motor de margem (medido ou com rótulo de teto/estimativa
 já resolvido). `dado-estimado` e `dado-ausente` não são cores de *estado da
 tela* (loading, erro de rede) — são cores de *natureza do dado*. Um erro de
-carregamento (API fora do ar) usa outro vocabulário visual, fora do escopo
-deste guia, e não deve pegar emprestado nenhum destes quatro tokens — senão
-o lojista aprende a desconfiar do número errado.
+carregamento usa `erro-sistema`: nunca `text-valor-negativo`/
+`bg-valor-negativo-bg` num bloco de erro de rede, senão o lojista aprende a
+desconfiar do número errado quando o problema real é a rede, não a margem.
+`resultado`, `pendências`, `operação` e `perguntar` usam
+`border-erro-sistema bg-erro-sistema-bg text-erro-sistema` no bloco
+`role="alert"` de falha de carregamento — esta era a lacuna que uma versão
+anterior deste guia deixava declarada como "fora de escopo"; fechada aqui.
 
 ### 2.3 Acessibilidade: cor nunca é o único sinal
 

@@ -103,7 +103,7 @@ export default function PaginaPerguntar() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p
             id="pergunta-texto-contador"
-            className={`text-xs tabular-nums ${contagem.excedeu ? "text-valor-negativo" : "text-texto-secundario"}`}
+            className={`text-xs tabular-nums ${contagem.excedeu ? "font-medium text-foreground" : "text-texto-secundario"}`}
           >
             {contagem.usados} / {LIMITE_CARACTERES_PERGUNTA} caracteres
           </p>
@@ -127,7 +127,7 @@ export default function PaginaPerguntar() {
         {!carregando && erroDeRede && (
           <p
             role="alert"
-            className="rounded border border-valor-negativo bg-valor-negativo-bg p-4 text-sm text-valor-negativo"
+            className="rounded border border-erro-sistema bg-erro-sistema-bg p-4 text-sm text-erro-sistema"
           >
             {erroDeRede}
           </p>

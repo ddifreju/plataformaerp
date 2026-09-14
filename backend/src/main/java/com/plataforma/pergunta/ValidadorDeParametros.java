@@ -49,6 +49,22 @@ public class ValidadorDeParametros {
      */
     static final Period TETO_PERIODO_EXPLICITO = Period.ofYears(1);
 
+    /**
+     * Rótulo em português de cada {@link PeriodoRelativo}, para a mensagem
+     * de esclarecimento que a lojista lê ({@link #periodosAceitosParaTexto()}).
+     * Sem este mapa, a mensagem listava o nome literal da constante Java
+     * ("MES_ATUAL, ULTIMOS_7_DIAS...") - mesma classe de bug que
+     * {@code RotulosDeExibicao} já corrige para status de pedido/devolução:
+     * jargão de enum vazando pra frase que a lojista lê.
+     */
+    private static final Map<PeriodoRelativo, String> TEXTO_PERIODO_RELATIVO = Map.of(
+            PeriodoRelativo.MES_ATUAL, "mês atual",
+            PeriodoRelativo.MES_PASSADO, "mês passado",
+            PeriodoRelativo.ULTIMOS_7_DIAS, "últimos 7 dias",
+            PeriodoRelativo.ULTIMOS_30_DIAS, "últimos 30 dias",
+            PeriodoRelativo.ULTIMOS_90_DIAS, "últimos 90 dias",
+            PeriodoRelativo.ANO_ATUAL, "ano atual");
+
     private final RepositorioCanal repositorioCanal;
     private final Clock relogio;
 
@@ -115,7 +131,7 @@ public class ValidadorDeParametros {
             fim = OffsetDateTime.parse(fimTexto);
         } catch (DateTimeParseException e) {
             return ResultadoParametro.esclarecimento(
-                    "Não entendi as datas do período. Use o formato AAAA-MM-DDThh:mm:ssZ.");
+                    "Não consigo ler essas datas - o formato esperado é AAAA-MM-DDThh:mm:ssZ.");
         }
         if (!inicio.isBefore(fim)) {
             return ResultadoParametro.esclarecimento(
@@ -136,7 +152,7 @@ public class ValidadorDeParametros {
             periodoRelativo = PeriodoRelativo.valueOf(periodoRelativoTexto.strip().toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
             return ResultadoParametro.esclarecimento(
-                    "Não reconheço o período \"" + periodoRelativoTexto + "\". Use um destes: "
+                    "\"" + periodoRelativoTexto + "\" não é um período que eu aceito. Use um destes: "
                             + periodosAceitosParaTexto() + ".");
         }
         return ResultadoParametro.valido(resolverPeriodoRelativo(periodoRelativo));
@@ -170,9 +186,12 @@ public class ValidadorDeParametros {
 
     private String periodosAceitosParaTexto() {
         return String.join(", ", List.of(
-                PeriodoRelativo.MES_ATUAL.name(), PeriodoRelativo.MES_PASSADO.name(),
-                PeriodoRelativo.ULTIMOS_7_DIAS.name(), PeriodoRelativo.ULTIMOS_30_DIAS.name(),
-                PeriodoRelativo.ULTIMOS_90_DIAS.name(), PeriodoRelativo.ANO_ATUAL.name()));
+                TEXTO_PERIODO_RELATIVO.get(PeriodoRelativo.MES_ATUAL),
+                TEXTO_PERIODO_RELATIVO.get(PeriodoRelativo.MES_PASSADO),
+                TEXTO_PERIODO_RELATIVO.get(PeriodoRelativo.ULTIMOS_7_DIAS),
+                TEXTO_PERIODO_RELATIVO.get(PeriodoRelativo.ULTIMOS_30_DIAS),
+                TEXTO_PERIODO_RELATIVO.get(PeriodoRelativo.ULTIMOS_90_DIAS),
+                TEXTO_PERIODO_RELATIVO.get(PeriodoRelativo.ANO_ATUAL)));
     }
 
     private String listarNomes(List<Canal> canais) {
