@@ -1,12 +1,31 @@
 # Estado do Projeto
 
-**Atualizado em:** 14 de agosto de 2026
-**Fase:** 3 concluída — roadmap inicial completo, validado de ponta a ponta em dev
+**Atualizado em:** 14 de setembro de 2026
+**Fase:** 4 em andamento — camada de IA, preparo de produção, escopo de canal
 **Modo:** autônomo (gerente decide, registra e segue)
 
 ---
 
-## Onde paramos (passagem de máquina, 14/08/2026)
+## Onde paramos (14/09/2026)
+
+Sessão nova, um mês depois. Nada mudou entre 14/08 e 14/09: nenhum commit,
+nenhuma credencial nova, nenhuma decisão de negócio resolvida.
+
+A Fase 4 foi definida e registrada na **decisão 0029**: camada de IA primeiro
+(bloco A), preparo de produção depois (bloco B), escopo de canal declarado por
+último (bloco C). A reconciliação ML × Bling por casamento de pares foi
+**descartada nesta fase** por contradizer a decisão 0017 — o gatilho para
+retomá-la é o primeiro payload real do Mercado Livre.
+
+A arquitetura da camada de IA está na **decisão 0030**: o modelo de linguagem
+interpreta a pergunta e nada mais. Catálogo fechado de perguntas, parâmetro
+validado em Java, número sempre vindo dos serviços já testados, resposta por
+template, recusa como caminho de primeira classe. **Decisão 0031**: pgvector
+continua sem uso, com gatilhos escritos para reverter.
+
+---
+
+## Histórico: passagem de máquina (14/08/2026)
 
 Este resumo existe porque o projeto está migrando de computador. Estado honesto:
 
@@ -26,11 +45,9 @@ Este resumo existe porque o projeto está migrando de computador. Estado honesto
 - Margem: imposto depende do regime tributário do tenant (pendência de negócio);
   antecipação de recebível é indetectável sem resposta da lojista.
 
-**Próxima tarefa:** não há fila aberta — o roadmap inicial (tarefas 1–20)
-acabou. Os candidatos naturais, em ordem do que destrava valor: (1) credencial
-do Mercado Livre e primeiro payload real contra o adaptador; (2) decisões de
-negócio (nome, nicho, regime tributário do demo→real); (3) deploy em staging
-numa VPS para exercitar CORS e cookies no fio.
+**Próxima tarefa (em 14/08):** não havia fila aberta — o roadmap inicial
+(tarefas 1–20) acabou. Resolvido em 14/09 pela decisão 0029, que abriu a
+Fase 4 (tarefas 21–32).
 
 **Para subir na máquina nova:** clonar, copiar `infra/.env.exemplo` para
 `infra/.env` e revisar senhas locais, `make preparar`, `make dados-demo`,
@@ -73,6 +90,35 @@ Execute em ordem. Não pergunte antes de começar cada uma.
 18. [x] Visão do dono: faturamento bruto → lucro real, com decomposição
 19. [x] Visão do gestor: gargalos do processo
 20. [x] Visão do analista: fila de pendências
+
+### Fase 4 — Camada de IA, produção e escopo de canal (decisão 0029)
+
+**Bloco A — Camada de IA sobre dados operacionais** (decisão 0030: o modelo
+interpreta a pergunta; número nenhum passa pela geração do modelo)
+
+21. [ ] `PortaModeloLinguagem` + duas implementações sem chave: `ModeloHeuristico`
+    (conservador, roda em dev) e `ModeloGravado` (fixture, inclusive adversária)
+22. [ ] Catálogo fechado de perguntas respondíveis, com parâmetros tipados e
+    validação determinística (canal do tenant, período, ausência → esclarecimento)
+23. [ ] Executor: intenção → serviço já existente → `ConsultaAuditada` → resposta
+    por template, com rótulo de confiança e memória de cálculo
+24. [ ] `POST /api/pergunta` + teste de isolamento de tenant + auditoria de segurança
+25. [ ] Suíte de avaliação com limiar (regra 4) e asserção dura nas travas
+26. [ ] Tela de perguntas, com "como cheguei nesse número" e a recusa honesta
+
+**Bloco B — Preparo de produção** (nada aqui é deploy; deploy é da fundadora)
+
+27. [ ] Dockerfile do backend: multi-stage, JRE 21, usuário sem privilégio
+28. [ ] Dockerfile do frontend: build standalone do Next
+29. [ ] Perfil de staging com proxy reverso de mesma origem (condição 2 da
+    decisão 0025): cookie `Secure`/`SameSite` exercitado no fio, CORS resolvido
+30. [ ] Checklist de deploy + falha no boot quando faltar variável obrigatória
+
+**Bloco C — Escopo de canal declarado** (substitui a reconciliação por
+casamento, descartada na decisão 0029)
+
+31. [ ] A lojista declara o escopo de cada canal — sem heurística, sem adivinhar
+32. [ ] Soma entre canais permitida apenas sobre conjunto declarado disjunto
 
 ---
 
