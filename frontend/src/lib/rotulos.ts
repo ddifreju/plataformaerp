@@ -1,4 +1,4 @@
-import type { BlocoMargem, StatusDevolucao, StatusPedido } from "./api/tipos";
+import type { BlocoMargem, CategoriaCanal, StatusDevolucao, StatusPedido, TipoCanal } from "./api/tipos";
 
 /**
  * Rótulos em português para os enums do backend. Nenhum destes textos
@@ -54,6 +54,33 @@ export const ROTULO_CODIGO_INTENCAO: Record<string, string> = {
   GARGALOS_DA_OPERACAO: "Onde a operação está travando",
   FILA_DE_PENDENCIAS: "O que precisa ser resolvido",
   CANAIS_DISPONIVEIS: "Canais cadastrados",
+};
+
+/** TipoCanal.java, em texto (tela "Canais", tarefa 34) — nome que a lojista reconhece, não a constante Java. */
+export const ROTULO_TIPO_CANAL: Record<TipoCanal, string> = {
+  MERCADO_LIVRE: "Mercado Livre",
+  SHOPEE: "Shopee",
+  AMAZON: "Amazon",
+  MAGALU: "Magalu",
+  AMERICANAS: "Americanas",
+  SHOPIFY: "Shopify",
+  NUVEMSHOP: "Nuvemshop",
+  WOOCOMMERCE: "WooCommerce",
+  LOJA_PROPRIA: "Loja própria",
+  ERP_BLING: "Bling",
+  ERP_TINY: "Tiny",
+  WHATSAPP: "WhatsApp",
+  EMAIL: "E-mail",
+  INSTAGRAM: "Instagram",
+  OUTRO: "Outro",
+};
+
+/** CategoriaCanal.java, em texto — o papel que o canal cumpre, não o sistema por trás dele. */
+export const ROTULO_CATEGORIA_CANAL: Record<CategoriaCanal, string> = {
+  MARKETPLACE: "Marketplace",
+  LOJA_PROPRIA: "Loja própria",
+  ERP: "ERP",
+  COMUNICACAO: "Comunicação",
 };
 
 /** Chaves de `RespostaPergunta.parametrosUsados`, em texto — mesmo motivo do mapa acima. */

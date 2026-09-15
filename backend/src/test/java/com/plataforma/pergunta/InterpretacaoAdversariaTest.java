@@ -17,6 +17,7 @@ import com.plataforma.canal.RepositorioCanal;
 import com.plataforma.margem.ResultadoMargemPeriodo;
 import com.plataforma.margem.RotuloTeto;
 import com.plataforma.margem.ServicoMargemPeriodo;
+import com.plataforma.margem.ServicoMargemPeriodoConsolidada;
 import com.plataforma.painel.ServicoPainelAnalista;
 import com.plataforma.painel.ServicoPainelGestor;
 
@@ -88,6 +89,8 @@ class InterpretacaoAdversariaTest {
     private final CatalogoDePerguntas catalogo = new CatalogoDePerguntas();
     private final ValidadorDeParametros validador = new ValidadorDeParametros(repositorioCanal, relogio);
     private final ServicoMargemPeriodo servicoMargemPeriodo = mock(ServicoMargemPeriodo.class);
+    private final ServicoMargemPeriodoConsolidada servicoMargemPeriodoConsolidada =
+            mock(ServicoMargemPeriodoConsolidada.class);
     private final ServicoPainelGestor servicoPainelGestor = mock(ServicoPainelGestor.class);
     private final ServicoPainelAnalista servicoPainelAnalista = mock(ServicoPainelAnalista.class);
     private final RepositorioConsultaAuditada repositorioConsultaAuditada = mock(RepositorioConsultaAuditada.class);
@@ -98,8 +101,9 @@ class InterpretacaoAdversariaTest {
         when(repositorioCanal.findAllByOrderByNomeAsc()).thenReturn(List.of(canalMercadoLivre, canalShopee));
         when(repositorioConsultaAuditada.save(any(ConsultaAuditada.class)))
                 .thenAnswer(invocacao -> invocacao.getArgument(0));
-        return new ServicoPergunta(modeloGravado, catalogo, validador, servicoMargemPeriodo, servicoPainelGestor,
-                servicoPainelAnalista, repositorioCanal, repositorioConsultaAuditada);
+        return new ServicoPergunta(modeloGravado, catalogo, validador, servicoMargemPeriodo,
+                servicoMargemPeriodoConsolidada, servicoPainelGestor, servicoPainelAnalista, repositorioCanal,
+                repositorioConsultaAuditada);
     }
 
     // ==================================================================

@@ -17,10 +17,12 @@ import com.plataforma.auditoria.ConsultaAuditada;
 import com.plataforma.auditoria.RepositorioConsultaAuditada;
 import com.plataforma.canal.Canal;
 import com.plataforma.canal.RepositorioCanal;
+import com.plataforma.margem.ConjuntoDeCanaisNaoDisjuntoException;
 import com.plataforma.margem.Lacuna;
+import com.plataforma.margem.ResultadoMargemConsolidada;
 import com.plataforma.margem.ResultadoMargemPeriodo;
-import com.plataforma.margem.RotuloTeto;
 import com.plataforma.margem.ServicoMargemPeriodo;
+import com.plataforma.margem.ServicoMargemPeriodoConsolidada;
 import com.plataforma.painel.RespostaFilaPendencias;
 import com.plataforma.painel.RespostaGargalosProcesso;
 import com.plataforma.painel.ServicoPainelAnalista;
@@ -47,11 +49,30 @@ import com.plataforma.painel.ServicoPainelGestor;
  * lojista e {@code executadoPor} = {@code "ServicoPergunta"} (nunca o
  * usuário - decisão 0012) - inclusive em RECUSA e ESCLARECIMENTO, onde não
  * há nenhum serviço de domínio para consultar. Isto é ADICIONAL à
- * auditoria que {@code ServicoMargemPeriodo.calcular} já grava por conta
- * própria (com {@code executadoPor = "ServicoMargemPeriodo"} e
+ * auditoria que {@code ServicoMargemPeriodo.calcular}/
+ * {@code ServicoMargemPeriodoConsolidada.calcular} já gravam por conta
+ * própria (com {@code executadoPor} = o nome de cada um deles e
  * {@code pergunta = null}): aquela prova o NÚMERO; esta prova que ESTA
  * pergunta, com este texto, gerou esta resposta - são rastreabilidades
  * diferentes, cada uma com sua própria linha.
+ *
+ * <h2>MARGEM_DO_PERIODO/LACUNAS_DA_MARGEM sem canal nomeado (tarefa 33,
+ * decisão 0033) - a decisão 0021 NÃO foi relaxada</h2>
+ * Até a tarefa 33, canal ausente no texto da lojista virava ESCLARECIMENTO
+ * sempre ("Para qual canal?") - era o único jeito de honrar a decisão
+ * 0021 ("o endpoint de margem exige um canal, nunca uma lista"). Isso
+ * continua exatamente igual: {@code POST /api/margem/periodo} continua
+ * exigindo {@code canalId} único e obrigatório, e
+ * {@link ServicoMargemPeriodo} nunca soma canal nenhum por conta própria -
+ * nada nesta classe muda isso.
+ * <p>
+ * O que passou a existir é um SEGUNDO caminho, novo e separado:
+ * {@link ServicoMargemPeriodoConsolidada}, que só soma um conjunto de
+ * canais depois de provar que ele é comprovadamente disjunto (decisão
+ * 0033). Pergunta sem canal nomeado tenta esse caminho sobre todos os
+ * canais ATIVOS do tenant, via {@link #responderMargemSemCanalNomeado};
+ * pergunta COM canal nomeado continua indo, sem nenhuma mudança de
+ * comportamento, pelo caminho de canal único de sempre.
  */
 @Service
 public class ServicoPergunta {
@@ -70,10 +91,25 @@ public class ServicoPergunta {
 
     private static final String TEXTO_RECUSA = "Ainda não sei responder isso.";
 
+    /**
+     * Acrescentada à mensagem de {@link ConjuntoDeCanaisNaoDisjuntoException}
+     * (que já nomeia o canal/par bloqueado e a saída "declare o escopo") -
+     * a SEGUNDA saída, que só faz sentido do ponto de vista da camada de
+     * pergunta: perguntar de novo citando um único canal sempre funciona,
+     * porque contorna qualquer problema de disjunção do conjunto (decisão
+     * 0033, "esclarecimento útil, nunca recusa seca").
+     */
+    static final String SUGESTAO_PERGUNTAR_POR_CANAL =
+            "Ou pergunte de novo citando o nome de um canal específico - respondo só sobre ele.";
+
+    static final String SEM_CANAL_ATIVO_PARA_CONSOLIDAR = "Você ainda não tem nenhum canal ativo cadastrado. "
+            + "Cadastre um canal e declare o escopo dele antes de perguntar sobre margem.";
+
     private final PortaModeloLinguagem portaModeloLinguagem;
     private final CatalogoDePerguntas catalogo;
     private final ValidadorDeParametros validador;
     private final ServicoMargemPeriodo servicoMargemPeriodo;
+    private final ServicoMargemPeriodoConsolidada servicoMargemPeriodoConsolidada;
     private final ServicoPainelGestor servicoPainelGestor;
     private final ServicoPainelAnalista servicoPainelAnalista;
     private final RepositorioCanal repositorioCanal;
@@ -81,12 +117,14 @@ public class ServicoPergunta {
 
     public ServicoPergunta(PortaModeloLinguagem portaModeloLinguagem, CatalogoDePerguntas catalogo,
             ValidadorDeParametros validador, ServicoMargemPeriodo servicoMargemPeriodo,
+            ServicoMargemPeriodoConsolidada servicoMargemPeriodoConsolidada,
             ServicoPainelGestor servicoPainelGestor, ServicoPainelAnalista servicoPainelAnalista,
             RepositorioCanal repositorioCanal, RepositorioConsultaAuditada repositorioConsultaAuditada) {
         this.portaModeloLinguagem = portaModeloLinguagem;
         this.catalogo = catalogo;
         this.validador = validador;
         this.servicoMargemPeriodo = servicoMargemPeriodo;
+        this.servicoMargemPeriodoConsolidada = servicoMargemPeriodoConsolidada;
         this.servicoPainelGestor = servicoPainelGestor;
         this.servicoPainelAnalista = servicoPainelAnalista;
         this.repositorioCanal = repositorioCanal;
@@ -143,9 +181,21 @@ public class ServicoPergunta {
 
     private RespostaPergunta responderMargem(String textoDaPergunta, IntencaoDetectada deteccao,
             CodigoIntencao codigo, boolean focoLacunas) {
-        ResultadoParametro<Canal> canalResultado = validador.validarCanal(deteccao.parametros());
         ResultadoParametro<Periodo> periodoResultado = validador.validarPeriodo(deteccao.parametros());
 
+        // "Canal nomeado" é decidido sobre o PARÂMETRO BRUTO, não sobre
+        // ResultadoParametro<Canal> - a distinção que importa aqui é "a
+        // lojista disse um canal" vs. "não disse nenhum", nunca "o canal
+        // que ela disse existe". Um canal digitado errado/inexistente
+        // continua indo pelo caminho de canal único (e vira ESCLARECIMENTO
+        // "não encontrei esse canal" logo abaixo) - só a AUSÊNCIA do
+        // parâmetro abre o caminho novo da tarefa 33.
+        String canalNoTexto = deteccao.parametros() == null ? null : deteccao.parametros().get("canal");
+        if (canalNoTexto == null || canalNoTexto.isBlank()) {
+            return responderMargemSemCanalNomeado(textoDaPergunta, deteccao, codigo, focoLacunas, periodoResultado);
+        }
+
+        ResultadoParametro<Canal> canalResultado = validador.validarCanal(deteccao.parametros());
         if (!canalResultado.valido() || !periodoResultado.valido()) {
             return esclarecer(textoDaPergunta, deteccao, codigo, canalResultado, periodoResultado);
         }
@@ -166,8 +216,11 @@ public class ServicoPergunta {
         if (!periodoResultado.valido()) {
             mensagens.add(periodoResultado.esclarecimento());
         }
-        String texto = String.join(" ", mensagens);
+        return esclarecerComTexto(textoDaPergunta, deteccao, codigo, String.join(" ", mensagens));
+    }
 
+    private RespostaPergunta esclarecerComTexto(String textoDaPergunta, IntencaoDetectada deteccao,
+            CodigoIntencao codigo, String texto) {
         String sqlExecutado = "PerguntaComEsclarecimento: intencao=" + codigo.name() + "; motivo=" + texto;
         UUID auditoriaId = registrarAuditoria(textoDaPergunta, sqlExecutado, new UUID[0], 0);
 
@@ -193,15 +246,15 @@ public class ServicoPergunta {
         if (resultado.quantidadePedidos() == 0) {
             // Regra dura: zero pedido nunca vira "R$ 0,00" apresentado como
             // resultado - é ausência declarada, não um valor calculado.
-            texto = "Não há pedido no canal " + canal.getNome() + " entre " + dataInicio + " e " + dataFim + ". "
-                    + escopo;
+            texto = RespostaDeMargem.textoZeroPedidosUnico(canal, dataInicio, dataFim, escopo);
             numeros = List.of();
         } else if (focoLacunas) {
-            texto = construirTextoLacunas(canal, dataInicio, dataFim, lacunasDescricao, escopo);
+            texto = RespostaDeMargem.textoLacunasUnico(canal, dataInicio, dataFim, lacunasDescricao, escopo);
             numeros = List.of();
         } else {
-            texto = construirTextoMargemCompleta(canal, dataInicio, dataFim, resultado, escopo, lacunasDescricao);
-            numeros = numerosDaMargem(resultado);
+            texto = RespostaDeMargem.textoMargemCompletaUnico(canal, dataInicio, dataFim, resultado, escopo,
+                    lacunasDescricao);
+            numeros = RespostaDeMargem.numerosUnico(resultado);
         }
 
         UUID auditoriaId = registrarAuditoriaMargem(textoDaPergunta, codigo, canal, periodo, resultado);
@@ -210,56 +263,120 @@ public class ServicoPergunta {
                 lacunasDescricao, auditoriaId, codigo.name(), parametrosUsados, List.of());
     }
 
-    private String construirTextoLacunas(Canal canal, String dataInicio, String dataFim,
-            List<String> lacunasDescricao, String escopo) {
-        if (lacunasDescricao.isEmpty()) {
-            return "Não encontrei nenhuma lacuna: a margem do canal " + canal.getNome() + " entre " + dataInicio
-                    + " e " + dataFim + " foi calculada sem dado faltando. " + escopo;
+    // ------------------------------------------------------------------
+    // MARGEM_DO_PERIODO / LACUNAS_DA_MARGEM sem canal nomeado (tarefa 33)
+    // ------------------------------------------------------------------
+
+    /**
+     * Caminho novo da tarefa 33 (decisão 0033) - ver o Javadoc da classe,
+     * seção "a decisão 0021 NÃO foi relaxada", antes de mexer aqui.
+     * Nenhum desfecho "assume um canal e responde": só RESPOSTA quando o
+     * conjunto de canais ativos é comprovadamente disjunto, ESCLARECIMENTO
+     * em todo outro caso.
+     */
+    private RespostaPergunta responderMargemSemCanalNomeado(String textoDaPergunta, IntencaoDetectada deteccao,
+            CodigoIntencao codigo, boolean focoLacunas, ResultadoParametro<Periodo> periodoResultado) {
+        if (!periodoResultado.valido()) {
+            return esclarecerComTexto(textoDaPergunta, deteccao, codigo, periodoResultado.esclarecimento());
         }
-        return "Faltam " + lacunasDescricao.size() + " coisa(s) para calcular com confiança a margem do canal "
-                + canal.getNome() + " entre " + dataInicio + " e " + dataFim + ": "
-                + String.join("; ", lacunasDescricao) + ". " + escopo;
+        Periodo periodo = periodoResultado.valor();
+
+        ResultadoMargemConsolidada resultado;
+        try {
+            // canaisPedidos = List.of() -> ServicoMargemPeriodoConsolidada
+            // resolve sozinho "todos os canais ATIVOS do tenant" (decisão
+            // 0033) - a mesma regra de negócio que o endpoint
+            // /api/margem/periodo/consolidado usa quando "canais" vem
+            // omitido do corpo, reaproveitada aqui, nunca reimplementada.
+            resultado = servicoMargemPeriodoConsolidada.calcular(periodo.inicio(), periodo.fim(), List.of());
+        } catch (ConjuntoDeCanaisNaoDisjuntoException erro) {
+            // Reaproveita a mensagem que ServicoMargemPeriodoConsolidada já
+            // monta (nomeia o canal/par bloqueado e já sugere "declare o
+            // escopo") - nunca uma segunda versão escrita à mão da mesma
+            // explicação. A segunda saída ("pergunte citando um canal") é
+            // acrescentada aqui porque só faz sentido do ponto de vista
+            // desta camada.
+            String texto = erro.getMessage() + " " + SUGESTAO_PERGUNTAR_POR_CANAL;
+            return esclarecerComTexto(textoDaPergunta, deteccao, codigo, texto);
+        }
+
+        if (resultado.canaisIncluidos().isEmpty()) {
+            return esclarecerComTexto(textoDaPergunta, deteccao, codigo, SEM_CANAL_ATIVO_PARA_CONSOLIDAR);
+        }
+
+        return construirRespostaMargemConsolidada(textoDaPergunta, codigo, resultado, focoLacunas);
     }
 
-    private String construirTextoMargemCompleta(Canal canal, String dataInicio, String dataFim,
-            ResultadoMargemPeriodo resultado, String escopo, List<String> lacunasDescricao) {
-        StringBuilder texto = new StringBuilder();
-        texto.append("Canal ").append(canal.getNome()).append(", de ").append(dataInicio).append(" a ")
-                .append(dataFim).append(": ");
-        for (NumeroCitado numero : numerosDaMargem(resultado)) {
-            texto.append(numero.nome()).append(": ").append(numero.valor()).append(". ");
-        }
-        texto.append("O lucro operacional do período (N4) não é a soma simples do Resultado do pedido (N3) - ele "
-                + "também desconta custo de período que não foi rateado entre pedidos. ");
-        texto.append(escopo);
+    private RespostaPergunta construirRespostaMargemConsolidada(String textoDaPergunta, CodigoIntencao codigo,
+            ResultadoMargemConsolidada resultado, boolean focoLacunas) {
+        List<String> nomesCanais = nomesDosCanais(resultado.canaisIncluidos());
+        String dataInicio = FormatadorDeTexto.data(resultado.inicio());
+        String dataFim = FormatadorDeTexto.data(resultado.fim());
+        String listaCanais = String.join(", ", nomesCanais);
+        // Decisão 0017 ("nunca somar sem dizer o que somou"): o escopo
+        // SEMPRE nomeia cada canal que entrou na soma, nunca só a contagem.
+        String escopo = "Soma consolidada de " + nomesCanais.size() + " canal(is) comprovadamente disjunto(s): "
+                + listaCanais + ". Para um canal só, pergunte de novo citando o nome dele.";
+        List<String> lacunasDescricao = resultado.lacunas().stream().map(Lacuna::descricao).toList();
+        Map<String, String> parametrosUsados = Map.of(
+                "escopo", "CONSOLIDADO",
+                "canais", listaCanais,
+                "periodoInicio", resultado.inicio().toString(),
+                "periodoFim", resultado.fim().toString());
 
-        if (resultado.rotulo() == RotuloTeto.COM_TETO) {
-            String percentualTexto = resultado.margemContribuicaoPercentual()
-                    .map(p -> " (" + FormatadorDeTexto.percentual(p) + ")").orElse("");
-            texto.append(" ").append(FormatadorDeTexto.moeda(resultado.margemContribuicaoN2())).append(percentualTexto)
-                    .append(" é o teto - a margem real é menor. Faltam: ")
-                    .append(String.join("; ", lacunasDescricao)).append(".");
-        } else if (resultado.rotulo() == RotuloTeto.INDETERMINADA) {
-            texto.append(" Não dá para calcular esta margem com confiança. Faltam: ")
-                    .append(String.join("; ", lacunasDescricao))
-                    .append(". Alguns desses fazem o número subir, outros descer - por isso não existe um teto seguro para mostrar aqui.");
+        String texto;
+        List<NumeroCitado> numeros;
+
+        if (resultado.quantidadePedidos() == 0) {
+            texto = RespostaDeMargem.textoZeroPedidosConsolidado(nomesCanais, dataInicio, dataFim, escopo);
+            numeros = List.of();
+        } else if (focoLacunas) {
+            texto = RespostaDeMargem.textoLacunasConsolidado(nomesCanais, dataInicio, dataFim, lacunasDescricao,
+                    escopo);
+            numeros = List.of();
+        } else {
+            texto = RespostaDeMargem.textoMargemCompletaConsolidado(nomesCanais, dataInicio, dataFim, resultado,
+                    escopo, lacunasDescricao);
+            numeros = RespostaDeMargem.numerosConsolidado(resultado);
         }
-        return texto.toString();
+
+        UUID auditoriaId = registrarAuditoriaMargemConsolidada(textoDaPergunta, codigo, resultado);
+
+        return new RespostaPergunta(TipoResposta.RESPOSTA, texto, numeros, resultado.rotulo().name(),
+                lacunasDescricao, auditoriaId, codigo.name(), parametrosUsados, List.of());
     }
 
-    private List<NumeroCitado> numerosDaMargem(ResultadoMargemPeriodo resultado) {
-        List<NumeroCitado> numeros = new ArrayList<>();
-        numeros.add(new NumeroCitado("Faturamento bruto (N0)", FormatadorDeTexto.moeda(resultado.faturamentoBrutoN0())));
-        numeros.add(new NumeroCitado("Receita líquida (N1)", FormatadorDeTexto.moeda(resultado.receitaLiquidaN1())));
-        numeros.add(new NumeroCitado("Margem por pedido (N2)", FormatadorDeTexto.moeda(resultado.margemContribuicaoN2())));
-        numeros.add(new NumeroCitado("Resultado do pedido (N3)", FormatadorDeTexto.moeda(resultado.resultadoPeriodoN3())));
-        numeros.add(new NumeroCitado("Lucro operacional do período (N4)", FormatadorDeTexto.moeda(resultado.lucroOperacionalN4())));
-        resultado.margemContribuicaoPercentual()
-                .ifPresent(p -> numeros.add(new NumeroCitado("Margem por pedido (%)", FormatadorDeTexto.percentual(p))));
-        resultado.margemLiquidaPercentual()
-                .ifPresent(p -> numeros.add(new NumeroCitado("Margem líquida (%)", FormatadorDeTexto.percentual(p))));
-        numeros.add(new NumeroCitado("Pedidos no período", String.valueOf(resultado.quantidadePedidos())));
-        return numeros;
+    /**
+     * Nomes dos canais consolidados, NA MESMA ORDEM de
+     * {@code resultado.canaisIncluidos()} - o texto precisa nomear
+     * explicitamente quais canais entraram na soma (decisão 0017).
+     * {@code findAllById} já roda sob o mesmo predicado de tenant que todo
+     * repositório com {@code @TenantId} recebe (decisão 0007), então um id
+     * de outro tenant (que nunca deveria chegar aqui, já que
+     * {@code canaisIncluidos} vem de uma consulta já escopada por tenant)
+     * simplesmente não voltaria - daí o fallback para o próprio UUID em vez
+     * de lançar exceção.
+     */
+    private List<String> nomesDosCanais(List<UUID> canaisIncluidos) {
+        Map<UUID, String> nomePorId = repositorioCanal.findAllById(canaisIncluidos).stream()
+                .collect(Collectors.toMap(Canal::getId, Canal::getNome));
+        return canaisIncluidos.stream().map(id -> nomePorId.getOrDefault(id, id.toString())).toList();
+    }
+
+    private UUID registrarAuditoriaMargemConsolidada(String textoDaPergunta, CodigoIntencao codigo,
+            ResultadoMargemConsolidada resultado) {
+        Set<UUID> idsTotal = new LinkedHashSet<>();
+        idsTotal.addAll(resultado.idsPedidoUsados());
+        idsTotal.addAll(resultado.idsCustoUsados());
+
+        String metodo = codigo == CodigoIntencao.LACUNAS_DA_MARGEM
+                ? "responderLacunasDaMargemSemCanalNomeado" : "responderMargemSemCanalNomeado";
+        String sqlExecutado = "ServicoPergunta." + metodo + ": delega a ServicoMargemPeriodoConsolidada.calcular("
+                + "canais=" + resultado.canaisIncluidos() + ", periodo=[" + resultado.inicio() + ", "
+                + resultado.fim() + ")) - consolidado sobre " + resultado.canaisIncluidos().size()
+                + " canal(is) comprovadamente disjunto(s) (decisao 0033).";
+
+        return registrarAuditoria(textoDaPergunta, sqlExecutado, idsTotal.toArray(new UUID[0]), idsTotal.size());
     }
 
     private UUID registrarAuditoriaMargem(String textoDaPergunta, CodigoIntencao codigo, Canal canal, Periodo periodo,

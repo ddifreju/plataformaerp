@@ -22,9 +22,11 @@ import com.plataforma.devolucao.ContagemPorStatusDevolucao;
 import com.plataforma.devolucao.StatusDevolucao;
 import com.plataforma.margem.DirecaoViesLacuna;
 import com.plataforma.margem.Lacuna;
+import com.plataforma.margem.ResultadoMargemConsolidada;
 import com.plataforma.margem.ResultadoMargemPeriodo;
 import com.plataforma.margem.RotuloTeto;
 import com.plataforma.margem.ServicoMargemPeriodo;
+import com.plataforma.margem.ServicoMargemPeriodoConsolidada;
 import com.plataforma.painel.RespostaFilaPendencias;
 import com.plataforma.painel.RespostaGargalosProcesso;
 import com.plataforma.painel.ServicoPainelAnalista;
@@ -64,7 +66,7 @@ class NenhumDigitoInventadoTest {
     // quando deveriam ser 2). A allowlist só pode valer para a OCORRÊNCIA
     // LITERAL do rótulo estrutural: dígito 0..4 imediatamente precedido do
     // caractere 'N' no texto gerado (o "N" de "(N0)", "(N1)" etc. em
-    // ServicoPergunta.numerosDaMargem). Ver assertTodoDigitoRastreavel.
+    // RespostaDeMargem.numerosUnico/numerosConsolidado). Ver assertTodoDigitoRastreavel.
     private static final Set<String> ALLOWLIST_ESTRUTURAL = Set.of("0", "1", "2", "3", "4");
 
     private static final UUID CANAL_ID = UUID.randomUUID();
@@ -74,6 +76,8 @@ class NenhumDigitoInventadoTest {
     private final CatalogoDePerguntas catalogo = new CatalogoDePerguntas();
     private final ValidadorDeParametros validador = mock(ValidadorDeParametros.class);
     private final ServicoMargemPeriodo servicoMargemPeriodo = mock(ServicoMargemPeriodo.class);
+    private final ServicoMargemPeriodoConsolidada servicoMargemPeriodoConsolidada =
+            mock(ServicoMargemPeriodoConsolidada.class);
     private final ServicoPainelGestor servicoPainelGestor = mock(ServicoPainelGestor.class);
     private final ServicoPainelAnalista servicoPainelAnalista = mock(ServicoPainelAnalista.class);
     private final RepositorioCanal repositorioCanal = mock(RepositorioCanal.class);
@@ -82,8 +86,8 @@ class NenhumDigitoInventadoTest {
     private ServicoPergunta novoServico(PortaModeloLinguagem porta) {
         when(repositorioConsultaAuditada.save(any(ConsultaAuditada.class)))
                 .thenAnswer(invocacao -> invocacao.getArgument(0));
-        return new ServicoPergunta(porta, catalogo, validador, servicoMargemPeriodo, servicoPainelGestor,
-                servicoPainelAnalista, repositorioCanal, repositorioConsultaAuditada);
+        return new ServicoPergunta(porta, catalogo, validador, servicoMargemPeriodo, servicoMargemPeriodoConsolidada,
+                servicoPainelGestor, servicoPainelAnalista, repositorioCanal, repositorioConsultaAuditada);
     }
 
     private Set<String> digitosDe(String texto) {
@@ -224,6 +228,46 @@ class NenhumDigitoInventadoTest {
     }
 
     // ------------------------------------------------------------------
+    // MARGEM_DO_PERIODO sem canal nomeado (tarefa 33) - caminho consolidado
+    // ------------------------------------------------------------------
+
+    @Test
+    void margemDoPeriodoConsolidadaNaoInventaDigito() {
+        String pergunta = "quanto sobrou no mes passado no total?";
+        PortaModeloLinguagem porta = (p, cat) -> new IntencaoDetectada(CodigoIntencao.MARGEM_DO_PERIODO.name(),
+                Map.of("periodoRelativo", "MES_PASSADO"), new BigDecimal("0.90"));
+        when(validador.validarPeriodo(any())).thenReturn(ResultadoParametro.valido(new Periodo(INICIO, FIM)));
+
+        Canal canal = DublesDeTeste.canal("ml-classico", "Mercado Livre");
+        when(repositorioCanal.findAllById(List.of(canal.getId()))).thenReturn(List.of(canal));
+
+        BigDecimal n0 = new BigDecimal("2345.6700");
+        BigDecimal n1 = new BigDecimal("2000.1200");
+        BigDecimal n2 = new BigDecimal("1000.5000");
+        BigDecimal n3 = new BigDecimal("900.0900");
+        BigDecimal n4 = new BigDecimal("800.0000");
+        ResultadoMargemConsolidada resultado = DublesDeTeste.margemConsolidada(
+                List.of(canal.getId()), INICIO, FIM, n0, n1, n2, n3, n4, List.of(), RotuloTeto.CALCULADA, 9);
+        when(servicoMargemPeriodoConsolidada.calcular(INICIO, FIM, List.of())).thenReturn(resultado);
+
+        ServicoPergunta servico = novoServico(porta);
+        RespostaPergunta resposta = servico.responder(pergunta);
+
+        Set<String> pool = new HashSet<>();
+        pool.addAll(digitosDe(FormatadorDeTexto.moeda(n0)));
+        pool.addAll(digitosDe(FormatadorDeTexto.moeda(n1)));
+        pool.addAll(digitosDe(FormatadorDeTexto.moeda(n2)));
+        pool.addAll(digitosDe(FormatadorDeTexto.moeda(n3)));
+        pool.addAll(digitosDe(FormatadorDeTexto.moeda(n4)));
+        pool.addAll(digitosDe(String.valueOf(resultado.quantidadePedidos())));
+        pool.addAll(digitosDe(FormatadorDeTexto.data(resultado.inicio())));
+        pool.addAll(digitosDe(FormatadorDeTexto.data(resultado.fim())));
+        pool.addAll(digitosDe(String.valueOf(1))); // "Soma consolidada de 1 canal(is)..."
+
+        assertTodoDigitoRastreavel(resposta.texto(), pergunta, pool);
+    }
+
+    // ------------------------------------------------------------------
     // LACUNAS_DA_MARGEM
     // ------------------------------------------------------------------
 
@@ -261,7 +305,7 @@ class NenhumDigitoInventadoTest {
 
         // Nota sobre a regra 5 do CLAUDE.md ("nunca invente dado"): o texto
         // concatena "Faltam " + lacunasDescricao.size() dentro de
-        // ServicoPergunta.construirTextoLacunas. Isso NÃO é dado inventado -
+        // RespostaDeMargem.textoLacunasUnico. Isso NÃO é dado inventado -
         // o número vem de List.size() de uma lista real do resultado da
         // consulta, calculado em Java, não redigido por um modelo. O que
         // faltava era só uma trava forte o bastante para PROVAR essa conta:

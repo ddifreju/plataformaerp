@@ -1,27 +1,62 @@
 # Estado do Projeto
 
 **Atualizado em:** 14 de setembro de 2026
-**Fase:** 4 em andamento — camada de IA, preparo de produção, escopo de canal
+**Fase:** 4 — tarefas 21 a 34 concluídas; resta a 35 e a validação por execução
 **Modo:** autônomo (gerente decide, registra e segue)
 
 ---
 
 ## Onde paramos (14/09/2026)
 
-Sessão nova, um mês depois. Nada mudou entre 14/08 e 14/09: nenhum commit,
-nenhuma credencial nova, nenhuma decisão de negócio resolvida.
+Sessão nova, um mês depois da anterior. Entre 14/08 e 14/09 nada mudou:
+nenhum commit, nenhuma credencial, nenhuma decisão de negócio resolvida.
 
-A Fase 4 foi definida e registrada na **decisão 0029**: camada de IA primeiro
-(bloco A), preparo de produção depois (bloco B), escopo de canal declarado por
-último (bloco C). A reconciliação ML × Bling por casamento de pares foi
-**descartada nesta fase** por contradizer a decisão 0017 — o gatilho para
-retomá-la é o primeiro payload real do Mercado Livre.
+A Fase 4 foi definida (**decisão 0029**) e executada quase inteira: **tarefas
+21 a 34 concluídas**, em três blocos.
 
-A arquitetura da camada de IA está na **decisão 0030**: o modelo de linguagem
-interpreta a pergunta e nada mais. Catálogo fechado de perguntas, parâmetro
-validado em Java, número sempre vindo dos serviços já testados, resposta por
-template, recusa como caminho de primeira classe. **Decisão 0031**: pgvector
-continua sem uso, com gatilhos escritos para reverter.
+**O que existe agora que não existia de manhã:**
+
+1. **A camada de IA existe.** `POST /api/pergunta` responde cinco perguntas
+   sobre a operação, e a tela `/perguntar` mostra as respostas com "Como
+   cheguei nesse número". O desenho (**decisão 0030**) é que o modelo de
+   linguagem **só interpreta** — catálogo fechado, parâmetro validado em Java,
+   número sempre vindo dos serviços já testados, texto por template, recusa
+   como caminho de primeira classe. Nenhum dígito da resposta passa pela
+   geração do modelo, e há teste provando isso. Roda **sem chave de LLM**:
+   `ModeloHeuristico` classifica por vocabulário e extrai canal e período.
+2. **"Quanto sobrou no mês?" tem resposta.** O escopo de canal declarado
+   (**decisão 0033**) deixa a lojista dizer quais canais são fonte e quais são
+   espelho; a soma entre canais só acontece sobre conjunto provadamente
+   disjunto, e recusa nomeando os dois lados do par quando não é. A decisão
+   0021 continua íntegra.
+3. **O caminho para produção está montado** (**decisão 0032**): Dockerfiles,
+   compose de staging onde só o Caddy publica porta, `tls internal` para
+   exercitar cookie `Secure` sem VPS, CORS vazio por padrão, e boot que recusa
+   subir sem as variáveis obrigatórias. **Nada foi construído nem subido.**
+4. **Um bug de segurança de um mês foi fechado** (**decisão 0034**):
+   `GET /api/margem/periodo` gravava auditoria, o que tornava falsa a condição
+   que sustenta o CSRF desligado. Virou POST.
+
+**Decisão 0031**: pgvector continua sem uso, com gatilhos escritos para
+reverter. **A reconciliação ML × Bling por casamento de pares foi descartada**
+nesta fase por contradizer a decisão 0017 — o gatilho para retomá-la é o
+primeiro payload real do Mercado Livre.
+
+**Placar: 300 testes no backend e 44 no frontend, tudo verde contra Postgres
+real.** Lint e build limpos.
+
+### A próxima sessão começa por aqui
+
+1. **Validação por execução do que foi escrito hoje e nunca rodou**: `docker
+   build` dos dois Dockerfiles, `make staging-subir`, e
+   `make staging-conferir-cookie` para ver `Secure`/`HttpOnly`/`SameSite` no
+   fio. É a parte da Fase 4 com maior distância entre "escrito" e "provado", e
+   a história deste projeto diz que é aí que os bugs sérios aparecem.
+2. **Ver no navegador** as duas telas novas (`/perguntar` e `/canais`) com
+   `make dados-demo`. Vale perguntar de verdade e ver o que a heurística erra.
+3. **Tarefa 35** (contagem de pedidos por canal) — pequena, destrava a decisão
+   informada na tela de declaração.
+4. As dívidas da Fase 4 listadas mais abaixo, em ordem de risco.
 
 ---
 
@@ -125,20 +160,26 @@ casamento, descartada na decisão 0029)
 31. [x] A lojista declara o escopo de cada canal — sem heurística, sem adivinhar
     *(backend, seed e endpoint prontos; a TELA de declaração é a tarefa 34)*
 32. [x] Soma entre canais permitida apenas sobre conjunto declarado disjunto
-33. [ ] A camada de IA passa a responder sem exigir canal, quando a declaração
+33. [x] A camada de IA passa a responder sem exigir canal, quando a declaração
     permitir — é o que torna "quanto sobrou no mês?" respondível
-34. [ ] Tela de declaração de escopo de canal (aberta na tarefa 31)
+34. [x] Tela de declaração de escopo de canal (aberta na tarefa 31)
+35. [ ] `GET /api/canais` devolvendo `quantidadePedidos` por canal — a decisão
+    0033 diz que a tela deve "mostrar os canais e quantos pedidos cada um tem"
+    para a lojista decidir de forma informada. A tela 34 saiu **sem** esse
+    número, de propósito: não existe endpoint que o devolva, e estimar ou
+    contar no cliente violaria a regra 5. É contagem simples, sem margem.
 
 ---
 
 ## Placar de testes da Fase 4 (14/09/2026)
 
-**293 testes no backend, 0 falhas, 0 erros. 35 no frontend, 0 falhas.**
+**300 testes no backend, 0 falhas, 0 erros. 44 no frontend, 0 falhas.**
 `npm run lint` e `npm run build` limpos. Rodado contra Postgres real: os
 testes de Testcontainers executaram, incluindo os de isolamento novos
 (`IsolamentoPerguntaTest`, `IsolamentoMargemConsolidadaTest`).
 
-Eram 161 no fim da Fase 3 — a Fase 4 somou 132 testes até aqui.
+Eram 161 backend + 20 frontend no fim da Fase 3. A Fase 4 somou **139 testes
+no backend e 24 no frontend**.
 
 ### Duas lições de ambiente desta máquina (para a próxima sessão)
 
@@ -421,6 +462,32 @@ Da revisão de código do pacote `pergunta`:
 6. **`500` duplicado** entre `ServicoPergunta.TAMANHO_MAXIMO_PERGUNTA` e o
    `@Size(max = 500)` de `RequisicaoPergunta`, sem teste amarrando os dois.
    A duplicação é proposital (defesa nas duas bordas); a falta do teste não é.
+7. **O desfecho RESPOSTA do caminho consolidado não tem caso de contrato
+   HTTP.** O tenant compartilhado do `ContratoApiTest` sempre tem, entre os
+   canais ativos, um `NAO_DECLARADO` e um par espelho/primária — então "todos
+   os ativos" nunca é disjunto ali, e o caminho feliz não é alcançável sem um
+   tenant próprio só para este caso. Coberto em unidade
+   (`ServicoPerguntaTest`) e em isolamento (`IsolamentoPerguntaTest`).
+8. **`resultado/page.tsx` ainda usa `text-valor-negativo` para validação de
+   formulário** ("Escolha um canal"). Mesma categoria de uso indevido do token
+   que a revisão de marca corrigiu para erro de rede, mas fora do que foi
+   pedido — não foi tocado para não expandir escopo sem decisão.
+
+### A armadilha transacional que a tarefa 33 encontrou
+
+Vale guardar porque é o tipo de coisa que só aparece rodando. `ServicoPergunta.responder`
+é `@Transactional` e chama `ServicoMargemPeriodoConsolidada.calcular`, que
+também é. **Capturar a exceção de "conjunto não disjunto" no chamador não
+bastava**: ao cruzar a própria borda transacional, o proxy do método interno
+já tinha marcado a transação como rollback-only, e o resultado era
+`UnexpectedRollbackException` → HTTP 500, no lugar do ESCLARECIMENTO que o
+código claramente pretendia devolver. Ou seja: a recusa educada virava erro de
+servidor.
+
+Corrigido com `noRollbackFor` na exceção, seguro porque nenhuma escrita
+acontece antes daquele ponto. Regra a lembrar: **exceção usada como fluxo de
+controle entre dois métodos `@Transactional` precisa de `noRollbackFor`**, ou
+o `catch` do chamador é decorativo.
 
 ### Dívida conhecida (não bloqueia)
 
@@ -458,7 +525,17 @@ quebrava exatamente no comprador recorrente. Corrigido com
 
 ## Decisões tomadas
 
-Ver `docs/decisoes/`. **0004 a 0028.**
+Ver `docs/decisoes/`. **0001 a 0034.**
+
+Da Fase 4 (14/09/2026):
+- **0029** — escopo e ordem da Fase 4; reconciliação por casamento descartada
+- **0030** — o modelo de linguagem interpreta, e nada mais. É a decisão mais
+  estruturante da fase e a única marcada `[DIFÍCIL DE REVERTER]` por motivo de
+  produto, não de código: define o que a plataforma promete
+- **0031** — pgvector continua sem uso, com gatilhos para reverter
+- **0032** — staging com Caddy, mesma origem, CORS morre em produção
+- **0033** — escopo de canal é declarado pela lojista, e a soma falha fechada
+- **0034** — a consulta de margem vira POST porque grava a trilha
 
 As mais estruturantes, em ordem de peso:
 - **0007** (propagação de tenant) + **0010** (molde de RLS por tabela). As 13
@@ -489,6 +566,8 @@ Duas decisões nasceram de eu ter errado e estão registradas assim: **0011**
 | 2026-09-14 | 27–30. Preparo de produção | Feito, **nada construído nem subido**. Dockerfile do backend (multi-stage, JRE 21 alpine, usuário sem privilégio, healthcheck), do frontend (standalone), compose de staging onde **só o Caddy publica porta** — backend, frontend e Postgres ficam na rede interna —, `Caddyfile` com `tls internal` para exercitar cookie `Secure` sem VPS nem domínio, e perfil `staging` com `Secure`/`HttpOnly`/`SameSite`. CORS virou lista por variável, **vazia por padrão**, e a aplicação recusa subir se alguém puser `*`. `ValidadorDeAmbiente` derruba o boot fora de dev quando falta variável obrigatória, dizendo qual. `make staging-conferir-cookie` lê o `Set-Cookie` no fio. |
 | 2026-09-14 | 31 e 32. Escopo de canal e soma consolidada | Feito (decisão 0033). V016 com FK composta e **índice único parcial sobre o par não ordenado**, que impede o ciclo de dois sem gatilho; o ciclo de 3+ fica na aplicação, com limite de profundidade explícito, e está dito na migration que o banco não pega. `POST /api/canais/{id}/escopo` e `POST /api/margem/periodo/consolidado`, que **recusa com 409 nomeando os dois lados do par** quando o conjunto não é provadamente disjunto. Percentuais recalculados a partir das somas, nunca média de percentuais; rótulo do conjunto é o pior dos canais; lacunas são união. |
 | 2026-09-14 | O seed passou a mentir menos | A demo dizia, em comentário, que os pedidos do Bling "são pedidos DELE, não espelho" — o que tornaria desonesto declarar o Bling como espelho. Os pedidos do Bling agora **são cópias** de 4 pedidos do ML Clássico (mesmo valor, mesma data, `id_externo` próprio). Isso torna a demo mais forte, não mais fraca: dá para mostrar que somar os três infla o faturamento, e que o valor inflado é exatamente a mesma venda contada duas vezes. Bloco de conferência dos três rótulos continua passando, agora com 54 pedidos. |
+| 2026-09-14 | 33. A IA responde sem exigir canal | Feito, e é o pagamento de toda a fase. "Quanto sobrou no mês?" agora tem resposta: sem canal nomeado, a camada de pergunta tenta o consolidado sobre os canais ativos; se forem provadamente disjuntos, responde **nomeando quais canais somou**; se não, devolve um esclarecimento que diz o motivo e as duas saídas (declarar o escopo, ou citar um canal). A decisão 0021 não foi relaxada — o endpoint por canal continua exigindo `canalId`; o que apareceu foi um segundo caminho com pré-condição verificada. A distinção é feita sobre o parâmetro **bruto** do modelo, então canal digitado errado continua indo pelo caminho de canal único, sem regressão. O bloco de margem saiu de `ServicoPergunta` para `RespostaDeMargem` — o gatilho registrado era "quando o catálogo passar de 5"; o que disparou foi a tarefa dobrar o tamanho do bloco. |
+| 2026-09-14 | 34. Tela de declaração de canal | Feita. O formulário **nunca vem pré-marcado**, nem ao corrigir uma declaração existente: valor pré-selecionado vira declaração por inércia, e a decisão 0033 é explícita em que ninguém além da lojista sabe isso. Nenhuma sugestão, nenhuma ordenação por palpite. A tela diz que o canal declarado espelho **continua ingerindo e continua consultável sozinho** — sem usar as palavras "apaga" ou "funde" nem para negá-las (há teste garantindo isso), porque um texto que sugira perda de dado faz a lojista não declarar nada. Saiu sem contagem de pedidos por canal de propósito: ajudaria a decidir, e não existe endpoint que a devolva (tarefa 35). |
 | 2026-09-14 | 24. `POST /api/pergunta` | Feito. É POST de propósito e está comentado no código: a rota grava `consulta_auditada`, ou seja, altera estado — um GET aqui quebraria a condição 1 da decisão 0025, que é o que sustenta o CSRF desligado. Nenhuma alteração em `ConfiguracaoSeguranca` foi necessária: `.anyRequest().authenticated()` já cobre rota nova. `PerguntaInvalidaException` e `MethodArgumentNotValidException` → 400 em `ErroApi`, sem ecoar o texto da pergunta. |
 | 2026-08-12 | 1. Estrutura do monorepo | Feito. `backend/`, `frontend/`, `infra/`, `docs/` + Makefile na raiz. Git inicializado (decisão 0009). `frontend/` é placeholder documentado: sem Node, o scaffold do Next.js é gerado, não escrito à mão. |
 | 2026-08-12 | 2. Docker Compose com Postgres 16 + pgvector | Feito. Imagem `pgvector/pgvector:pg16`, healthcheck, portas presas a `127.0.0.1`, segredos só via `infra/.env`. Adminer em perfil opcional. **Não executado** (sem Docker). |

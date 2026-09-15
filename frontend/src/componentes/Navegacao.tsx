@@ -10,6 +10,7 @@ const ITENS_DE_NAVEGACAO = [
   { href: "/operacao", rotulo: "Operação" },
   { href: "/pendencias", rotulo: "Pendências" },
   { href: "/perguntar", rotulo: "Perguntar" },
+  { href: "/canais", rotulo: "Canais" },
 ] as const;
 
 interface PropriedadesNavegacao {
@@ -26,6 +27,11 @@ interface PropriedadesNavegacao {
  * A mesma pessoa entra em "Pendências" de manhã, olha "Resultado" no fim
  * do mês, usa "Operação" quando algo trava, e "Perguntar" quando é mais
  * rápido escrever a pergunta do que navegar até o filtro certo.
+ *
+ * "Canais" (tarefa 34, decisão 0033) é cadastro/configuração, não uma
+ * quarta pergunta de papel — é onde a lojista declara a origem dos
+ * pedidos de cada canal, pré-requisito para "Resultado" somar mais de um
+ * canal.
  */
 export function Navegacao({ nomeUsuario, tenantNome }: PropriedadesNavegacao) {
   const caminhoAtual = usePathname();

@@ -21,6 +21,7 @@ import com.plataforma.canal.RepositorioCanal;
 import com.plataforma.canal.TipoCanal;
 import com.plataforma.comum.tenant.ContextoTenant;
 import com.plataforma.margem.ServicoMargemPeriodo;
+import com.plataforma.margem.ServicoMargemPeriodoConsolidada;
 import com.plataforma.painel.ServicoPainelAnalista;
 import com.plataforma.painel.ServicoPainelGestor;
 import com.plataforma.suporte.PostgresDeTeste;
@@ -80,6 +81,9 @@ class IsolamentoPerguntaTest {
     private ServicoMargemPeriodo servicoMargemPeriodo;
 
     @Autowired
+    private ServicoMargemPeriodoConsolidada servicoMargemPeriodoConsolidada;
+
+    @Autowired
     private ServicoPainelGestor servicoPainelGestor;
 
     @Autowired
@@ -99,8 +103,8 @@ class IsolamentoPerguntaTest {
     }
 
     private ServicoPergunta novoServico(PortaModeloLinguagem porta) {
-        return new ServicoPergunta(porta, catalogo, validador, servicoMargemPeriodo, servicoPainelGestor,
-                servicoPainelAnalista, repositorioCanal, repositorioConsultaAuditada);
+        return new ServicoPergunta(porta, catalogo, validador, servicoMargemPeriodo, servicoMargemPeriodoConsolidada,
+                servicoPainelGestor, servicoPainelAnalista, repositorioCanal, repositorioConsultaAuditada);
     }
 
     private static PortaModeloLinguagem perguntaCanaisDisponiveis() {
@@ -240,6 +244,55 @@ class IsolamentoPerguntaTest {
                 "contagem deveria ser EXATAMENTE os 2 canais de A, nunca incluir o de B");
     }
 
+    // ==================================================================
+    // 4. Tarefa 33 (decisao 0033): pergunta SEM canal nomeado consolida
+    //    "todos os canais ATIVOS do tenant" - o cenario mais importante
+    //    deste caminho novo e que "todos os canais do tenant" nunca inclui
+    //    um canal de OUTRO tenant, mesmo que ele seja FONTE_PRIMARIA de
+    //    verdade la (mesmo racional de IsolamentoMargemConsolidadaTest,
+    //    agora pela camada de pergunta).
+    // ==================================================================
+
+    @Test
+    void perguntaSemCanalNomeadoConsolidaSoOsCanaisAtivosDoTenantDoContextoNuncaAlcancaCanalDeOutroTenant()
+            throws SQLException {
+        UUID tenantA = criarTenant("pergunta-consolidado-isolamento-a");
+        UUID tenantB = criarTenant("pergunta-consolidado-isolamento-b");
+        UUID canalAId = criarCanalFontePrimariaComoTenant(tenantA, "Canal Isolamento Consolidado A");
+        UUID canalBId = criarCanalFontePrimariaComoTenant(tenantB, "Canal Secreto Isolamento Consolidado B");
+
+        assertEquals(1, contarComoPrivilegiado("canal", tenantB, canalBId),
+                "setup falhou: canal de B nao foi gravado de verdade");
+
+        // O dublê simula o modelo devolvendo a intencao SEM parametro
+        // "canal" nenhum - exatamente "quanto sobrou no periodo", a
+        // pergunta que a tarefa 33 passou a responder.
+        PortaModeloLinguagem porta = (pergunta, cat) -> new IntencaoDetectada(
+                CodigoIntencao.MARGEM_DO_PERIODO.name(), Map.of("periodoRelativo", "ULTIMOS_30_DIAS"),
+                new BigDecimal("0.90"));
+
+        ContextoTenant.definir(tenantA);
+        RespostaPergunta resposta;
+        try {
+            ServicoPergunta servico = novoServico(porta);
+            resposta = servico.responder("Quanto sobrou nos ultimos 30 dias, considerando tudo?");
+        } finally {
+            ContextoTenant.limpar();
+        }
+
+        assertEquals(TipoResposta.RESPOSTA, resposta.tipo(),
+                "conjunto com UM canal FONTE_PRIMARIA e trivialmente disjunto - deveria responder, nao pedir esclarecimento");
+        assertTrue(resposta.texto().contains("Canal Isolamento Consolidado A"),
+                "texto deveria nomear o canal do PROPRIO tenant que entrou na soma");
+        assertFalse(resposta.texto().contains("Canal Secreto Isolamento Consolidado B"),
+                "VAZAMENTO: canal de outro tenant apareceu no texto da soma consolidada");
+        assertFalse(resposta.texto().contains(canalBId.toString()),
+                "VAZAMENTO: id do canal de outro tenant apareceu no texto da resposta");
+        assertFalse(resposta.parametrosUsados().getOrDefault("canais", "").contains(canalBId.toString()),
+                "VAZAMENTO: id do canal de outro tenant apareceu em parametrosUsados");
+        assertEquals("CONSOLIDADO", resposta.parametrosUsados().get("escopo"));
+    }
+
     // ------------------------------------------------------------------
     // Auxiliares - criacao de tenant (identico a IsolamentoMargemTest).
     // ------------------------------------------------------------------
@@ -271,6 +324,25 @@ class IsolamentoPerguntaTest {
                     "canal-" + UUID.randomUUID().toString().substring(0, 8),
                     nome, TipoCanal.MERCADO_LIVRE, CategoriaCanal.MARKETPLACE, null, null, null));
             return canal.getId();
+        } finally {
+            ContextoTenant.limpar();
+        }
+    }
+
+    /**
+     * Mesmo que {@link #criarCanalComoTenant}, mas já declarado
+     * {@code FONTE_PRIMARIA} (decisão 0033) - o consolidado da tarefa 33
+     * só soma canal com escopo declarado, então o teste de isolamento do
+     * caminho novo precisa de um canal que passaria na checagem de
+     * disjunção, não só existir.
+     */
+    private UUID criarCanalFontePrimariaComoTenant(UUID tenantId, String nome) {
+        ContextoTenant.definir(tenantId);
+        try {
+            Canal canal = new Canal("canal-" + UUID.randomUUID().toString().substring(0, 8),
+                    nome, TipoCanal.MERCADO_LIVRE, CategoriaCanal.MARKETPLACE, null, null, null);
+            canal.declararFontePrimaria(null);
+            return repositorioCanal.save(canal).getId();
         } finally {
             ContextoTenant.limpar();
         }

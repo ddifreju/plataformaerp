@@ -98,7 +98,28 @@ public class ServicoMargemPeriodoConsolidada {
         this.repositorioConsultaAuditada = repositorioConsultaAuditada;
     }
 
-    @Transactional
+    /**
+     * {@code noRollbackFor} - achado da tarefa 33: {@code ServicoPergunta}
+     * chama este método de DENTRO da sua própria transação (ele também é
+     * {@code @Transactional}, propagação REQUIRED, então as duas
+     * participam da MESMA transação física) e PEGA
+     * {@link ConjuntoDeCanaisNaoDisjuntoException} para virar
+     * ESCLARECIMENTO, continuando a escrever a própria auditoria na
+     * sequência. Sem {@code noRollbackFor}, o proxy transacional deste
+     * método já marca a transação como rollback-only no INSTANTE em que a
+     * exceção cruza esta borda - antes mesmo de {@code ServicoPergunta}
+     * conseguir capturá-la - e o commit no fim de
+     * {@code ServicoPergunta.responder} falha com
+     * {@code UnexpectedRollbackException} (500), mesmo a exceção tendo
+     * sido tratada. É seguro não forçar rollback aqui porque, no ponto em
+     * que esta exceção é lançada, NENHUMA escrita aconteceu ainda nesta
+     * chamada (a verificação de disjunção é toda leitura; a soma e o
+     * registro de auditoria só rodam depois dela) - não há o que desfazer.
+     * {@code POST /api/margem/periodo/consolidado} (chamado direto pelo
+     * controller, sem transação por fora) continua se comportando
+     * exatamente igual: a exceção ainda propaga e ainda vira 409.
+     */
+    @Transactional(noRollbackFor = ConjuntoDeCanaisNaoDisjuntoException.class)
     public ResultadoMargemConsolidada calcular(OffsetDateTime inicio, OffsetDateTime fim, List<UUID> canaisPedidos) {
         if (inicio == null || fim == null || !inicio.isBefore(fim)) {
             throw new PeriodoInvalidoException(inicio, fim);

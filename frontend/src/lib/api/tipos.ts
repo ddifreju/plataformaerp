@@ -195,15 +195,64 @@ export interface ErroApi {
   mensagem: string;
 }
 
-// ---- canal/RespostaCanal.java -----------------------------------------
+// ---- canal: enums e DTOs (tarefa 34, decisão 0033) ---------------------
 
+/** TipoCanal.java — QUE SISTEMA de origem o canal é. */
+export type TipoCanal =
+  | "MERCADO_LIVRE"
+  | "SHOPEE"
+  | "AMAZON"
+  | "MAGALU"
+  | "AMERICANAS"
+  | "SHOPIFY"
+  | "NUVEMSHOP"
+  | "WOOCOMMERCE"
+  | "LOJA_PROPRIA"
+  | "ERP_BLING"
+  | "ERP_TINY"
+  | "WHATSAPP"
+  | "EMAIL"
+  | "INSTAGRAM"
+  | "OUTRO";
+
+/** CategoriaCanal.java — QUE PAPEL o canal cumpre. */
+export type CategoriaCanal = "MARKETPLACE" | "LOJA_PROPRIA" | "ERP" | "COMUNICACAO";
+
+/**
+ * EscopoCanal.java — declaração da LOJISTA sobre a origem dos pedidos de
+ * um canal (decisão 0033). `NAO_DECLARADO` é o padrão e BLOQUEIA a soma
+ * entre canais (fail-closed); nunca inferido por heurística.
+ */
+export type EscopoCanal = "NAO_DECLARADO" | "FONTE_PRIMARIA" | "ESPELHO";
+
+/**
+ * RespostaCanal.java — o mínimo para montar um seletor e mostrar/editar o
+ * escopo declarado. DE PROPÓSITO não expõe `chaveCredencial`, `idExterno`,
+ * `dadosOrigem` nem `escopoDeclaradoPor` (ver o Javadoc do record no
+ * backend).
+ */
 export interface RespostaCanal {
   id: string;
   codigo: string;
   nome: string;
-  tipo: string;
-  categoria: string;
+  tipo: TipoCanal;
+  categoria: CategoriaCanal;
   ativo: boolean;
+  escopoDeclarado: EscopoCanal;
+  /** Só não-nulo quando `escopoDeclarado === "ESPELHO"`. */
+  espelhaCanalId: string | null;
+  /** Só não-nulo quando `escopoDeclarado !== "NAO_DECLARADO"`. */
+  escopoDeclaradoEm: string | null;
+}
+
+/**
+ * RequisicaoEscopoCanal.java — corpo de `POST /api/canais/{id}/escopo`.
+ * `espelhaCanalId` só é obrigatório quando `escopo` é `"ESPELHO"`
+ * (validação cruzada feita no backend, `ServicoEscopoDeCanal`).
+ */
+export interface RequisicaoEscopoCanal {
+  escopo: EscopoCanal;
+  espelhaCanalId?: string;
 }
 
 // ---- pergunta: camada de IA (decisão 0030) -----------------------------

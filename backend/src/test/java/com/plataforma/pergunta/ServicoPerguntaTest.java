@@ -15,11 +15,14 @@ import com.plataforma.auditoria.ConsultaAuditada;
 import com.plataforma.auditoria.RepositorioConsultaAuditada;
 import com.plataforma.canal.Canal;
 import com.plataforma.canal.RepositorioCanal;
+import com.plataforma.margem.ConjuntoDeCanaisNaoDisjuntoException;
 import com.plataforma.margem.DirecaoViesLacuna;
 import com.plataforma.margem.Lacuna;
+import com.plataforma.margem.ResultadoMargemConsolidada;
 import com.plataforma.margem.ResultadoMargemPeriodo;
 import com.plataforma.margem.RotuloTeto;
 import com.plataforma.margem.ServicoMargemPeriodo;
+import com.plataforma.margem.ServicoMargemPeriodoConsolidada;
 import com.plataforma.painel.RespostaFilaPendencias;
 import com.plataforma.painel.ItemDevolucaoAberta;
 import com.plataforma.painel.ItemEventoComErro;
@@ -55,6 +58,8 @@ class ServicoPerguntaTest {
     private final CatalogoDePerguntas catalogo = new CatalogoDePerguntas();
     private final ValidadorDeParametros validador = mock(ValidadorDeParametros.class);
     private final ServicoMargemPeriodo servicoMargemPeriodo = mock(ServicoMargemPeriodo.class);
+    private final ServicoMargemPeriodoConsolidada servicoMargemPeriodoConsolidada =
+            mock(ServicoMargemPeriodoConsolidada.class);
     private final ServicoPainelGestor servicoPainelGestor = mock(ServicoPainelGestor.class);
     private final ServicoPainelAnalista servicoPainelAnalista = mock(ServicoPainelAnalista.class);
     private final RepositorioCanal repositorioCanal = mock(RepositorioCanal.class);
@@ -63,8 +68,8 @@ class ServicoPerguntaTest {
     private ServicoPergunta novoServico(PortaModeloLinguagem porta) {
         when(repositorioConsultaAuditada.save(any(ConsultaAuditada.class)))
                 .thenAnswer(invocacao -> invocacao.getArgument(0));
-        return new ServicoPergunta(porta, catalogo, validador, servicoMargemPeriodo, servicoPainelGestor,
-                servicoPainelAnalista, repositorioCanal, repositorioConsultaAuditada);
+        return new ServicoPergunta(porta, catalogo, validador, servicoMargemPeriodo, servicoMargemPeriodoConsolidada,
+                servicoPainelGestor, servicoPainelAnalista, repositorioCanal, repositorioConsultaAuditada);
     }
 
     // ------------------------------------------------------------------
@@ -116,29 +121,37 @@ class ServicoPerguntaTest {
     }
 
     // ------------------------------------------------------------------
-    // (c) parametro faltando -> ESCLARECIMENTO, com auditoria gravada
+    // (c) canal NOMEADO mas nao encontrado -> ESCLARECIMENTO, com auditoria
+    //     gravada - caminho de canal unico, prova de nao-regressao da
+    //     tarefa 33 (canal nomeado nao muda de comportamento).
     // ------------------------------------------------------------------
 
     @Test
-    void parametroFaltandoViraEsclarecimentoEGravaAuditoria() {
+    void canalNomeadoMasNaoEncontradoViraEsclarecimentoEGravaAuditoria() {
         PortaModeloLinguagem porta = (pergunta, cat) -> new IntencaoDetectada(
-                CodigoIntencao.MARGEM_DO_PERIODO.name(), Map.of(), new BigDecimal("0.90"));
+                CodigoIntencao.MARGEM_DO_PERIODO.name(), Map.of("canal", "Canal Que Nao Existe"),
+                new BigDecimal("0.90"));
         when(validador.validarCanal(any())).thenReturn(
-                ResultadoParametro.esclarecimento("Para qual canal? Canais existentes: Mercado Livre, Shopee."));
+                ResultadoParametro.esclarecimento("Não encontrei o canal \"Canal Que Nao Existe\"."));
         when(validador.validarPeriodo(any())).thenReturn(ResultadoParametro.valido(new Periodo(INICIO, FIM)));
         ServicoPergunta servico = novoServico(porta);
 
-        RespostaPergunta resposta = servico.responder("quanto sobrou no mes passado?");
+        RespostaPergunta resposta = servico.responder("quanto sobrou no Canal Que Nao Existe mes passado?");
 
         assertEquals(TipoResposta.ESCLARECIMENTO, resposta.tipo());
-        assertTrue(resposta.texto().contains("Para qual canal?"));
+        assertTrue(resposta.texto().contains("Não encontrei o canal"));
         assertNotNull(resposta.consultaAuditadaId());
         assertFalse(resposta.perguntasQueSeiResponder().isEmpty());
         verify(repositorioConsultaAuditada, times(1)).save(any(ConsultaAuditada.class));
+        // Canal NOMEADO (mesmo que invalido) nunca aciona o caminho
+        // consolidado - so a AUSENCIA do parametro faz isso (tarefa 33).
+        verify(servicoMargemPeriodoConsolidada, org.mockito.Mockito.never()).calcular(any(), any(), any());
     }
 
     // ------------------------------------------------------------------
-    // (d) caminho feliz de margem -> RESPOSTA
+    // (d) caminho feliz de margem, COM canal nomeado -> RESPOSTA. Prova de
+    //     nao-regressao da tarefa 33: canal nomeado nunca aciona o
+    //     caminho consolidado, so o de canal unico de sempre.
     // ------------------------------------------------------------------
 
     @Test
@@ -186,6 +199,136 @@ class ServicoPerguntaTest {
         assertEquals(idsEsperados.size(), auditoria.getLinhasRetornadas());
         assertEquals(textoDaPergunta, auditoria.getPergunta());
         assertEquals("ServicoPergunta", auditoria.getExecutadoPor());
+        verify(servicoMargemPeriodoConsolidada, org.mockito.Mockito.never()).calcular(any(), any(), any());
+    }
+
+    // ------------------------------------------------------------------
+    // (d2) pergunta SEM canal nomeado (tarefa 33, decisao 0033) - tres
+    //      desfechos: RESPOSTA consolidada quando disjunto, ESCLARECIMENTO
+    //      nomeando o problema quando nao.
+    // ------------------------------------------------------------------
+
+    @Test
+    void perguntaSemCanalNomeadoComConjuntoDisjuntoDevolveRespostaConsolidadaNomeandoOsCanais() {
+        PortaModeloLinguagem porta = (pergunta, cat) -> new IntencaoDetectada(
+                CodigoIntencao.MARGEM_DO_PERIODO.name(), Map.of("periodoRelativo", "MES_PASSADO"),
+                new BigDecimal("0.90"));
+        when(validador.validarPeriodo(any())).thenReturn(ResultadoParametro.valido(new Periodo(INICIO, FIM)));
+
+        // Canal.getId() e gerado no construtor (sem setter) - usa-se o id
+        // REAL de cada fixture, nunca um UUID independente, senao
+        // ServicoPergunta.nomesDosCanais nao acharia correspondencia.
+        Canal canalUm = DublesDeTeste.canal("ml-classico", "Mercado Livre");
+        Canal canalDois = DublesDeTeste.canal("loja-propria", "Loja Propria");
+        UUID canalUmId = canalUm.getId();
+        UUID canalDoisId = canalDois.getId();
+        when(repositorioCanal.findAllById(List.of(canalUmId, canalDoisId))).thenReturn(List.of(canalUm, canalDois));
+
+        ResultadoMargemConsolidada resultado = DublesDeTeste.margemConsolidada(List.of(canalUmId, canalDoisId),
+                INICIO, FIM, new BigDecimal("1000.0000"), new BigDecimal("900.0000"), new BigDecimal("500.0000"),
+                new BigDecimal("400.0000"), new BigDecimal("350.0000"), List.of(), RotuloTeto.CALCULADA, 5);
+        when(servicoMargemPeriodoConsolidada.calcular(INICIO, FIM, List.of())).thenReturn(resultado);
+
+        ServicoPergunta servico = novoServico(porta);
+        String textoDaPergunta = "quanto sobrou no mes passado?";
+        RespostaPergunta resposta = servico.responder(textoDaPergunta);
+
+        assertEquals(TipoResposta.RESPOSTA, resposta.tipo());
+        assertEquals("MARGEM_DO_PERIODO", resposta.intencao());
+        // Decisao 0017: somar sem dizer o que somou e proibido - o texto
+        // PRECISA nomear os dois canais que entraram na soma.
+        assertTrue(resposta.texto().contains("Mercado Livre"), "texto deveria nomear o primeiro canal somado");
+        assertTrue(resposta.texto().contains("Loja Propria"), "texto deveria nomear o segundo canal somado");
+        assertTrue(resposta.parametrosUsados().get("canais").contains("Mercado Livre"));
+        assertTrue(resposta.parametrosUsados().get("canais").contains("Loja Propria"));
+        assertEquals("CONSOLIDADO", resposta.parametrosUsados().get("escopo"));
+
+        // Auditoria com os ids REAIS do resultado (regra 3 do CLAUDE.md).
+        ArgumentCaptor<ConsultaAuditada> captor = ArgumentCaptor.forClass(ConsultaAuditada.class);
+        verify(repositorioConsultaAuditada, times(1)).save(captor.capture());
+        ConsultaAuditada auditoria = captor.getValue();
+        Set<UUID> idsEsperados = new HashSet<>(resultado.idsPedidoUsados());
+        idsEsperados.addAll(resultado.idsCustoUsados());
+        assertEquals(idsEsperados, Set.of(auditoria.getIdsRetornados()));
+        assertEquals("ServicoPergunta", auditoria.getExecutadoPor());
+    }
+
+    @Test
+    void perguntaSemCanalComUmCanalNaoDeclaradoViraEsclarecimentoNomeandoOCanalEAsDuasSaidas() {
+        PortaModeloLinguagem porta = (pergunta, cat) -> new IntencaoDetectada(
+                CodigoIntencao.MARGEM_DO_PERIODO.name(), Map.of("periodoRelativo", "MES_PASSADO"),
+                new BigDecimal("0.90"));
+        when(validador.validarPeriodo(any())).thenReturn(ResultadoParametro.valido(new Periodo(INICIO, FIM)));
+
+        UUID canalNaoDeclaradoId = UUID.randomUUID();
+        String mensagemDoServico = "O conjunto de canais pedido nao e comprovadamente disjunto - nao e seguro "
+                + "somar (decisao 0033). Canal ml-nao-declarado (" + canalNaoDeclaradoId + ") ainda nao tem escopo "
+                + "declarado - declare FONTE_PRIMARIA ou ESPELHO (POST /api/canais/" + canalNaoDeclaradoId
+                + "/escopo) antes de somar.";
+        when(servicoMargemPeriodoConsolidada.calcular(INICIO, FIM, List.of()))
+                .thenThrow(new ConjuntoDeCanaisNaoDisjuntoException(mensagemDoServico));
+
+        ServicoPergunta servico = novoServico(porta);
+        RespostaPergunta resposta = servico.responder("quanto sobrou no mes passado?");
+
+        assertEquals(TipoResposta.ESCLARECIMENTO, resposta.tipo());
+        // A mensagem e REAPROVEITADA de ServicoMargemPeriodoConsolidada, no
+        // caractere - nunca reescrita: nomeia o canal sem escopo E ja
+        // sugere "declare o escopo".
+        assertTrue(resposta.texto().contains(mensagemDoServico), "deveria reaproveitar a mensagem do servico, "
+                + "nao escrever uma segunda versao dela");
+        assertTrue(resposta.texto().contains(canalNaoDeclaradoId.toString()));
+        // A segunda saida (perguntar citando um canal) e acrescentada pela
+        // camada de pergunta.
+        assertTrue(resposta.texto().contains("pergunte de novo citando"),
+                "esclarecimento precisa oferecer a segunda saida: perguntar citando um canal");
+        assertNotNull(resposta.consultaAuditadaId());
+    }
+
+    @Test
+    void perguntaSemCanalComParEspelhoEPrimariaViraEsclarecimentoNomeandoOsDoisLados() {
+        PortaModeloLinguagem porta = (pergunta, cat) -> new IntencaoDetectada(
+                CodigoIntencao.MARGEM_DO_PERIODO.name(), Map.of("periodoRelativo", "MES_PASSADO"),
+                new BigDecimal("0.90"));
+        when(validador.validarPeriodo(any())).thenReturn(ResultadoParametro.valido(new Periodo(INICIO, FIM)));
+
+        UUID primariaId = UUID.randomUUID();
+        UUID espelhoId = UUID.randomUUID();
+        String mensagemDoServico = "O conjunto de canais pedido nao e comprovadamente disjunto - nao e seguro "
+                + "somar (decisao 0033). Canal ml-primaria (" + primariaId + ") e FONTE_PRIMARIA, mas o canal "
+                + "ml-espelho (" + espelhoId + ") - presente no MESMO conjunto pedido - e declarado ESPELHO dele. "
+                + "Somar os dois contaria a mesma venda duas vezes: remova um dos dois do conjunto.";
+        when(servicoMargemPeriodoConsolidada.calcular(INICIO, FIM, List.of()))
+                .thenThrow(new ConjuntoDeCanaisNaoDisjuntoException(mensagemDoServico));
+
+        ServicoPergunta servico = novoServico(porta);
+        RespostaPergunta resposta = servico.responder("quanto sobrou no mes passado?");
+
+        assertEquals(TipoResposta.ESCLARECIMENTO, resposta.tipo());
+        assertTrue(resposta.texto().contains(primariaId.toString()), "deveria nomear o lado FONTE_PRIMARIA do par");
+        assertTrue(resposta.texto().contains(espelhoId.toString()), "deveria nomear o lado ESPELHO do par");
+        assertTrue(resposta.texto().contains("pergunte de novo citando"));
+        assertNotNull(resposta.consultaAuditadaId());
+    }
+
+    @Test
+    void perguntaSemCanalSemNenhumCanalAtivoViraEsclarecimentoPedindoParaCadastrar() {
+        PortaModeloLinguagem porta = (pergunta, cat) -> new IntencaoDetectada(
+                CodigoIntencao.MARGEM_DO_PERIODO.name(), Map.of("periodoRelativo", "MES_PASSADO"),
+                new BigDecimal("0.90"));
+        when(validador.validarPeriodo(any())).thenReturn(ResultadoParametro.valido(new Periodo(INICIO, FIM)));
+
+        ResultadoMargemConsolidada resultadoVazio = DublesDeTeste.margemConsolidada(List.of(), INICIO, FIM,
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, List.of(),
+                RotuloTeto.CALCULADA, 0);
+        when(servicoMargemPeriodoConsolidada.calcular(INICIO, FIM, List.of())).thenReturn(resultadoVazio);
+
+        ServicoPergunta servico = novoServico(porta);
+        RespostaPergunta resposta = servico.responder("quanto sobrou no mes passado?");
+
+        assertEquals(TipoResposta.ESCLARECIMENTO, resposta.tipo());
+        assertTrue(resposta.texto().toLowerCase(java.util.Locale.ROOT).contains("nenhum canal ativo"));
+        assertNotNull(resposta.consultaAuditadaId());
     }
 
     // ------------------------------------------------------------------

@@ -909,6 +909,44 @@ class ContratoApiTest {
                 "o id do tenant jamais pode aparecer na resposta de /api/pergunta");
     }
 
+    /**
+     * (e) Pergunta de margem SEM nomear canal (tarefa 33, decisão 0033): o
+     * dublê não recebe {@code __CANAL[...]__} nenhum, então
+     * {@code parametros} chega em {@link ServicoPergunta} sem a chave
+     * "canal" - o mesmo que aconteceria com o {@code ModeloHeuristico} real
+     * diante de "quanto sobrou no total?". O cenário compartilhado desta
+     * classe (ver o comentário dos campos {@code canalSecundarioId}&amp;cia)
+     * tem, entre os canais ATIVOS de A, um {@code NAO_DECLARADO}
+     * ({@code canalNaoDeclaradoId}) e um par ESPELHO/FONTE_PRIMARIA
+     * ({@code canalEspelhoId}/{@code canalAId}) - "todos os canais ativos"
+     * NUNCA é disjunto aqui, então o desfecho é sempre ESCLARECIMENTO,
+     * nunca RESPOSTA nem 409: a camada de pergunta reaproveita a MESMA
+     * mensagem de {@code ServicoMargemPeriodoConsolidada} (nomeia o canal
+     * sem escopo) e acrescenta a segunda saída ("pergunte citando um
+     * canal"). O caminho RESPOSTA (conjunto disjunto) já está coberto a
+     * nível de unidade em {@code ServicoPerguntaTest} - reproduzi-lo aqui
+     * exigiria um tenant próprio, sem os canais problemáticos da fixture
+     * compartilhada (ver o relato final da tarefa).
+     */
+    @Test
+    void perguntaSemCanalNomeadoTentaConsolidadoEViraEsclarecimentoQuandoNaoDisjunto() throws Exception {
+        MockHttpSession sessao = sessaoDoDonoA();
+        String pergunta = "__INTENCAO[MARGEM_DO_PERIODO]__ __PERIODO_RELATIVO[ULTIMOS_30_DIAS]__ "
+                + "quanto sobrou no total?";
+
+        mockMvc.perform(post("/api/pergunta")
+                        .session(sessao)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(corpoPergunta(pergunta)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipo").value("ESCLARECIMENTO"))
+                .andExpect(jsonPath("$.consultaAuditadaId").isString())
+                .andExpect(jsonPath("$.texto",
+                        org.hamcrest.Matchers.containsString(canalNaoDeclaradoId.toString())))
+                .andExpect(jsonPath("$.texto",
+                        org.hamcrest.Matchers.containsString("Ou pergunte de novo citando")));
+    }
+
     // ==================================================================
     // 9. POST /api/canais/{id}/escopo (tarefa 31, decisao 0033)
     // ==================================================================

@@ -1,5 +1,6 @@
 import type {
   ErroApi,
+  RequisicaoEscopoCanal,
   RequisicaoMargemPeriodo,
   RequisicaoPergunta,
   RespostaCanal,
@@ -152,6 +153,24 @@ export function buscarPainelAnalista(): Promise<RespostaFilaPendencias> {
  */
 export function listarCanais(): Promise<RespostaCanal[]> {
   return requisitar<RespostaCanal[]>("/api/canais");
+}
+
+/**
+ * POST /api/canais/{id}/escopo — a lojista declara (ou corrige) o escopo
+ * de um canal (tela "Canais", tarefa 34, decisão 0033). Idempotente do
+ * lado do servidor: declarar de novo, mesmo repetindo o valor anterior, é
+ * uma correção válida — "errar aqui é barato e reversível" (0033).
+ *
+ * Pode devolver 404 (`canal_desconhecido`, canal inexistente ou de outro
+ * tenant) ou 409 (`cadeia_de_espelho_invalida`, espelho de espelho ou
+ * ciclo) — os dois com `ErroApi.mensagem` já em português e nomeando a
+ * cadeia; a tela mostra essa mensagem tal como veio, nunca uma genérica.
+ */
+export function declararEscopoCanal(canalId: string, requisicao: RequisicaoEscopoCanal): Promise<RespostaCanal> {
+  return requisitar<RespostaCanal>(`/api/canais/${canalId}/escopo`, {
+    method: "POST",
+    body: JSON.stringify(requisicao),
+  });
 }
 
 /**

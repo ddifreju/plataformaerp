@@ -11,6 +11,7 @@ import com.plataforma.canal.Canal;
 import com.plataforma.canal.CategoriaCanal;
 import com.plataforma.canal.TipoCanal;
 import com.plataforma.margem.Lacuna;
+import com.plataforma.margem.ResultadoMargemConsolidada;
 import com.plataforma.margem.ResultadoMargemPeriodo;
 import com.plataforma.margem.RotuloTeto;
 import com.plataforma.painel.ItemDevolucaoAberta;
@@ -43,6 +44,25 @@ final class DublesDeTeste {
         return new ResultadoMargemPeriodo(canalId, inicio, fim, "escopo de teste", n0, n1, n2, n3, n4,
                 percentualContribuicao, percentualLiquida, List.of(), lacunas, rotulo, quantidadePedidos,
                 idsPedido, idsCusto);
+    }
+
+    /**
+     * Mesmo racional de {@link #margem}, agora para
+     * {@link ResultadoMargemConsolidada} (tarefa 33) - usada por
+     * {@link ServicoPerguntaTest} para o caminho "pergunta sem canal
+     * nomeado". Percentuais e lacunas ficam vazios por padrão porque os
+     * testes que usam este dublê focam no caminho de RESPOSTA/texto, não
+     * na agregação em si (já coberta por
+     * {@code ServicoMargemPeriodoConsolidadaTest}).
+     */
+    static ResultadoMargemConsolidada margemConsolidada(List<UUID> canaisIncluidos, OffsetDateTime inicio,
+            OffsetDateTime fim, BigDecimal n0, BigDecimal n1, BigDecimal n2, BigDecimal n3, BigDecimal n4,
+            List<Lacuna> lacunas, RotuloTeto rotulo, int quantidadePedidos) {
+        Set<UUID> idsPedido = quantidadePedidos == 0 ? Set.of() : Set.of(UUID.randomUUID());
+        Set<UUID> idsCusto = quantidadePedidos == 0 ? Set.of() : Set.of(UUID.randomUUID());
+        return new ResultadoMargemConsolidada(canaisIncluidos, inicio, fim, "escopo consolidado de teste",
+                n0, n1, n2, n3, n4, Optional.empty(), Optional.empty(), List.of(), lacunas, rotulo,
+                quantidadePedidos, idsPedido, idsCusto);
     }
 
     static ItemEventoComErro itemEventoComErro() {
