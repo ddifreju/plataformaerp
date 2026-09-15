@@ -47,11 +47,12 @@ real.** Lint e build limpos.
 
 ### A próxima sessão começa por aqui
 
-1. **Validação por execução do que foi escrito hoje e nunca rodou**: `docker
-   build` dos dois Dockerfiles, `make staging-subir`, e
-   `make staging-conferir-cookie` para ver `Secure`/`HttpOnly`/`SameSite` no
-   fio. É a parte da Fase 4 com maior distância entre "escrito" e "provado", e
-   a história deste projeto diz que é aí que os bugs sérios aparecem.
+1. **Subir o staging.** As imagens já foram construídas e o `Caddyfile` já foi
+   validado nesta sessão; o que falta é `cp infra/.env.staging.exemplo
+   infra/.env.staging`, revisar as senhas locais, `make staging-subir` e
+   `make staging-conferir-cookie`. É a parte da Fase 4 com maior distância
+   entre "escrito" e "provado", e a história deste projeto diz que é aí que os
+   bugs sérios aparecem.
 2. **Ver no navegador** as duas telas novas (`/perguntar` e `/canais`) com
    `make dados-demo`. Vale perguntar de verdade e ver o que a heurística erra.
 3. **Tarefa 35** (contagem de pedidos por canal) — pequena, destrava a decisão
@@ -194,13 +195,29 @@ no backend e 24 no frontend**.
    handoff serve para **subir o backend** (o pipe AF_UNIX do Tomcat), não para
    rodar a suíte. Rodar `./mvnw` sem tocar em `TMP` funciona.
 
+### O que foi provado por execução no fim da sessão
+
+- **As duas imagens constroem.** `docker build` do backend e do frontend:
+  sucesso nos dois. O multi-stage, o `mvnw` dentro do build, o standalone do
+  Next e o usuário sem privilégio não são mais hipótese.
+- **O `Caddyfile` é válido.** `caddy validate` respondeu
+  `Valid configuration`, e confirmou de quebra que o redirecionamento
+  automático HTTP→HTTPS está ligado.
+
 ### O que continua sem prova de execução
 
-- **Nenhuma imagem Docker foi construída** e o staging nunca subiu: os dois
-  `Dockerfile`, o `Caddyfile` e o `Set-Cookie` no fio estão escritos e
-  revisados, não exercitados. `docs/checklist-deploy.md` lista isso.
-- A tela `/perguntar` **não foi vista no navegador** — build e lint passam, a
-  validação visual é da fundadora.
+- **O staging nunca subiu.** Falta `make staging-subir` e
+  `make staging-conferir-cookie` para ver `Secure`/`HttpOnly`/`SameSite` no
+  fio, que é o objetivo declarado da decisão 0032. Não foi feito por um motivo
+  específico e que vale registrar: subir exige criar `infra/.env.staging` com
+  senhas locais, e **a criação de arquivo de segredo em `infra/` é bloqueada
+  pelas permissões desta sessão** — corretamente. É um passo de um minuto para
+  a fundadora: copiar `infra/.env.staging.exemplo`, revisar os valores, rodar
+  `make staging-subir`. As portas 80 e 443 estavam livres nesta máquina.
+- **As duas telas novas não foram vistas no navegador.** `/perguntar` e
+  `/canais` passam em build, lint e teste; validação visual é da fundadora.
+- **O healthcheck do container** do backend nunca respondeu de verdade — a
+  imagem constrói, mas ninguém a executou.
 
 ---
 
