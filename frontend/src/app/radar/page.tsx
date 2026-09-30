@@ -1,2 +1,4 @@
 import Radar from "./radar";
-export default function Page(){return <Radar/>;}
+export default function Page() {
+  return <Radar />;
+}
