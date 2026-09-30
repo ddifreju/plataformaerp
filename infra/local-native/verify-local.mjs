@@ -1,30 +1,226 @@
-import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-const base='http://127.0.0.1:3000';let checks=[];
-async function login(email){const r=await fetch(base+'/api/login',{method:'POST',headers:{'Content-Type':'application/json',Origin:base},body:JSON.stringify({email,senha:'demo1234'})});assert.equal(r.status,204,await r.text());return r.headers.getSetCookie().map(x=>x.split(';')[0]).join(';');}
-async function req(cookie,path,body,key=crypto.randomUUID(),header=true){let r=await fetch(base+path,{method:body?'POST':'GET',headers:{Cookie:cookie,Origin:base,...(body?{'Content-Type':'application/json','Idempotency-Key':key,...(header?{'X-Radar-Request':'1'}:{})}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:await r.json().catch(()=>null)};}
-const a=await login('qa-a-dono@radar.test'),b=await login('qa-b-dono@radar.test'),support=await login('qa-a-atendimento@radar.test');
-const command=(body,key,session=a)=>req(session,'/api/radar/comandos',body,key);
-const data=async(session=a)=>{let r=await req(session,'/api/radar');assert.equal(r.status,200,JSON.stringify(r.data));return r.data;};
-const check=(name,fn)=>{fn();checks.push(name);};
-const stamp=Date.now().toString();const product={op:'produto',sku:'QA-'+stamp,nome:'Produto de teste',custo:'20.00',preco:'50.00',saldo:10};const key=crypto.randomUUID();let r=await command(product,key);assert.equal(r.status,200,JSON.stringify(r.data));const pid=r.data.id;
-check('Idempotência devolve mesmo produto',()=>assert.ok(pid));let retry=await command(product,key);assert.equal(retry.data.id,pid);assert.equal((await data()).produtos.filter(p=>p.id===pid).length,1);
-check('Chave reutilizada com conteúdo diferente é bloqueada',()=>{});assert.equal((await command({...product,nome:'Outro'},key)).status,409);
-check('Importação com linha duplicada reverte o lote inteiro',()=>{});assert.equal((await command({op:'importar',itens:[{...product,sku:'ROLL-'+stamp},product]})).status,400);assert.ok(!(await data()).produtos.some(p=>p.sku==='ROLL-'+stamp));
-check('Outra empresa não lê nem altera o produto',()=>{});assert.ok(!(await data(b)).produtos.some(p=>p.id===pid));assert.equal((await command({op:'estoque',produto_id:pid,quantidade:2,motivo:'Teste'},undefined,b)).status,404);
-check('Atendimento não recebe custo, ledger ou audit log',()=>{});let d=await data(support);assert.equal(d.financeiroPermitido,false);assert.equal(d.produtos.find(p=>p.id===pid).custo,undefined);assert.equal(d.lancamentos.length,0);assert.equal(d.auditoria.length,0);assert.equal((await command(product,undefined,support)).status,403);assert.equal((await req(support,'/api/radar/perguntar',{texto:'lucro'})).status,403);
-check('Comando sem cabeçalho de proteção é bloqueado',()=>{});assert.equal((await req(a,'/api/radar/comandos',product,crypto.randomUUID(),false)).status,403);
-let order={op:'pedido',produto_id:pid,canal:'Shopee',cliente:'Cliente fictício QA',quantidade:2,preco:'50.00',comissao:'10.00',frete:'5.00',imposto:'3.00',ads:'4.00',embalagem:'2.00',desconto:'1.00'};r=await command(order);assert.equal(r.status,200,JSON.stringify(r.data));const oid=r.data.id;
-check('Pedido reserva estoque e calcula R$35 de resultado',()=>{});d=await data();assert.equal(d.produtos.find(p=>p.id===pid).reservado,2);assert.equal(d.lancamentos.filter(l=>l.pedido_id===oid).reduce((n,l)=>n+Math.round(Number(l.valor)*100),0),3500);
-check('Não permite consumir estoque reservado ou vender além do saldo',()=>{});assert.equal((await command({op:'estoque',produto_id:pid,quantidade:-9,motivo:'Teste'})).status,400);assert.equal((await command({...order,quantidade:9})).status,400);
-check('Expedição exige sequência válida e confirmação local',()=>{});assert.equal((await command({op:'pedido_estado',id:oid,estado:'EXPEDIDO',confirmar_simulacao:true})).status,400);assert.equal((await command({op:'pedido_estado',id:oid,estado:'SEPARADO'})).status,200);assert.equal((await command({op:'pedido_estado',id:oid,estado:'EXPEDIDO'})).status,400);assert.equal((await command({op:'pedido_estado',id:oid,estado:'EXPEDIDO',confirmar_simulacao:true})).status,200);d=await data();assert.equal(d.produtos.find(p=>p.id===pid).fisico,8);assert.equal(d.produtos.find(p=>p.id===pid).reservado,0);
-check('Devolução conserva despesas e recupera apenas mercadoria inspecionada',()=>{});assert.equal((await command({op:'pedido_estado',id:oid,estado:'DEVOLVIDO',retornar_estoque:true})).status,200);d=await data();assert.equal(d.produtos.find(p=>p.id===pid).fisico,10);assert.equal(d.lancamentos.filter(l=>l.pedido_id===oid).reduce((n,l)=>n+Math.round(Number(l.valor)*100),0),-2400);assert.equal((await command({op:'pedido_estado',id:oid,estado:'DEVOLVIDO',retornar_estoque:true})).status,400);
-check('Cancelamento libera reserva e estorna o pedido local',()=>{});r=await command(order);const cancel=r.data.id;assert.equal((await command({op:'pedido_estado',id:cancel,estado:'CANCELADO'})).status,200);d=await data();assert.equal(d.lancamentos.filter(l=>l.pedido_id===cancel).reduce((n,l)=>n+Math.round(Number(l.valor)*100),0),0);
-r=await command({op:'anuncio',produto_id:pid,canal:'Shopee',titulo:'QA',preco:'50.00'});assert.equal(r.status,200);const aid=r.data.id;r=await command({op:'propor_preco',id:aid,preco:'55.00',motivo:'QA'});const approval=r.data.id;
-check('Proposta obsoleta não sobrescreve alteração posterior',()=>{});await command({op:'anuncio_estado',id:aid,estado:'PAUSADO'});assert.equal((await command({op:'aprovar',id:approval})).status,409);
-check('Política impede aprovar preço inferior ao custo',()=>{});r=await command({op:'propor_preco',id:aid,preco:'10.00',motivo:'QA'});assert.equal((await command({op:'aprovar',id:r.data.id})).status,400);
-check('Compra atualiza custo médio e contas a pagar uma única vez',()=>{});r=await command({op:'registro',tipo:'COMPRA',dados:{produto_id:pid,quantidade:10,custo_unitario:'30.00',fornecedor:'Fictício'}});assert.equal(r.status,200,JSON.stringify(r.data));const cid=r.data.id;assert.equal((await command({op:'receber_compra',id:cid})).status,200);assert.equal((await command({op:'receber_compra',id:cid})).status,400);d=await data();assert.equal(d.produtos.find(p=>p.id===pid).custo,'25.00');assert.equal(d.produtos.find(p=>p.id===pid).fisico,20);
-check('Pedidos antigos mantêm CMV congelado após mudança de custo',()=>assert.equal(d.pedidos.find(p=>p.id===oid).custo_unitario,'20.00'));
-check('Rascunhos multicanal não duplicam anúncios existentes',()=>{});assert.equal((await command({op:'anuncios_lote',produto_id:pid})).status,200);await command({op:'anuncios_lote',produto_id:pid});assert.equal((await data()).anuncios.filter(l=>l.produto_id===pid).length,4);
-const report=process.argv[2]??path.resolve('target/radar-local-verification.json');fs.mkdirSync(path.dirname(report),{recursive:true});fs.writeFileSync(report,JSON.stringify({date:new Date().toISOString(),passed:checks.length,checks,scope:'Integração HTTP local com PostgreSQL nativo. Tenants fictícios isolados. Não testa APIs externas.'},null,2));console.log(`${checks.length} verificações de integração passaram.`);
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+const base = "http://127.0.0.1:3000";
+let checks = [];
+async function login(email) {
+  const r = await fetch(base + "/api/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: base },
+    body: JSON.stringify({ email, senha: "demo1234" }),
+  });
+  assert.equal(r.status, 204, await r.text());
+  return r.headers
+    .getSetCookie()
+    .map((x) => x.split(";")[0])
+    .join(";");
+}
+async function req(cookie, path, body, key = crypto.randomUUID(), header = true) {
+  let r = await fetch(base + path, {
+    method: body ? "POST" : "GET",
+    headers: {
+      Cookie: cookie,
+      Origin: base,
+      ...(body
+        ? {
+            "Content-Type": "application/json",
+            "Idempotency-Key": key,
+            ...(header ? { "X-Radar-Request": "1" } : {}),
+          }
+        : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return { status: r.status, data: await r.json().catch(() => null) };
+}
+const a = await login("qa-a-dono@radar.test"),
+  b = await login("qa-b-dono@radar.test"),
+  support = await login("qa-a-atendimento@radar.test");
+const command = (body, key, session = a) => req(session, "/api/radar/comandos", body, key);
+const data = async (session = a) => {
+  let r = await req(session, "/api/radar");
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  return r.data;
+};
+const check = (name, fn) => {
+  fn();
+  checks.push(name);
+};
+const stamp = Date.now().toString();
+const product = {
+  op: "produto",
+  sku: "QA-" + stamp,
+  nome: "Produto de teste",
+  custo: "20.00",
+  preco: "50.00",
+  saldo: 10,
+};
+const key = crypto.randomUUID();
+let r = await command(product, key);
+assert.equal(r.status, 200, JSON.stringify(r.data));
+const pid = r.data.id;
+check("Idempotência devolve mesmo produto", () => assert.ok(pid));
+let retry = await command(product, key);
+assert.equal(retry.data.id, pid);
+assert.equal((await data()).produtos.filter((p) => p.id === pid).length, 1);
+check("Chave reutilizada com conteúdo diferente é bloqueada", () => {});
+assert.equal((await command({ ...product, nome: "Outro" }, key)).status, 409);
+check("Importação com linha duplicada reverte o lote inteiro", () => {});
+assert.equal(
+  (await command({ op: "importar", itens: [{ ...product, sku: "ROLL-" + stamp }, product] }))
+    .status,
+  400,
+);
+assert.ok(!(await data()).produtos.some((p) => p.sku === "ROLL-" + stamp));
+check("Outra empresa não lê nem altera o produto", () => {});
+assert.ok(!(await data(b)).produtos.some((p) => p.id === pid));
+assert.equal(
+  (await command({ op: "estoque", produto_id: pid, quantidade: 2, motivo: "Teste" }, undefined, b))
+    .status,
+  404,
+);
+check("Atendimento não recebe custo, ledger ou audit log", () => {});
+let d = await data(support);
+assert.equal(d.financeiroPermitido, false);
+assert.equal(d.produtos.find((p) => p.id === pid).custo, undefined);
+assert.equal(d.lancamentos.length, 0);
+assert.equal(d.auditoria.length, 0);
+assert.equal((await command(product, undefined, support)).status, 403);
+assert.equal((await req(support, "/api/radar/perguntar", { texto: "lucro" })).status, 403);
+check("Comando sem cabeçalho de proteção é bloqueado", () => {});
+assert.equal(
+  (await req(a, "/api/radar/comandos", product, crypto.randomUUID(), false)).status,
+  403,
+);
+let order = {
+  op: "pedido",
+  produto_id: pid,
+  canal: "Shopee",
+  cliente: "Cliente fictício QA",
+  quantidade: 2,
+  preco: "50.00",
+  comissao: "10.00",
+  frete: "5.00",
+  imposto: "3.00",
+  ads: "4.00",
+  embalagem: "2.00",
+  desconto: "1.00",
+};
+r = await command(order);
+assert.equal(r.status, 200, JSON.stringify(r.data));
+const oid = r.data.id;
+check("Pedido reserva estoque e calcula R$35 de resultado", () => {});
+d = await data();
+assert.equal(d.produtos.find((p) => p.id === pid).reservado, 2);
+assert.equal(
+  d.lancamentos
+    .filter((l) => l.pedido_id === oid)
+    .reduce((n, l) => n + Math.round(Number(l.valor) * 100), 0),
+  3500,
+);
+check("Não permite consumir estoque reservado ou vender além do saldo", () => {});
+assert.equal(
+  (await command({ op: "estoque", produto_id: pid, quantidade: -9, motivo: "Teste" })).status,
+  400,
+);
+assert.equal((await command({ ...order, quantidade: 9 })).status, 400);
+check("Expedição exige sequência válida e confirmação local", () => {});
+assert.equal(
+  (await command({ op: "pedido_estado", id: oid, estado: "EXPEDIDO", confirmar_simulacao: true }))
+    .status,
+  400,
+);
+assert.equal((await command({ op: "pedido_estado", id: oid, estado: "SEPARADO" })).status, 200);
+assert.equal((await command({ op: "pedido_estado", id: oid, estado: "EXPEDIDO" })).status, 400);
+assert.equal(
+  (await command({ op: "pedido_estado", id: oid, estado: "EXPEDIDO", confirmar_simulacao: true }))
+    .status,
+  200,
+);
+d = await data();
+assert.equal(d.produtos.find((p) => p.id === pid).fisico, 8);
+assert.equal(d.produtos.find((p) => p.id === pid).reservado, 0);
+check("Devolução conserva despesas e recupera apenas mercadoria inspecionada", () => {});
+assert.equal(
+  (await command({ op: "pedido_estado", id: oid, estado: "DEVOLVIDO", retornar_estoque: true }))
+    .status,
+  200,
+);
+d = await data();
+assert.equal(d.produtos.find((p) => p.id === pid).fisico, 10);
+assert.equal(
+  d.lancamentos
+    .filter((l) => l.pedido_id === oid)
+    .reduce((n, l) => n + Math.round(Number(l.valor) * 100), 0),
+  -2400,
+);
+assert.equal(
+  (await command({ op: "pedido_estado", id: oid, estado: "DEVOLVIDO", retornar_estoque: true }))
+    .status,
+  400,
+);
+check("Cancelamento libera reserva e estorna o pedido local", () => {});
+r = await command(order);
+const cancel = r.data.id;
+assert.equal((await command({ op: "pedido_estado", id: cancel, estado: "CANCELADO" })).status, 200);
+d = await data();
+assert.equal(
+  d.lancamentos
+    .filter((l) => l.pedido_id === cancel)
+    .reduce((n, l) => n + Math.round(Number(l.valor) * 100), 0),
+  0,
+);
+r = await command({
+  op: "anuncio",
+  produto_id: pid,
+  canal: "Shopee",
+  titulo: "QA",
+  preco: "50.00",
+});
+assert.equal(r.status, 200);
+const aid = r.data.id;
+r = await command({ op: "propor_preco", id: aid, preco: "55.00", motivo: "QA" });
+const approval = r.data.id;
+check("Proposta obsoleta não sobrescreve alteração posterior", () => {});
+await command({ op: "anuncio_estado", id: aid, estado: "PAUSADO" });
+assert.equal((await command({ op: "aprovar", id: approval })).status, 409);
+check("Política impede aprovar preço inferior ao custo", () => {});
+r = await command({ op: "propor_preco", id: aid, preco: "10.00", motivo: "QA" });
+assert.equal((await command({ op: "aprovar", id: r.data.id })).status, 400);
+check("Compra atualiza custo médio e contas a pagar uma única vez", () => {});
+r = await command({
+  op: "registro",
+  tipo: "COMPRA",
+  dados: { produto_id: pid, quantidade: 10, custo_unitario: "30.00", fornecedor: "Fictício" },
+});
+assert.equal(r.status, 200, JSON.stringify(r.data));
+const cid = r.data.id;
+assert.equal((await command({ op: "receber_compra", id: cid })).status, 200);
+assert.equal((await command({ op: "receber_compra", id: cid })).status, 400);
+d = await data();
+assert.equal(d.produtos.find((p) => p.id === pid).custo, "25.00");
+assert.equal(d.produtos.find((p) => p.id === pid).fisico, 20);
+check("Pedidos antigos mantêm CMV congelado após mudança de custo", () =>
+  assert.equal(d.pedidos.find((p) => p.id === oid).custo_unitario, "20.00"),
+);
+check("Rascunhos multicanal não duplicam anúncios existentes", () => {});
+assert.equal((await command({ op: "anuncios_lote", produto_id: pid })).status, 200);
+await command({ op: "anuncios_lote", produto_id: pid });
+assert.equal((await data()).anuncios.filter((l) => l.produto_id === pid).length, 4);
+const report = process.argv[2] ?? path.resolve("target/radar-local-verification.json");
+fs.mkdirSync(path.dirname(report), { recursive: true });
+fs.writeFileSync(
+  report,
+  JSON.stringify(
+    {
+      date: new Date().toISOString(),
+      passed: checks.length,
+      checks,
+      scope:
+        "Integração HTTP local com PostgreSQL nativo. Tenants fictícios isolados. Não testa APIs externas.",
+    },
+    null,
+    2,
+  ),
+);
+console.log(`${checks.length} verificações de integração passaram.`);
