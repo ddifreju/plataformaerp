@@ -4,6 +4,7 @@ Esta pasta reúne o manual mestre e o planejamento completo do Radar. A versão 
 
 ## Comece aqui
 
+- [Como rodar no seu computador](COMO-RODAR-LOCAL.md): passo a passo com Docker, acessos de demonstração e o aviso de `localhost`.
 - [Manual mestre — 24 capítulos](Manual-mestre-Radar.txt): negócio, operação, engenharia e continuidade com outra IA.
 - [Livro completo com anexos e código de referência](Manual-mestre-Radar-completo.txt): arquivo único para compartilhar com outra IA ou desenvolvedor.
 - [Livro navegável em HTML](Entrega-local-Radar.html): baixe somente este arquivo e abra no navegador; não é necessário baixar um ZIP. Os links para anexos separados exigem os respectivos arquivos.

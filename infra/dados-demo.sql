@@ -79,6 +79,20 @@ BEGIN
     SELECT array_agg(id) INTO v_ids FROM tenant WHERE slug LIKE 'demo-%';
     IF v_ids IS NULL THEN RETURN; END IF;
 
+    -- Nucleo operacional do Radar (V017). Vem primeiro: todas as radar_*
+    -- apontam para tenant, e sem isto a limpeza falha por FK assim que
+    -- alguem usa o Radar na base de demo.
+    DELETE FROM radar_comando    WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_auditoria  WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_registro   WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_acao       WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_titulo     WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_lancamento WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_movimento  WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_pedido     WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_anuncio    WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_produto    WHERE tenant_id = ANY(v_ids);
+
     DELETE FROM custo           WHERE tenant_id = ANY(v_ids);
     DELETE FROM item_devolucao  WHERE tenant_id = ANY(v_ids);
     DELETE FROM devolucao       WHERE tenant_id = ANY(v_ids);
@@ -112,6 +126,8 @@ VALUES ('11111111-1111-1111-1111-111111111111', 'Ateliê Bem Posto', 'demo-loja'
 --   dono@demo.plataforma     / demo1234   (papel DONO)
 --   gestor@demo.plataforma   / demo1234   (papel GESTOR)
 --   analista@demo.plataforma / demo1234   (papel ANALISTA)
+-- Papeis do Radar (V017), mesma senha:
+--   financeiro@, atendimento@, estoque@, marketing@demo.plataforma
 INSERT INTO usuario (id, tenant_id, email, senha_hash, nome, papel, ativo)
 VALUES
     ('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111',
@@ -119,7 +135,15 @@ VALUES
     ('22222222-2222-2222-2222-222222222223', '11111111-1111-1111-1111-111111111111',
      'gestor@demo.plataforma', crypt('demo1234', gen_salt('bf', 12)), 'Marcos (gestor)', 'GESTOR', true),
     ('22222222-2222-2222-2222-222222222224', '11111111-1111-1111-1111-111111111111',
-     'analista@demo.plataforma', crypt('demo1234', gen_salt('bf', 12)), 'Rita (analista)', 'ANALISTA', true);
+     'analista@demo.plataforma', crypt('demo1234', gen_salt('bf', 12)), 'Rita (analista)', 'ANALISTA', true),
+    ('22222222-2222-2222-2222-222222222225', '11111111-1111-1111-1111-111111111111',
+     'financeiro@demo.plataforma', crypt('demo1234', gen_salt('bf', 12)), 'Demo financeiro', 'FINANCEIRO', true),
+    ('22222222-2222-2222-2222-222222222226', '11111111-1111-1111-1111-111111111111',
+     'atendimento@demo.plataforma', crypt('demo1234', gen_salt('bf', 12)), 'Demo atendimento', 'ATENDIMENTO', true),
+    ('22222222-2222-2222-2222-222222222227', '11111111-1111-1111-1111-111111111111',
+     'estoque@demo.plataforma', crypt('demo1234', gen_salt('bf', 12)), 'Demo estoque', 'ESTOQUE', true),
+    ('22222222-2222-2222-2222-222222222228', '11111111-1111-1111-1111-111111111111',
+     'marketing@demo.plataforma', crypt('demo1234', gen_salt('bf', 12)), 'Demo marketing', 'MARKETING', true);
 
 
 -- ---------------------------------------------------------------------
