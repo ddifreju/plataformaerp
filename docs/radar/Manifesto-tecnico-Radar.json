@@ -1,0 +1,1588 @@
+{
+  "edition": "1",
+  "inspectedAt": "2026-09-30T18:04:20.014Z",
+  "project": "C:/Users/Juliana Trabalho/Documents/ECP/kit-inicio",
+  "scope": "Fontes de backend, frontend, infraestrutura nativa e manifestos. Exclui segredos, runtime, banco, node_modules e outputs de build.",
+  "files": [
+    {
+      "path": "CLAUDE.md",
+      "bytes": 2475,
+      "sha256": "f82b697362e9cf6ab40de605d67fa5d4c972c8bbf991418031029de609cb164a"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1817,
+      "sha256": "5cbb47dfa12d4a90f2a2e5df0d5b76b7748aa2f0c1379f890656fa87d0dcba0a"
+    },
+    {
+      "path": "backend/pom.xml",
+      "bytes": 11741,
+      "sha256": "be0ed885dbbb9e0c345eaeaa57ed60320ae7117198a7c0b22e14a7fbbb7eec9b"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/AplicacaoPlataforma.java",
+      "bytes": 703,
+      "sha256": "9474d7b3f6109419f02e4ce25887473722ca0dace8a38a40a24d76225e24d428"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/auditoria/ConsultaAuditada.java",
+      "bytes": 3779,
+      "sha256": "26e3cd5e5e1c91c0614de2118fd49b27646b5184bc91948c0cc29a18f9a1e947"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/auditoria/RepositorioConsultaAuditada.java",
+      "bytes": 829,
+      "sha256": "8b84e82f92cf37b7afad95e36a757e5b628d2ce739c18836006224029ccc3b92"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/ConfiguracaoSeguranca.java",
+      "bytes": 13701,
+      "sha256": "7e754ece278841648e8cbe95d76b7e97fa72c5f57f42f3f521df1338b109a439"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/CredenciaisLogin.java",
+      "bytes": 325,
+      "sha256": "6984b8d6d9cecf2be09d7e43420a7540d2d3d028b31c7b7a0ee990de28ac4ad6"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/FiltroLoginJson.java",
+      "bytes": 3260,
+      "sha256": "e1b2b1614bae34a7724c50c385dfb366b695788cb6a2795718c7560146a09e69"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/OrigemCorsInvalidaException.java",
+      "bytes": 718,
+      "sha256": "95db3be50b6c029c7724b67e0f269d9087a4e07d7293a0ec0fe567f9ccf1dea5"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/PapelUsuario.java",
+      "bytes": 757,
+      "sha256": "0bbae03a2daf697a99c049438fcdfe3c20c8fcaa034f67eac3e960b609ead142"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/PontoEntradaNaoAutenticado.java",
+      "bytes": 1546,
+      "sha256": "e632c6e7466f0fd42e8c2a74c69bc82d6e54aa3af8477ff47e35519c6281b62d"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/RepositorioLoginUsuario.java",
+      "bytes": 3014,
+      "sha256": "7ddf15849ede991d386e344ca106bbf295426b48771ca6dea3c4055b44483958"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/RepositorioUsuario.java",
+      "bytes": 2553,
+      "sha256": "68018f49626c6977a1d7169ff7fe5a3fc493036626cc159e86e0ac848e15046c"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/RespostaSessao.java",
+      "bytes": 576,
+      "sha256": "ae15168a7524c50a50146b9ecc66ed7fd3ac3ef178ef4b3a34f7ffe484c14520"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/ServicoLogin.java",
+      "bytes": 3670,
+      "sha256": "d00a55306a2c8e7dc86c884352f1cf54041b9e879a05c5ab9c60d6428bd8e6c0"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/ServicoSessao.java",
+      "bytes": 1237,
+      "sha256": "a9469cfd3cdbf15f5fd37990e25ad66b4bc008c81c0d6500456f166eb1cd0f3f"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/ServicoUserDetails.java",
+      "bytes": 1765,
+      "sha256": "0b05a291eed057f57e3ffaf5e9675debac74e336840d0c778b4a4285ace21950"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/SessaoController.java",
+      "bytes": 874,
+      "sha256": "6cc6896c71551540672667ee2777dbcb17f68d1ceb3c5ae99122c0b3ea272e11"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/SessaoInvalidaException.java",
+      "bytes": 971,
+      "sha256": "509a5eb298ae96d5e287224b095214f3bb34d9a96458530237bac7f853b5681f"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/TratadorAcessoNegado.java",
+      "bytes": 1566,
+      "sha256": "4971a228a7de23e1e9069d78e09ff2578f6a181d9c4212b4fbf051aecf1846c1"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/TratadorFalhaLogin.java",
+      "bytes": 2694,
+      "sha256": "338563fa41f5977a42708a45c61052a399ce9ce76df2c9e43c48d15db79cd3a9"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/TratadorSucessoLogin.java",
+      "bytes": 3180,
+      "sha256": "2f6a6732f7960f1c21449552e86813d6a75cf15a8b18955d772d25356a8a6a95"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/Usuario.java",
+      "bytes": 3104,
+      "sha256": "e6319f2f6982294b0157a017aada393ad2060bf276e48f6635bc1b38fb1d9290"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/UsuarioAutenticado.java",
+      "bytes": 3450,
+      "sha256": "b7fea8c58a95a2b2de44d74d69c831250366dda5f699210710c572a6a1aedc25"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/autenticacao/UsuarioParaLogin.java",
+      "bytes": 905,
+      "sha256": "0d9dbc474d05fafe792767845916bd63c48caf2cbdb59e9fddbdba0f27605a20"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/canal/CadeiaDeEspelhoInvalidaException.java",
+      "bytes": 847,
+      "sha256": "e32e66c9ebdea1cd9029945262a99e6cafdf5ce66106a14a56b3bb29ce8f9148"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/canal/Canal.java",
+      "bytes": 10905,
+      "sha256": "079ffd340ba2a43cb15b5e7ce5de497c1cfa65b25fd1f17491a51c3a46a49db2"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/canal/CanalController.java",
+      "bytes": 3074,
+      "sha256": "18449cc043cfbafada68c7ddee6c48362e8620b636baa2fdd3351e8c918e7222"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/canal/CategoriaCanal.java",
+      "bytes": 342,
+      "sha256": "2a27565a1a0486b501854208f5ab2a28e52ed636358f1fff1180954b9d629e24"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/canal/EscopoCanal.java",
+      "bytes": 1005,
+      "sha256": "c56fb78cff006cdc5c564a4e9d7f9b2c2bb20d6731142eaa75c6e8ef19e8d6c3"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/canal/RepositorioCanal.java",
+      "bytes": 1227,
+      "sha256": "502fedfdadc9948c9e64af1e30c970d20289a9ac4a466e50e04ce0d33328e365"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/canal/RequisicaoEscopoCanal.java",
+      "bytes": 857,
+      "sha256": "1e00ef7052aa33c364944b52ebabbef9925b4fc34acb1712dacca7904b65caf7"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/canal/RespostaCanal.java",
+      "bytes": 1740,
+      "sha256": "96846ad0a71710410337f426fcf9ba281c0d0d4f3a19ec28263f98ef4cfa68c8"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/canal/ServicoEscopoDeCanal.java",
+      "bytes": 10289,
+      "sha256": "2568bb6a4d994d5728d9122c19b4b08295037569561d356ad8881302315533f9"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/canal/TipoCanal.java",
+      "bytes": 728,
+      "sha256": "65da7ede27ab594b38e2f1e4fcb8d595b446055e5d56d6935d910b90e2d5a246"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/catalogo/Produto.java",
+      "bytes": 4456,
+      "sha256": "e617d5f3ca383fc7374565be494135ad497775e17ce857878e2a7ff248928637"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/catalogo/RepositorioProduto.java",
+      "bytes": 361,
+      "sha256": "9cc28fac458b9b149e73b9f7c43a777bcba32a3cda615bc84a44113554a9728e"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/catalogo/RepositorioVariacao.java",
+      "bytes": 1175,
+      "sha256": "4fc4658e8953d630d226d6ed6873568f056141a331c0c2ddac21253d7355b57f"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/catalogo/Variacao.java",
+      "bytes": 5470,
+      "sha256": "b795cdb406853a16bc32669d7f20508bed389ba46207bf26c36c7e1974b2af50"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/cliente/Cliente.java",
+      "bytes": 8831,
+      "sha256": "408132f0dca907d42e8d9a3414148346474c737077081169783c269da5b9ae2e"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/cliente/RepositorioCliente.java",
+      "bytes": 1043,
+      "sha256": "7f60a861f12fc997b1459e76eb362607615c224bc1f612ca67b3ee946e808528"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/cliente/TipoCliente.java",
+      "bytes": 181,
+      "sha256": "e9496be48ee1af043ef55b14d7493c65e7abf8489ef8afe3040ca45d0b621299"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/cliente/TipoDocumento.java",
+      "bytes": 242,
+      "sha256": "66076a26a9d6d6802af61eba7ee0aef449a6472726df72d1427aa0a1e5f1de00"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/ambiente/ValidadorDeAmbiente.java",
+      "bytes": 4782,
+      "sha256": "34eabe26d212326fd3ae422b6b2e8060aff56d50abaeb609e4804911ed41dc9f"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/ambiente/VariavelDeAmbienteAusenteException.java",
+      "bytes": 752,
+      "sha256": "0a511c73a0fb6f1c2872548d82dd96b73cffe0df42812324e00cd9aab8262e66"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/tenant/ConfiguracaoTenant.java",
+      "bytes": 7603,
+      "sha256": "87459bdfac85208c2eaaa98f3eae77ab50c278d3a2f35eda01d52c6c5b1bea6e"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/tenant/ContextoTenant.java",
+      "bytes": 2801,
+      "sha256": "0ce52a942f62d521625a08534d55fc0d8c5c6b68714a0182bf5094cda6182a2b"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/tenant/DataSourceComTenant.java",
+      "bytes": 4268,
+      "sha256": "d1b5c183136cb8746474edd4fa0be44250dcb4997545e453990d6ddeb44a4af8"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/tenant/FiltroTenant.java",
+      "bytes": 9988,
+      "sha256": "8e5383a09dbfb588b98686bf2053bc864286d26118b1818d74244872b96f4bb9"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/tenant/RepositorioTenant.java",
+      "bytes": 1044,
+      "sha256": "4a3b24d8b370cf79fcd834565c4a84b1a4633de23e38c5933ab4cd2984e1b402"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/tenant/ResolvedorTenantHibernate.java",
+      "bytes": 2471,
+      "sha256": "d8371c5c475e42fca1dd731eb1faa8f2aefe86c18cfe1b8dcc6fd3d63295ed3a"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/tenant/Tenant.java",
+      "bytes": 1504,
+      "sha256": "854ac5be62f32e024b0ff66e58e789d8b4c0422ba422aba6f9c05628fccfba1b"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/tenant/TenantDesconhecidoException.java",
+      "bytes": 886,
+      "sha256": "84beffa8e01381a3368238a4b6b344c08b795054a3455e26f612b39668a5841f"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/tenant/TenantNaoResolvidoException.java",
+      "bytes": 673,
+      "sha256": "f78dd5259c3028d4cc7e12bfc15c0202005951f6eeda0925ebbca89ce9f102cc"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/web/ConfiguracaoJackson.java",
+      "bytes": 2794,
+      "sha256": "59bc087a9f39d8a5b0ae92fb488ff2a092f2b9637ca5a97a336d5ae683874876"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/web/ErroApi.java",
+      "bytes": 522,
+      "sha256": "1f97ff0a511ec270a076c5ff5785b5ca7376860e85676f58407b444d7e0f2012"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/comum/web/TratadorGlobalDeErros.java",
+      "bytes": 11235,
+      "sha256": "b85b738feb7a7be7947da56cc7aaa4b5bbd0d85f0d0ae316b6a139c0191d0c7f"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/conversa/Conversa.java",
+      "bytes": 4603,
+      "sha256": "4761841513d65952d54b3153a16a5ba22da4bfbd2c0766697c5457e3f843adbc"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/conversa/DirecaoMensagem.java",
+      "bytes": 360,
+      "sha256": "85ff0fe1e38831c824da6551176c5f72d8ce23788e697fce92fea34c7b81f4f7"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/conversa/Mensagem.java",
+      "bytes": 4923,
+      "sha256": "73870f4e3b1b3cf94845c616da5de785ce2bacaf4dabb0cd5682b28b55cf36c7"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/conversa/RepositorioConversa.java",
+      "bytes": 364,
+      "sha256": "3b3924d701d3db8c622e04473b423835ef36f5fba9314e87d54a006354ec4d98"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/conversa/RepositorioMensagem.java",
+      "bytes": 810,
+      "sha256": "5adb986a961cf077223f3f6531cc67a915f22a417f8201fe5ffa2789c7b62e3d"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/conversa/StatusConversa.java",
+      "bytes": 238,
+      "sha256": "9ad894134d3077a3b5643775082af2ef6d1721cb0da9ff792dfb6b011cca347e"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/conversa/TipoAutorMensagem.java",
+      "bytes": 327,
+      "sha256": "912f74d7cb6c1741e2231784b0931c01a032c75a962f210acf9c5ac384147248"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/conversa/TipoConteudoMensagem.java",
+      "bytes": 262,
+      "sha256": "14a95ed2c53efb6fcee1da0f41059e2940f36d39a4df908b93696f73f8daf4bd"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/custo/Custo.java",
+      "bytes": 5941,
+      "sha256": "ba84a33c49693d434a6fe128faab470a7dc86915228d074022d0b5b30c559e00"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/custo/NaturezaCusto.java",
+      "bytes": 699,
+      "sha256": "b9ab77c5c7db20e5dd49ae353784ab20c38d55ecc8b925711350c8c84af2dd13"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/custo/RepositorioCusto.java",
+      "bytes": 2512,
+      "sha256": "4a56a0821b2eaf377e1854d79e2fc35fe9a0d37dbeee4095df3c994a7599ff20"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/devolucao/ContagemPorStatusDevolucao.java",
+      "bytes": 307,
+      "sha256": "c5be84db286ed6adec13f3b2aeee995fff0abf97041a7ef7d7dd5f3fd58223c0"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/devolucao/DestinoProduto.java",
+      "bytes": 431,
+      "sha256": "d57e82dce2297437614db68510031a58fe948d3fc33d8d2a503d29661168252b"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/devolucao/Devolucao.java",
+      "bytes": 7110,
+      "sha256": "47f72eaf51b31b03f817118ed1f444f62494c522ec378c47f4da96e0bf0c497f"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/devolucao/ItemDevolucao.java",
+      "bytes": 3447,
+      "sha256": "c8ac3d939e4e89bfdd77c0e176e4cbaeff4ba1f1b00ce02c8cee31695aa629ec"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/devolucao/MotivoDevolucao.java",
+      "bytes": 730,
+      "sha256": "32693f068e15ba175cc55b0af263b6b3457a3d69f973a80dc3d8965ab95d1710"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/devolucao/RepositorioDevolucao.java",
+      "bytes": 1219,
+      "sha256": "08341cfc3352850201c01aed409d1385e8234150cef8a08ab49bd08792968efb"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/devolucao/RepositorioItemDevolucao.java",
+      "bytes": 898,
+      "sha256": "c9593d8a0280d77c8ee426d8428792d75a748d2feeb0b70e36c9d30fe566fa26"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/devolucao/ResponsavelFreteReverso.java",
+      "bytes": 322,
+      "sha256": "8bb0648234e3352bd784cdf11da443ac61734ccffacc578be18223a49c824ffa"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/devolucao/StatusDevolucao.java",
+      "bytes": 292,
+      "sha256": "b208ee5e8e92c4a512011c267e2f841852f6278e72010373131232eb474883ab"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/devolucao/TipoDevolucao.java",
+      "bytes": 173,
+      "sha256": "3a3248eb27ef317d4565a972b88bb7228a2f591db4597fec227ae3a8e7de5220"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/ingestao/CanalDesconhecidoException.java",
+      "bytes": 797,
+      "sha256": "1fae69ab539416ad45150037c730440b3af245da351024f7b362b40159e5a581"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/ingestao/EventoIngerido.java",
+      "bytes": 5852,
+      "sha256": "748fb5796f0090cbe25046adf6c071e1eeb4d63c48c6370ebf28906260d8ba5f"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/ingestao/RepositorioEventoIngerido.java",
+      "bytes": 1770,
+      "sha256": "434279a244dc311475349f74ccad689c47156b4cad471b636a3fef88957a04e1"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/ingestao/ResultadoIngestao.java",
+      "bytes": 1389,
+      "sha256": "1dfa26a05a5a19c1c85b5ce25a190e84520568e5044689a90c8956a05311c449"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/ingestao/ServicoIngestao.java",
+      "bytes": 36013,
+      "sha256": "a7c3d954c6c0d286b932ba7b0143fee6e9756df4347cbacc04515a0fd08d24c4"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/ingestao/StatusEventoIngerido.java",
+      "bytes": 245,
+      "sha256": "ab2a6affbd8267c9e10351c569b83bbc7a7da1a6b080ac8bc089acf171212fcd"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/ingestao/TipoEntidade.java",
+      "bytes": 1019,
+      "sha256": "da0197502f45b958b0fa3d24ecfd4ea013db0e14925348becc93bac2dfd9b019"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/ingestao/TipoEvento.java",
+      "bytes": 666,
+      "sha256": "c3d28004cc1e6bbcf74645a69baeba758364dbf761c1afaaa3cd4a3e9c55b622"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/integracao/AdaptadorBling.java",
+      "bytes": 25273,
+      "sha256": "1a41cf6a5190623245b0ce23a1034d2254ea62bc2f336e665ec466ffb71d3289"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/integracao/AdaptadorDeCanal.java",
+      "bytes": 2117,
+      "sha256": "c7611451a7ba80e3cc0fffee65ec66dd5ce044b4da3b3e80998dd453371dbae1"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/integracao/AdaptadorMercadoLivre.java",
+      "bytes": 20096,
+      "sha256": "088fd173d01320cd7958c2e893b2a24824e27e12391bb325f694c2a95dce56ca"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/integracao/CampoAusente.java",
+      "bytes": 1675,
+      "sha256": "fa26cdb8e731b215fd1e4949524258e50fcc6aa3274780c6c79614027bdebe70"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/integracao/PayloadInvalidoException.java",
+      "bytes": 1047,
+      "sha256": "0b65b60afbad0fe539bc52f03fca6e83e6bc0130f7685ef41439887e5dcb3a37"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/integracao/ResultadoTraducao.java",
+      "bytes": 1416,
+      "sha256": "d6a5b9e76bc00d4fe8bb9ee112026e5be6bae77e966396c055c7c8df79556c56"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/integracao/SuporteJson.java",
+      "bytes": 5992,
+      "sha256": "0f7cb228bacac8c64c1adc8f6171c717a380f3c2aa89591b00c1f02d552c58eb"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/AplicadorTaxa.java",
+      "bytes": 2894,
+      "sha256": "5c13c3d9ee0f66a520cbd5dfbc951d74036de485c7a8cedb18512125dc4ef94e"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/Apresentacao.java",
+      "bytes": 1457,
+      "sha256": "b71abecfa5beff0ff01a5a65f4973f2f5d806b1b594b7907a1268b5bb4aa9c7e"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/BaseIncidencia.java",
+      "bytes": 824,
+      "sha256": "9726ab5e9e4f7509b97c5a3bf60ba8296b49f253100419c956c34fb31c3e290f"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/BlocoMargem.java",
+      "bytes": 3075,
+      "sha256": "11f22868644d332a4d2804c6baabf4161dc8786118d49674c3c27947266e52b2"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/CatalogoLacunas.java",
+      "bytes": 4848,
+      "sha256": "d28b6fc8a0ca38f0d491182bbe04022e4aee971eb0a845ccef02415ff4c682ea"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/ConferenciaRepasse.java",
+      "bytes": 4943,
+      "sha256": "ada62293cd111ad343a57f3fca57a73dcce9741763e479d880569ef1a069a363"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/ConfiancaTaxa.java",
+      "bytes": 369,
+      "sha256": "23bfb3799d4b03fad352a9d3a03c10b638fef84be102c4f9d2959d7d1538b145"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/CongelamentoCustoMercadoria.java",
+      "bytes": 5901,
+      "sha256": "bf21b65906bb7abb1c40fffea89d3f86ef4b512b92e23abba2e13bc12398e71a"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/ConjuntoDeCanaisNaoDisjuntoException.java",
+      "bytes": 668,
+      "sha256": "095f61a2b3786cb3b853abb08d50af4d89ba9b9126e6e83946bf67f732aeb660"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/DetectorDeLacunas.java",
+      "bytes": 3372,
+      "sha256": "f32eef51f300802f719f896fcf1712656eb648ff3cfbf1cebb52a8c9de333511"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/DirecaoViesLacuna.java",
+      "bytes": 1298,
+      "sha256": "ddf4634457540061fe30b41cdb77495f814823aa6f864de1339028ab62bd91e6"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/FaturamentoZeroException.java",
+      "bytes": 1367,
+      "sha256": "3330eee583b2dd9d151aa331252d0aa4e63e4d85485d614a8b70761ddd4512bd"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/Lacuna.java",
+      "bytes": 1284,
+      "sha256": "4067863418362ac7b7d91a10f67fbff6057489f2ffb69d65aef0a878ba141a1c"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/LinhaDisjuncaoCanal.java",
+      "bytes": 750,
+      "sha256": "0ca95e005d24e44cf53df29d3e0d3e05d5175618e86c3ab87c675b787c5e52bc"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/MargemController.java",
+      "bytes": 3817,
+      "sha256": "eebefb493dcb87cf3a190954bff9f2e2fd04f33c4c37f0c900408c4504402a46"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/MemoriaCalculoBloco.java",
+      "bytes": 744,
+      "sha256": "32f409ac1bde772e81291c40f19abb8ec26bd985cbc0fe6ef2f7b264da45542b"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/MemoriaCalculoBlocoPeriodo.java",
+      "bytes": 843,
+      "sha256": "b51e322edabe3b0dd7c99c31e7becd55858c3665ed34111e3c7bcb43f631fa9c"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/MotivoBloqueioDeSoma.java",
+      "bytes": 1419,
+      "sha256": "b5d6277e93f3e6d25903b92be13db6fe38b48c0255ec5c53b54220823aa71b86"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/MotorMargemPedido.java",
+      "bytes": 6449,
+      "sha256": "399981e4c957ccf69d411c6241303bf2f66df3890729b6690856f4cd3a98930c"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/OrigemTaxa.java",
+      "bytes": 334,
+      "sha256": "93b449cca1435e1f2f9a121118bb34547e41fe520f4f39809d396dad5fb14bae"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/PeriodoInvalidoException.java",
+      "bytes": 589,
+      "sha256": "0f8aa6370cad0743e309589da17f16cb63d275d67e887b9d6dc85366226f2e5f"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/Rateio.java",
+      "bytes": 7584,
+      "sha256": "5071e6b766fe1aac0b552d6f91771efe6bf5f6e82192d1668594c0dc819951aa"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/RateioImpossivelException.java",
+      "bytes": 710,
+      "sha256": "68158d8e5794d27d1ff5737b120120303633c8804c44644d17c2a049bbbb6cee"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/RepositorioDisjuncaoDeCanais.java",
+      "bytes": 6212,
+      "sha256": "873ceba9fec337fd33c5c37f841a713d9d1ec7dcf9a20b64c54660886a6ffe57"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/RepositorioTaxaCanal.java",
+      "bytes": 2961,
+      "sha256": "7610040f9feecca693afc2ef2a7b4161dd573b228d6ebc65648270c5cf9d8ece"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/RequisicaoMargemConsolidada.java",
+      "bytes": 1128,
+      "sha256": "59b6c2298435ee0080f658ee6615c0618e981e5f103c191c791a5ac3f53edf2b"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/RequisicaoMargemPeriodo.java",
+      "bytes": 853,
+      "sha256": "8bd488612d91cf1e3e7c8e483556256bd976d8aff92718fe50dbce64196e87f5"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/ResolvedorCustoPedido.java",
+      "bytes": 10925,
+      "sha256": "8d646a1e64d8b5185ca2ff52ca59e9b8fe74858503534450b21c48479ad565be"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/RespostaMargemConsolidada.java",
+      "bytes": 3280,
+      "sha256": "d94eff4367f86d431e691a5d4a9f436015f652796180bd367caa8868557ed2a6"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/RespostaMargemPeriodo.java",
+      "bytes": 3686,
+      "sha256": "91cf9e4ead6a6ce1545dcb704474521c6d592f392dac3ca341c625b4b4b2ae85"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/ResultadoMargemConsolidada.java",
+      "bytes": 1411,
+      "sha256": "4fbb2328b608bcc70b7eed7b550d2e2ac1ed162b142f237e6ba3e378974fed68"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/ResultadoMargemPedido.java",
+      "bytes": 1449,
+      "sha256": "82f5e3cdbee9b01b1fb2142740ee190d3bfbd2e4ce8d5ce310c4bc7f55d35f59"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/ResultadoMargemPeriodo.java",
+      "bytes": 1543,
+      "sha256": "bc2ed801a31075d61df124f6f2136d034e992fc4f2bc27f5cb2ecef3ac24b979"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/ResultadoSelecaoTaxa.java",
+      "bytes": 1094,
+      "sha256": "d9b73bbca77c74ec02bcae72034291c7cb6834d599ca0ad52832a51d00d9246c"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/RotuloTeto.java",
+      "bytes": 1673,
+      "sha256": "f93a4513db466c2c8e2e0d47971dd11b6c0dc7d0a3be4ff503849ea6e10317ce"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/SelecaoTaxaCanal.java",
+      "bytes": 1926,
+      "sha256": "485ce91564d77441fdb97f1cee34eb3055c78de7ff28c4c481aa9d35d8032067"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/ServicoMargemPeriodo.java",
+      "bytes": 10121,
+      "sha256": "08c633836c98438d1fea9f34adc5117659ba128f4703f20d1ffb79d859608e5d"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/ServicoMargemPeriodoConsolidada.java",
+      "bytes": 17372,
+      "sha256": "0e7cc35737357acc458b8954abca85204442646c83627a9ce79df3c0bc4b30d1"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/TaxaCanal.java",
+      "bytes": 10171,
+      "sha256": "5bd4519b84e15a5e4bd1dbf909ed54e2923a9a157e68f7c61510c42b982d5009"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/TaxaCanalAmbiguaException.java",
+      "bytes": 1210,
+      "sha256": "7acd541559d7b3d2915ac34ec1af8c13f57356d5473a0c2576b1cb05d52b108e"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/margem/TipoTaxaCanal.java",
+      "bytes": 504,
+      "sha256": "97ed137030457390138379424167b679302d4505e20d584059398c4fa5a63801"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/package-info.java",
+      "bytes": 2155,
+      "sha256": "3c3f3d336569a835624941c60c2e4d2042c7ac77551363123c0c10412fcb9cd0"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/painel/ItemDevolucaoAberta.java",
+      "bytes": 1077,
+      "sha256": "8a4cf7910268e5400780db68d01993a893ba3d0f9f895a6b5dc1ef60f14d0e5a"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/painel/ItemEventoComErro.java",
+      "bytes": 1277,
+      "sha256": "1d7a47dae2c6ef4288b38b2707342702e795580be05d0da782a643600b039490"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/painel/ItemPedidoSemVariacao.java",
+      "bytes": 803,
+      "sha256": "7c020165b54499e3ba026b91ff258889ed37c33590fef24b160552ac60d53b8d"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/painel/ItemVariacaoSemCusto.java",
+      "bytes": 814,
+      "sha256": "47d4a95c1105c95d32de3243dc7ce9c887726a085f6a6ac1774c6bf3d6d24f34"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/painel/PainelAnalistaController.java",
+      "bytes": 761,
+      "sha256": "820eef0498b9e4250a4e61702f8a0873d164e7b28f3ed0ccbb6704a2bd07ed41"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/painel/PainelGestorController.java",
+      "bytes": 836,
+      "sha256": "4f743c8518d81781c11754b360dc7d6a020677de0269ec9eb4ff093aa625690e"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/painel/RespostaFilaPendencias.java",
+      "bytes": 1085,
+      "sha256": "6c582725b0c7ab451fcd41fe37ed726160532b1ffcffc71417ad37a706671b20"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/painel/RespostaGargalosProcesso.java",
+      "bytes": 1718,
+      "sha256": "dd7ceb6ec779a16dacb64117053dcaef3b41b774c4d67a8a2189207e9b9ba3fa"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/painel/ServicoPainelAnalista.java",
+      "bytes": 2389,
+      "sha256": "a89eec822723aff2e5da2d159379821fc27955a9056d323af43f00b8accd9c56"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/painel/ServicoPainelGestor.java",
+      "bytes": 1630,
+      "sha256": "c3120de2f44b2bbe126835995be4718919a0024e2cc875cbced1e3be2bf525c7"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pedido/ContagemPorStatusPedido.java",
+      "bytes": 536,
+      "sha256": "0222373bc4da4569f70f0d5026e3ca65819598792d84f5adbe37ab14e480aa24"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pedido/FormaPagamento.java",
+      "bytes": 368,
+      "sha256": "65401df5a04c4d994c46fc989a8801e9b03a303e9eab8bbfb89b88797b91eec7"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pedido/ItemPedido.java",
+      "bytes": 6309,
+      "sha256": "db27a6fc29540867e853944299a5c74dcfbcdbe1b82da801ca13d0f87e7bade8"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pedido/Pedido.java",
+      "bytes": 14529,
+      "sha256": "aa333224cb14d4ae2a9e6fe45d923c6b65608dfad9e0549a6668966917c7b7e0"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pedido/RepositorioItemPedido.java",
+      "bytes": 1475,
+      "sha256": "fdc4e3ca2bdb635ac0f4f4806afe7cf5b25d3c45c0be6f4893566824fa3a4576"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pedido/RepositorioPedido.java",
+      "bytes": 3351,
+      "sha256": "ad6bde4210c28048dd20025f4a1df13b525b90954d8295955e72be3481a560fe"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pedido/StatusPedido.java",
+      "bytes": 417,
+      "sha256": "c238b6958168c390e2edc41715b448c2ae2a9df6b81392cbd02536786e2c619b"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/CatalogoDePerguntas.java",
+      "bytes": 4952,
+      "sha256": "da2fef18d0304f5bcfd69a1a2275b09a17a2434022d9e76d3194a2651d56bddb"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/CodigoIntencao.java",
+      "bytes": 1262,
+      "sha256": "a2aa979486746d2dc6a74752ae6f786393fef06b62bac98a63110d023d2780d0"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/ConfiguracaoRelogio.java",
+      "bytes": 714,
+      "sha256": "35912759b8901ef35fdd11a507a6af10797adb6e3ca8e102cf09870d42fea920"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/DescricaoIntencao.java",
+      "bytes": 1253,
+      "sha256": "d6b83acfab01271fdc67e4bdb20ac196bd69d5d7eb4121b1ac60904a87cb34c9"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/FormatadorDeTexto.java",
+      "bytes": 1436,
+      "sha256": "3c5cf28b6fe5e9b6d3189fe97467fbd8c37080f08779366de7b8c6b0e6074a30"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/IntencaoDetectada.java",
+      "bytes": 1677,
+      "sha256": "db19fcb28c525d4fcf8bef4a635a3c2e1ebe0d30dca82bf3cbba2710d5bc5f47"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/ModeloHeuristico.java",
+      "bytes": 17777,
+      "sha256": "a5b150e819f22c4fb8e50ade89d54b37a4d8cfb1263fffb0af99a5b9fdcbf97b"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/NumeroCitado.java",
+      "bytes": 450,
+      "sha256": "b01743f707281ec052bd3f4f174588961f4f8635a349028526189446e1b9b5a5"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/PerguntaController.java",
+      "bytes": 2615,
+      "sha256": "0de7b88ce75831a62b4bdad037f6da2a27b9fad05402855945a0fd9f9506c92a"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/PerguntaInvalidaException.java",
+      "bytes": 503,
+      "sha256": "cefb3ee05ec45dab5930bf82b147316dee846a7f5a4dddff47dbe60dec845866"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/Periodo.java",
+      "bytes": 583,
+      "sha256": "4fcc5256794e1865d75de881c5dbca34db438d8ee9c17bb47f2e55ff0eb68abf"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/PeriodoRelativo.java",
+      "bytes": 528,
+      "sha256": "7da1fea7dd4cf55ab581e6c17a8437a2768f29a8121e784d44916ebf5770ada2"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/PortaModeloLinguagem.java",
+      "bytes": 1695,
+      "sha256": "7f088b7d17b22a80e12e68484b817a2ec2639f72791ceef5ee28fa2e1a8d6a4b"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/RequisicaoPergunta.java",
+      "bytes": 1075,
+      "sha256": "fa77e6ad616138374d7ab10c499fdafafbf56cad003dddff4462bf94155d82db"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/RespostaDeMargem.java",
+      "bytes": 11451,
+      "sha256": "8ec3286bd46b9b04532d7147e4f112ff4bd1797f5b8fa765a35c0b7e087c761f"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/RespostaPergunta.java",
+      "bytes": 1072,
+      "sha256": "9663e8ea94d319a708908d4d30d37b2ba3f9f1e6d0d43cf09592e61c493bcc77"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/ResultadoParametro.java",
+      "bytes": 1291,
+      "sha256": "74673d46f80d4e3447a1623cc904dbc023c84dc66a5249983dfb1cdcdfc6060e"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/RotulosDeExibicao.java",
+      "bytes": 3217,
+      "sha256": "9a74c29e6d82df5e759fc7333ab718e058dd67e72e232cda092552fe6e92c138"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/ServicoPergunta.java",
+      "bytes": 28616,
+      "sha256": "886093bd5ec3492798ec367e25472ee8d99810d83efd61644569f1e8fdd94eca"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/TipoResposta.java",
+      "bytes": 807,
+      "sha256": "846ffeaeecb9494b0b7ef22de0f0df792087451f235a972de0cfcc27f7e33835"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/pergunta/ValidadorDeParametros.java",
+      "bytes": 9938,
+      "sha256": "d1e5bfe927af886e0cc63965b1c18e0ab50e86409465cf76cae86d3c68c7925a"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/radar/RadarController.java",
+      "bytes": 823,
+      "sha256": "74b8de63eae128bace5cebaaaa59f5525671ef62d9f037cc8dd01379d98adf9d"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/radar/RadarErrors.java",
+      "bytes": 829,
+      "sha256": "af2919ce951da24008ce1c0a9dd0d5c21fea07ccb85e870085779ba167ff1343"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/radar/RadarGuard.java",
+      "bytes": 2205,
+      "sha256": "3c631a3bf74a01cb5d9a9f9e9a2490ab6c89331145a77239b58c36b303eb7bb6"
+    },
+    {
+      "path": "backend/src/main/java/com/plataforma/radar/RadarService.java",
+      "bytes": 27029,
+      "sha256": "86fb90e01534b98d517eaf549b1c5abaa534d2faf51501631468d73d30d8b21b"
+    },
+    {
+      "path": "backend/src/main/resources/META-INF/spring.factories",
+      "bytes": 533,
+      "sha256": "0ca1e0e0b0e26fbbd2c8272d4b20809724aae3079b780582e332f03d912d4e98"
+    },
+    {
+      "path": "backend/src/main/resources/application-staging.yml",
+      "bytes": 1661,
+      "sha256": "d9549fabb300b8ad66cba0f2f23795d45c815bea3aea1790d315dbd1f57ca096"
+    },
+    {
+      "path": "backend/src/main/resources/application.yml",
+      "bytes": 4769,
+      "sha256": "3f3c071ed2fe43ba619131136960fbb19ff05d67efcfef2f63b9b00f9023961e"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V001__extensoes_e_funcao_tenant.sql",
+      "bytes": 4975,
+      "sha256": "b358a9cab9bf67ca7ade6325709a9dd5163746cd78125ae40b4dc088e1bac65a"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V002__tenant.sql",
+      "bytes": 2692,
+      "sha256": "4e34d98e1f4ed4ced4cd5127dccb733546465506be27629abed49efd7fc91815"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V003__consulta_auditada.sql",
+      "bytes": 6731,
+      "sha256": "aeab3194d1babc032c25405f5134377e0e47c46dce165c59ccb0a57820920003"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V004__papel_aplicacao.sql",
+      "bytes": 4433,
+      "sha256": "2f9b86cecde3f6cf2eb71e83073cbc939f28c57c68691e8eec511e2e97ec9d33"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V005__canal.sql",
+      "bytes": 16753,
+      "sha256": "c688e77c1ce2fd5de2d3717edeeb86340c84f7ee65d3d5d8dfe99f0546af5be9"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V006__produto_e_variacao.sql",
+      "bytes": 14564,
+      "sha256": "4e0bbdbef32697fb1042afd29fab2c1720697c617de3cfd75b2407c3a00728a0"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V007__cliente.sql",
+      "bytes": 10761,
+      "sha256": "0469bf0deb391897288c91a6420d25f0c7274cee70d16d18c5854f55b8d7c37b"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V008__pedido_e_item_pedido.sql",
+      "bytes": 22820,
+      "sha256": "7e9961aaba9ef3055dcff5df5172240b9b00f57dac448d74ecf0c47a03c6a2e2"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V009__devolucao_e_item_devolucao.sql",
+      "bytes": 16411,
+      "sha256": "631a1cdd3aae3c415c54b2aaa1c2de381d4dc217cfcbd47fc8c072805977d48e"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V010__custo.sql",
+      "bytes": 17060,
+      "sha256": "a1b9ce579a4636c8150e68c68935d7dcac644b91ae50e138263a321cccbaa052"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V011__conversa_e_mensagem.sql",
+      "bytes": 13051,
+      "sha256": "5345ddb9200efb981241ef459922ca815ee14c4ea68b3d6a75be7fed11af8409"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V012__evento_ingerido.sql",
+      "bytes": 12750,
+      "sha256": "0cbf4e583d47dd836792a5c353f1f8cabb8f3f6957bd3dc181b24c58ace253ab"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V013__taxa_canal.sql",
+      "bytes": 44534,
+      "sha256": "61f40e61642dc771521b9b3ac92c06e6d89293f7fa25dbd45d8fdaf504e98040"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V014__usuario.sql",
+      "bytes": 45301,
+      "sha256": "eef8377ab0441cc071b9659c278afb917ab647d28de331911f0fde72facfbcb0"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V015__char_para_varchar.sql",
+      "bytes": 5046,
+      "sha256": "8fb0ebd8c700d87c4378b7aa9d728c31701fa0b9e9329b57bdd1ddef478ddd4c"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V016__escopo_declarado_de_canal.sql",
+      "bytes": 20096,
+      "sha256": "a59f7760b5ab9d7870d62deb5e0f38d0fb16ecdeeef5cc6a0d617fa90544c143"
+    },
+    {
+      "path": "backend/src/main/resources/db/migration/V017__radar_operacao.sql",
+      "bytes": 5831,
+      "sha256": "aa21e47a17822e31855f9961c1c18f55f4905166cda4f5e49044186563c8ff7f"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U001__extensoes_e_funcao_tenant.sql",
+      "bytes": 1881,
+      "sha256": "1250ffcb682760dadbec5d8f1d10dca4ccfae3b9c5eae1635aa0888020c225a9"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U002__tenant.sql",
+      "bytes": 889,
+      "sha256": "aec6da9429d43129d8cd46cc0d60667f3c77c778184b231316d69ef4a052de4e"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U003__consulta_auditada.sql",
+      "bytes": 1533,
+      "sha256": "57a154843ae48017dfa58a9c1c1c24bc37f6a4d39fbce5b56617c9a4927cde6f"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U004__papel_aplicacao.sql",
+      "bytes": 2738,
+      "sha256": "277d6786640796540dcd436b91fc69534ec0efe62206468eb8abc917c4dfd4a5"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U005__canal.sql",
+      "bytes": 1931,
+      "sha256": "0d6e552487cbea4e002f06a2b769ce23ba48c4a78facd0e5a756081180b6318c"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U006__produto_e_variacao.sql",
+      "bytes": 2182,
+      "sha256": "9a42a2bc8922a531e0805a3420936c4b42a2e041bfa0378a2ccc25783c03f40c"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U007__cliente.sql",
+      "bytes": 1477,
+      "sha256": "18e3c29a0f5ddef824ffe414887abe60cec45b28fd079290d7afefc2f46f46c3"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U008__pedido_e_item_pedido.sql",
+      "bytes": 2424,
+      "sha256": "4cd04d0763b00d8e2db153d07a976933be8a0913b3f1bb56863c89e4b18f0982"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U009__devolucao_e_item_devolucao.sql",
+      "bytes": 2344,
+      "sha256": "96bd7337f743c831a86320f1d8565a333e863a5097731cb5fe4a9c9dde93cfd5"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U010__custo.sql",
+      "bytes": 1755,
+      "sha256": "7835cd47c36da70cdc3720eaef0ddea27530066af4bcfc5f124f060b3971b390"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U011__conversa_e_mensagem.sql",
+      "bytes": 2291,
+      "sha256": "71f2a4b95ede1bb06e9d85f5c4640c681eca76688135b7cc26e082d58e69d5a9"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U012__evento_ingerido.sql",
+      "bytes": 1901,
+      "sha256": "328694e1463907f66b15e7234cf2739d7946a3e8b07ab5dade8184841412ba45"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U013__taxa_canal.sql",
+      "bytes": 3793,
+      "sha256": "91860f8bcb199636276833892e00918c76afb4e8f7b7dfa3b9328af13b4dfbc0"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U014__usuario.sql",
+      "bytes": 4593,
+      "sha256": "71356a3b8be38cbaca3085189bd326391d626b651530e831becf4470f517310c"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U015__char_para_varchar.sql",
+      "bytes": 2080,
+      "sha256": "d8c2176eb2cca0bb6266c84e6f3f0593adb5cb044630f6ab9500037c355ad4fa"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U016__escopo_declarado_de_canal.sql",
+      "bytes": 4026,
+      "sha256": "c8f709e04cf5a1671eb81c1125e2b057bfdfeba1027ba7613711d845cd1695db"
+    },
+    {
+      "path": "backend/src/main/resources/db/undo/U017__radar_operacao.sql",
+      "bytes": 334,
+      "sha256": "476ca7e3ff9aeac582260ebb7bdde07530e0cb45249e0e3192da13bdf339bdd5"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/autenticacao/FiltroLoginJsonTest.java",
+      "bytes": 4572,
+      "sha256": "aa1ab6a11a91d2627be805ee2ed54f2e9a2e6044cab72146aa66e4985d24e1e1"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/autenticacao/FonteDeConfiguracaoCorsTest.java",
+      "bytes": 4348,
+      "sha256": "a28db4034daee855889d696630023b7d8cbb73d413d1d609515846f667c92741"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/autenticacao/IsolamentoLoginTest.java",
+      "bytes": 28436,
+      "sha256": "07363c7f749e829057bcfbc9743e7eea56d80585ece54fdd66e1bc31ac1b7760"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/autenticacao/ServicoLoginTest.java",
+      "bytes": 1626,
+      "sha256": "73fe0428f78bd231a73e79fe72bbd870a1ef936df3182b90f32c821886b20a52"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/autenticacao/ServicoSessaoTest.java",
+      "bytes": 3830,
+      "sha256": "6197d1134e0b545920d6cfbd9bd8e3c1d4a93d811ead006cc839623547b0e043"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/autenticacao/ServicoUserDetailsTest.java",
+      "bytes": 2518,
+      "sha256": "31c0aeecb835caaf8bcd6b3710957b9beb48eb4c44d1347e88d9fa25e35d1304"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/autenticacao/TratadorFalhaLoginTest.java",
+      "bytes": 3396,
+      "sha256": "ee428c0a91bda2ce9c63f58fd28e9aac284036ec78d12cdc38044f1f48148438"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/autenticacao/UsuarioAutenticadoTest.java",
+      "bytes": 2954,
+      "sha256": "c48009228dfc4cec970e5520fc9b25fd66f7083e8e2e8f53368c5598c60cdb40"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/canal/CanalTest.java",
+      "bytes": 3948,
+      "sha256": "474386e6c5a999d409cd951f26f8316b7dde2e37e6997a1c54cd44a916c356f1"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/canal/ServicoEscopoDeCanalTest.java",
+      "bytes": 8136,
+      "sha256": "54ae9d485f59b4b591231930c98b756048ee1b9edc1244307501211e720e777f"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/cliente/ClienteTest.java",
+      "bytes": 3670,
+      "sha256": "1a9ead1b596751db8e64f056895dc39773e6755b9a48b5a9903b65364fdddd2c"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/comum/ambiente/ValidadorDeAmbienteTest.java",
+      "bytes": 4016,
+      "sha256": "623d5f34df39e13c8bbad7e986311f39fc96910195acf9fbe10aab0da04e18e1"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/comum/tenant/ChaveCompostaImpedeReferenciaCruzadaTest.java",
+      "bytes": 12068,
+      "sha256": "4a93a42e4d3f9c12b805e7b33159352142805b6aa0f9dc235747d3bf7ae6dee2"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/comum/tenant/ContextoTenantTest.java",
+      "bytes": 3749,
+      "sha256": "eb2202fca1d63903fb7ffd03ce735388f341962b48963bca8d91860df1cf6580"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/comum/tenant/FiltroTenantTest.java",
+      "bytes": 13003,
+      "sha256": "78219115c00e21ad78fb198180eaa1862b9b3c65916b851e9b4b1904c137a1b3"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/comum/tenant/IsolamentoDeTenantTest.java",
+      "bytes": 25330,
+      "sha256": "f714c84f3418b8d80693ed9c2b0884d3c5cd63ee3413c14eb8287dfd1f09a195"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/comum/tenant/IsolamentoFaseUmTest.java",
+      "bytes": 26180,
+      "sha256": "c2f07444781af975be8f678b18105c663789a93548460bdbbb2f283f951029a2"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/comum/tenant/RlsAtivoEmTodasAsTabelasTest.java",
+      "bytes": 9169,
+      "sha256": "25846fd4f4887c072be2937214fd7877d505f152a3b8afdf33f564b4052f69f6"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/contrato/ContratoApiTest.java",
+      "bytes": 76045,
+      "sha256": "7b786100cc1db869e6246bc147877c3054a1a364e68603815ce2dc9f4d8e29dc"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/ingestao/ServicoIngestaoTest.java",
+      "bytes": 30876,
+      "sha256": "2212dffbe1dc9a99b58866da702352060dbac4edb3471c45ea5221d36e7ca1bb"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/integracao/AdaptadorBlingTest.java",
+      "bytes": 8604,
+      "sha256": "b403dfc9560cd3fb00ad0c5808729b61e319a6904d869f99ae9a407ccd60fda8"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/integracao/AdaptadorMercadoLivreTest.java",
+      "bytes": 8244,
+      "sha256": "368644ce65b95011a0133ae8aec19ff7dee4b07ca48d7086eceeaa90512cf777"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/integracao/SuporteJsonTest.java",
+      "bytes": 3667,
+      "sha256": "81e667a39f6c83a98a49a4026a73c0e3b9f8152b47e25a4280ff344e5e9bd518"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/margem/AplicadorTaxaTest.java",
+      "bytes": 3791,
+      "sha256": "607f545bab3fa9ca19e266c24088beaa0a590b4db7c6380ab4b8913311a555ab"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/margem/ConferenciaRepasseTest.java",
+      "bytes": 4146,
+      "sha256": "0f706d58d35489249f92fcbd66239b40a1039abf96b5011929761f84546f1024"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/margem/CongelamentoCustoMercadoriaTest.java",
+      "bytes": 8272,
+      "sha256": "bf56fa058cb611bd3581b0b534250214f687b130152f1d285cc7551d55de48bd"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/margem/DetectorDeLacunasTest.java",
+      "bytes": 2979,
+      "sha256": "c03cdc0f54218d676eecab6937a4d3432fc266842b3e4f33c6756f67056ecc79"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/margem/IsolamentoMargemConsolidadaTest.java",
+      "bytes": 9704,
+      "sha256": "8333d7e186623167ba5531a91efea4bbaa44d45d9636416937a5cd938f4f073f"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/margem/IsolamentoMargemTest.java",
+      "bytes": 29252,
+      "sha256": "81cf384c7a6c2ea4343782eddffa9bd0b3bc0dd878431f262b8496fdef767546"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/margem/MotorMargemPedidoTest.java",
+      "bytes": 8640,
+      "sha256": "975e062e759ebd317e459ee820c780188ddec39f4b27348d66422e0753359755"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/margem/RateioTest.java",
+      "bytes": 9161,
+      "sha256": "9e471faf943c34afee2488d7d800627c1b502738512da11be3e717dfd81526e6"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/margem/RespostaMargemPeriodoTest.java",
+      "bytes": 5617,
+      "sha256": "3f9984df0dfd936f3aa16788f52bfd9a223e60cf07362dcf90e20fd554854049"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/margem/SelecaoTaxaCanalTest.java",
+      "bytes": 6034,
+      "sha256": "6d4e9a85a533606928567f3f86bce516c489df4cfb584edc4859ed4afb87dd96"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/margem/ServicoMargemPeriodoConsolidadaTest.java",
+      "bytes": 12077,
+      "sha256": "6bfb8771924b66fe431f16ad0c556b8f5ee5c34451fc2fec2dc3fb744445c2ae"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/painel/ServicoPainelAnalistaTest.java",
+      "bytes": 7443,
+      "sha256": "272c9d07c42e2725b5edaeb745c9ba74bae2827a1d121743f34cb0182dea7690"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/painel/ServicoPainelGestorTest.java",
+      "bytes": 2617,
+      "sha256": "2c022b92ea232f1c5bf11ec491a073e6df6648e715ea51922d6a0f52d1fbc416"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/pedido/PedidoTest.java",
+      "bytes": 6034,
+      "sha256": "b3d5460a7e8d73989b09362bec2f1a916dec12cd484b9a802e2eb2529715aee4"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/pergunta/AvaliacaoDeInterpretacaoTest.java",
+      "bytes": 18236,
+      "sha256": "7d5344b7ee074d47d8c9494d7f84483dc57df524b6f0a7d3c850c0f487f9b88e"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/pergunta/CatalogoDePerguntasTest.java",
+      "bytes": 2143,
+      "sha256": "4475e9e0c463cbbb900fd50c750397c730aa6b7025937b6c47b48195efb9c69b"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/pergunta/DublesDeTeste.java",
+      "bytes": 4123,
+      "sha256": "28fb372fb7a4c7e181dfb9aca0d882cb84d09135185210c87e4c61610310d064"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/pergunta/InterpretacaoAdversariaTest.java",
+      "bytes": 18467,
+      "sha256": "a3f4ab3d4af30eeca594879221d3823f0edf2408ad6fb1a7f0fa873633af0756"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/pergunta/IsolamentoPerguntaTest.java",
+      "bytes": 17910,
+      "sha256": "37b57253904fb7dab91fdebb339030c7a71029859418ee808051ca0093c0ed6b"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/pergunta/ModeloGravado.java",
+      "bytes": 8345,
+      "sha256": "9ce9f3eba3279f557677c18b4da6707ed485a157fbdfbea1ac45cf5b066a00c9"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/pergunta/ModeloHeuristicoTest.java",
+      "bytes": 12283,
+      "sha256": "f9fe3f6121c174e260610143bb984dfe9109a0a54c49da99a224e8c5a687758b"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/pergunta/NenhumDigitoInventadoTest.java",
+      "bytes": 22287,
+      "sha256": "7eb644e43eefe8b654968900e3590a680dddfdf20044e333023d8cc438a596e4"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/pergunta/RotulosDeExibicaoTest.java",
+      "bytes": 2334,
+      "sha256": "85cad555ea46778c8fb04af3b532c894622591c3f8038627e3aa3620b4a6915e"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/pergunta/ServicoPerguntaTest.java",
+      "bytes": 26872,
+      "sha256": "254a6d775a4cce653ec3f6276589c2e9d554c7ae2c5aba695e65490147c930d7"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/pergunta/ValidadorDeParametrosTest.java",
+      "bytes": 11147,
+      "sha256": "2f95c8e74c56d2495573c97568684b746d4eaa4b437ad853c615b441bdf47c66"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/suporte/LeitorDeFixture.java",
+      "bytes": 1228,
+      "sha256": "538ed50910eaf319ef18a46dfef5b0240569714cd144f4b37117a45defc4ebae"
+    },
+    {
+      "path": "backend/src/test/java/com/plataforma/suporte/PostgresDeTeste.java",
+      "bytes": 9388,
+      "sha256": "0f346588bfb404de1f60eafac2b00449ca59f39c14cdfeee76c7040093596854"
+    },
+    {
+      "path": "backend/src/test/resources/fixtures/bling/pedido-venda.json",
+      "bytes": 3110,
+      "sha256": "1d66c339d717ad5076af38d550e462dc7d1cfcf55ac5fcdf987d66d6dd4b7c99"
+    },
+    {
+      "path": "backend/src/test/resources/fixtures/bling/produto-com-variacoes.json",
+      "bytes": 2221,
+      "sha256": "d505ec1fa02bfdaafff6a9733d261c935c3b42954239f3f1eda66619533c936e"
+    },
+    {
+      "path": "backend/src/test/resources/fixtures/mercadolivre/envio-detalhe.json",
+      "bytes": 812,
+      "sha256": "62390bfb116bf62e00818ab735fbf0d3cc0dbe7ffc4219326677ffa52f3bc865"
+    },
+    {
+      "path": "backend/src/test/resources/fixtures/mercadolivre/pedido-cancelado.json",
+      "bytes": 3333,
+      "sha256": "aed4502990e376869a9c5342a5015ef6546643f8e19d18e36014851037d39a5a"
+    },
+    {
+      "path": "backend/src/test/resources/fixtures/mercadolivre/pedido-com-devolucao.json",
+      "bytes": 1167,
+      "sha256": "87eb50a8207d5fbe466541e65fb775964d7733e17b8906afb3df779fea1b9600"
+    },
+    {
+      "path": "backend/src/test/resources/fixtures/mercadolivre/pedido-completo.json",
+      "bytes": 3923,
+      "sha256": "0f75328eba5b76982a43b4befb00d1aa9e748fcab9ab448da3a4c2b31d4b2fd9"
+    },
+    {
+      "path": "backend/src/test/resources/fixtures/pergunta/adversario.json",
+      "bytes": 3619,
+      "sha256": "d8085d5d355096e129ca6f71132d10dd9fecfd643941d74035009d2bdf42a773"
+    },
+    {
+      "path": "frontend/next.config.ts",
+      "bytes": 1558,
+      "sha256": "32f43fe2f9779444dad6e9e2ff5d7dac45528ef5cd8f2abba7ea707716d54837"
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "bytes": 237053,
+      "sha256": "f320a9402351ebae178f8e9869d9ab8f49cb0e8427c73032fb8aa6bbed79c6c7"
+    },
+    {
+      "path": "frontend/package.json",
+      "bytes": 665,
+      "sha256": "ccde239426d83dcc97b371337791adf5b7ea7f5fa1016d79a334c7785f67bba7"
+    },
+    {
+      "path": "frontend/src/app/(painel)/canais/page.tsx",
+      "bytes": 10919,
+      "sha256": "fcf2bb0c64fda848634036c7c8fa4f3ed4ce954289936bfad788090df61fb82a"
+    },
+    {
+      "path": "frontend/src/app/(painel)/layout.tsx",
+      "bytes": 1820,
+      "sha256": "46e2769e444256ffe8631cf61ca4255bc882692650bb8ff99f131370f1c7ae9d"
+    },
+    {
+      "path": "frontend/src/app/(painel)/operacao/page.tsx",
+      "bytes": 5542,
+      "sha256": "0e16613154b943d9cd59efea98d6d59cba7ef54c3f888824f78ae5e79c5beccb"
+    },
+    {
+      "path": "frontend/src/app/(painel)/pendencias/page.tsx",
+      "bytes": 10571,
+      "sha256": "2bc9c9e6e6057bfd43cf28202946bbeaaf76b7aa4d16224c6606b2572e8e92dc"
+    },
+    {
+      "path": "frontend/src/app/(painel)/perguntar/page.tsx",
+      "bytes": 10334,
+      "sha256": "e91bafcbcf05aafabd76dade463e51cfbe758c791091b028e2ea5b3cea76c516"
+    },
+    {
+      "path": "frontend/src/app/(painel)/resultado/page.tsx",
+      "bytes": 12910,
+      "sha256": "c7bb5e5ea2471fa9f6f8179d67a308cc3196e76d4a6c71dac61231abf0134485"
+    },
+    {
+      "path": "frontend/src/app/favicon.ico",
+      "bytes": 25931,
+      "sha256": "2b8ad2d33455a8f736fc3a8ebf8f0bdea8848ad4c0db48a2833bd0f9cd775932"
+    },
+    {
+      "path": "frontend/src/app/globals.css",
+      "bytes": 2928,
+      "sha256": "d0747f617b12fa8f6cd7b60bf47df9ed09befbbc4c1af757387e8b00935312a5"
+    },
+    {
+      "path": "frontend/src/app/layout.tsx",
+      "bytes": 806,
+      "sha256": "6df3547d95040e3e9620a589102cffa02924ff00bc8d5e2e54258ea6d8e6eb3a"
+    },
+    {
+      "path": "frontend/src/app/login/page.tsx",
+      "bytes": 3344,
+      "sha256": "cfcc20a1e386e661c1b770ec492393ae303d5d45727afac647ae29b6a24c4d6f"
+    },
+    {
+      "path": "frontend/src/app/page.tsx",
+      "bytes": 411,
+      "sha256": "9c74a0ce9b2aa02f3433a8daf128b47f6d5cb1902c0ce954b7ee59e90af59567"
+    },
+    {
+      "path": "frontend/src/app/radar/guia/page.tsx",
+      "bytes": 98,
+      "sha256": "d7857cb6282a728cba73b0bb3349c895d25535203d986186fb0670719eb2850b"
+    },
+    {
+      "path": "frontend/src/app/radar/page.tsx",
+      "bytes": 78,
+      "sha256": "9575a655ffea29b44127d91dbe1fd8a847279f70d923f1174e612a81f2482704"
+    },
+    {
+      "path": "frontend/src/app/radar/radar.css",
+      "bytes": 23176,
+      "sha256": "885c1d625f2b3ada88f3997aeef667537b9acdd006926740dfd0d36e761db898"
+    },
+    {
+      "path": "frontend/src/app/radar/radar.tsx",
+      "bytes": 53244,
+      "sha256": "75440cb7d1c64b5d4eb81a02833dd6eb6555429836289df41035a3838acffa08"
+    },
+    {
+      "path": "frontend/src/componentes/BadgeConfianca.tsx",
+      "bytes": 1368,
+      "sha256": "897a8c35a9c601de63d8ea5ee7cec0e523b7e08a32558e4cd53fa49080a9d388"
+    },
+    {
+      "path": "frontend/src/componentes/CartaoNumero.tsx",
+      "bytes": 950,
+      "sha256": "ad00f2ba357d770e165986348a74fc6853433f49fa6f62a3521c4a4fde1d11a0"
+    },
+    {
+      "path": "frontend/src/componentes/CartaoNumeroCitado.tsx",
+      "bytes": 1162,
+      "sha256": "abe51fbeff9edad5db562ad06f5af250787c2078dcac4732d8755945bc0fabea"
+    },
+    {
+      "path": "frontend/src/componentes/ListaLacunas.tsx",
+      "bytes": 955,
+      "sha256": "e010bad781c6f123e403685a6651188743cd8ce784113b582127793d66bd9166"
+    },
+    {
+      "path": "frontend/src/componentes/ListaLacunasTexto.tsx",
+      "bytes": 1090,
+      "sha256": "4a1e13907e0ff68824c7fae611eaa7b1067766590f4d8df8b1c1a685bade775a"
+    },
+    {
+      "path": "frontend/src/componentes/Navegacao.tsx",
+      "bytes": 2748,
+      "sha256": "1981be8b114e0ac09889c767a23a863376986555d1ecfd98dcd1dd7f60b13187"
+    },
+    {
+      "path": "frontend/src/componentes/RotuloConfianca.tsx",
+      "bytes": 2325,
+      "sha256": "c063fdaace6f7b5352d46c7e60c5e74047ef3fb7961e7bd2e0f4e96c6bb5649f"
+    },
+    {
+      "path": "frontend/src/componentes/ValorMonetario.tsx",
+      "bytes": 1888,
+      "sha256": "b85273e24c7099c20f05cb94ed4aa5f39e950d604a57d1b2f78ccd5c1fd57572"
+    },
+    {
+      "path": "frontend/src/lib/api/cliente.ts",
+      "bytes": 7581,
+      "sha256": "82bea139ecb8d4271ca6bfa164f59dc6d2e10b0ef4be305c38e507d7eb936a6a"
+    },
+    {
+      "path": "frontend/src/lib/api/tipos.ts",
+      "bytes": 9084,
+      "sha256": "e2fc0b82a39c424057bf3efa525d0500266fea3c1a5148972f4e028a1f06d889"
+    },
+    {
+      "path": "frontend/src/lib/canais.test.ts",
+      "bytes": 4061,
+      "sha256": "1d4363a2984451d7147d9dde8e75fb42e44c5856fc2e641c012b738ae8e0a27f"
+    },
+    {
+      "path": "frontend/src/lib/canais.ts",
+      "bytes": 3351,
+      "sha256": "af3e65d8ab8d1dd8931479354b7c40294c560eca698b172c15832b7628fc80fa"
+    },
+    {
+      "path": "frontend/src/lib/dinheiro.test.ts",
+      "bytes": 3110,
+      "sha256": "9f5a3ca0e558def1f4e9ae7f4e0f08dff0a15de8edcaf41f203d8d32a17a8a11"
+    },
+    {
+      "path": "frontend/src/lib/dinheiro.ts",
+      "bytes": 5135,
+      "sha256": "3c1d913dc5db8b3d7820a74928d64822899552c6aa12868adf7968594aab6de4"
+    },
+    {
+      "path": "frontend/src/lib/lacunas.test.ts",
+      "bytes": 2353,
+      "sha256": "598e6c51770277283d970a05d6db6f5485dfafc89b5f4b0d7d87416258f38929"
+    },
+    {
+      "path": "frontend/src/lib/lacunas.ts",
+      "bytes": 2915,
+      "sha256": "326c7087f6e132fac07955268e014ce4ec0c35a43a0c7c4e3859c06216a720fe"
+    },
+    {
+      "path": "frontend/src/lib/marca.ts",
+      "bytes": 70,
+      "sha256": "cfb7d5110c4aafa678962e7f1a1ff00f3fb62211c257ef6e3dacac6b2d17bc9e"
+    },
+    {
+      "path": "frontend/src/lib/pergunta.test.ts",
+      "bytes": 3959,
+      "sha256": "38e9897be8d25a385fd12a92111da525c02d4735fca8f039a6c4239b81997bd1"
+    },
+    {
+      "path": "frontend/src/lib/pergunta.ts",
+      "bytes": 3696,
+      "sha256": "19bf192e255683a7441bf0da38821e0dc9d56bf908a33d41e595dd1f3df979ec"
+    },
+    {
+      "path": "frontend/src/lib/rotulos.ts",
+      "bytes": 3374,
+      "sha256": "294bf23d0c12e3b8eb4396a2272df41ad9e8e77a6d08bbf92abd164f907842be"
+    },
+    {
+      "path": "infra/local-native/LOCAL-RADAR.txt",
+      "bytes": 5652,
+      "sha256": "eb3b48b9650851793ebcfeb015f77622a08b07970639e818423227676cd9c975"
+    },
+    {
+      "path": "infra/local-native/LocalFixtures.java",
+      "bytes": 1758,
+      "sha256": "d77905cce36074c98b39b80d4c4f2be99ee7eb8519ce3471390b858dec9bc10f"
+    },
+    {
+      "path": "infra/local-native/NativeBootstrap.java",
+      "bytes": 2563,
+      "sha256": "4169f0824d742d16a4ea3e3a190635bea3768d3af2148051dfc2610cc9e99d48"
+    },
+    {
+      "path": "infra/local-native/launch.ps1",
+      "bytes": 3210,
+      "sha256": "0d364dff37d56a6e065a8e9d765e645f1feb73a9b6b9642d2bd57ce38f63bae6"
+    },
+    {
+      "path": "infra/local-native/verify-db.java",
+      "bytes": 1369,
+      "sha256": "ae2f2b33e2104840b7dd063fab17afe647ec3019f15114b137e5fd92ea947359"
+    },
+    {
+      "path": "infra/local-native/verify-local.mjs",
+      "bytes": 7174,
+      "sha256": "398b5aacabfafffcfeacd24ecb900a5bdddca9ac047208a83048d194e9d7266a"
+    }
+  ]
+}

@@ -1,0 +1,807 @@
+# Manual mestre do Radar
+
+Edição 1 • 30 de setembro de 2026 • Documento interno de produto, operação e engenharia
+
+Este livro reúne a visão aprovada do Radar, o funcionamento da versão local, os procedimentos para utilizá-la e a especificação para continuar seu desenvolvimento. É a base editorial para treinamento, apresentação comercial e continuidade com desenvolvedores ou outras IAs. O documento anterior “Veja o que funciona e o que falta” foi preservado integralmente em um capítulo próprio. O plano original também está incorporado, com sua data e contexto preservados.
+
+O Radar foi definido como um Commerce Operating System 100% voltado ao e-commerce. A implementação examinada é uma prévia local persistente, sem Docker, com um núcleo operacional funcional. O produto completo aprovado ainda não foi concluído. Não existe conector externo ativo, emissão real de NF-e ou operação autônoma de IA nesta entrega. Esta distinção deve acompanhar qualquer demonstração ou material derivado.
+
+## 1 Como consultar e manter este livro
+
+### Três caminhos de leitura
+
+Para negócio e direção: comece nos capítulos 2 a 6, consulte a matriz de capacidades no 7 e use os capítulos 19 a 22 para planejar lançamento, medir valor e produzir materiais. Para administração e operação: use os capítulos 8 a 11, execute os exercícios em dados fictícios e recorra ao glossário. Para desenvolvimento ou outra IA: leia a fotografia técnica dos capítulos 12 a 18, os anexos de código e dados e o roteiro de continuidade do capítulo 23.
+
+O sumário permite saltar entre capítulos. A busca filtra capítulos por assunto. O conteúdo pode ser impresso pelo botão de impressão; escolha salvar como PDF no navegador se desejar uma cópia paginada. A edição HTML é o livro principal, funciona sem internet e mantém tabelas e trechos de código pesquisáveis. O arquivo de texto é uma cópia editável destinada a revisão e ingestão por outra IA.
+
+### Significado dos estados
+
+| Estado | O que significa | Como comunicar |
+|---|---|---|
+| Implementado localmente | Há código que realiza a operação na base local | “Disponível na avaliação local” |
+| Simulação | Há fluxo de tela e alteração interna, sem efeito no canal externo | “Simula publicação ou expedição” |
+| Parcial | Uma parte existe e outras etapas faltam | Nomear exatamente a parte disponível |
+| Planejado | Faz parte da visão aprovada, mas ainda deve ser construído | “Previsto no roadmap” |
+| Dependência externa | Requer conta, contrato, documentação, credenciais ou homologação | Não prometer prazo antes de confirmar a dependência |
+| Evidência histórica | Foi verificado em execução anterior registrada | Não apresentar como teste executado novamente nesta edição |
+
+As descrições de implementação neste livro foram confrontadas com os arquivos do projeto. Os resultados de testes citados pertencem à execução anterior desta mesma tarefa; a escrita deste livro não repetiu a suíte nem realizou auditoria exaustiva de todo o repositório. O manifesto de fontes registra caminhos e hashes para permitir comparação futura. Um commit-base não inclui automaticamente as alterações locais ainda não commitadas.
+
+### Hierarquia de evidências
+
+Para saber o que o programa faz hoje, priorize código atual, migrations, configuração efetiva e resultados de testes com data. Para saber o que ele deve fazer, use o escopo aprovado e os critérios de aceite do roadmap. Um nome no menu ou no registro de agentes não prova que o recurso está operacional. Se duas fontes divergem, registre a divergência; não escolha silenciosamente a interpretação mais otimista.
+
+Depois de cada entrega, atualize os capítulos afetados, a matriz de capacidades, os procedimentos, o manifesto e as evidências de testes. Guarde uma edição anterior. Alterações de cálculo exigem um exemplo numérico antes/depois. Alterações de integração exigem atualização da matriz de capacidades por canal. A documentação de divulgação deve ser regenerada a partir da edição aprovada, nunca de uma conversa isolada.
+
+## 2 A visão de negócio e o problema resolvido
+
+O seller costuma operar com dados espalhados: cadastro no ERP, anúncios nos canais, conversas em caixas diferentes, taxas nos relatórios dos marketplaces e controles financeiros em planilhas. A decisão sobre preço ou compra depende de juntar essas peças. O Radar pretende unir registro, interpretação e ação autorizada em uma mesma experiência. A proposta de valor é reduzir trabalho repetitivo e tornar o resultado econômico explicável.
+
+O foco é o ciclo do e-commerce: produto, canal, pedido, estoque, fiscal, expedição, recebimento, custos e resultado. Módulos genéricos sem conexão com esse ciclo não entram automaticamente no escopo. Folha de pagamento, indústria completa ou gestão empresarial genérica só devem ser considerados quando existir uma necessidade demonstrada do público escolhido e uma decisão explícita de produto.
+
+### As três responsabilidades do produto
+
+System of Record registra fatos: quem vendeu, o que foi reservado, qual documento foi autorizado e qual lançamento financeiro foi recebido. System of Intelligence relaciona esses fatos: onde a margem caiu, por que existe uma divergência ou quais SKUs têm excesso de estoque. System of Action executa uma decisão permitida: ajustar preço, preparar anúncio, responder uma pergunta ou encaminhar uma exceção. Uma ação só termina quando seu resultado foi confirmado e registrado.
+
+A jornada aprovada é perguntar → compreender → recomendar → executar. Hoje, o copiloto local responde a algumas intenções por regras; o ciclo amplo com modelos, ferramentas e ações externas ainda é uma meta. A arquitetura deve permitir evolução gradual sem colocar um modelo de linguagem como dono dos saldos, cálculos ou permissões.
+
+### Público inicial e recorte de entrada
+
+Hipótese de público: pequenos e médios vendedores que operam poucos canais, sentem dificuldade para conciliar dados e precisam profissionalizar catálogo, estoque e financeiro. Isso é uma hipótese de posicionamento, não uma pesquisa validada de mercado. O piloto precisa identificar volume de pedidos, número de SKUs, regime operacional, equipe, canais, ferramentas atuais e disposição para mudar de sistema.
+
+Um recorte inicial recomendado é uma operação com catálogo administrável, um centro de estoque, um canal prioritário e equipe capaz de conferir os números. Primeiro se prova um ciclo completo; depois se replica em um segundo canal. A expansão para grande variedade de canais antes de provar o financeiro e o estoque aumenta a superfície de erro.
+
+### O que pode diferenciar o Radar
+
+A tese aprovada combina cinco elementos: resultado financeiro rastreável por pedido/SKU/canal; conhecimento operacional transformado em regras e ferramentas; agentes que conseguem agir com supervisão; telas adequadas ao cargo; e venda de trabalho executado com qualidade verificável. Essa combinação é uma tese competitiva a validar. Não deve ser anunciada como exclusividade comprovada.
+
+Evitar frases como “nenhum ERP faz isso”, “lucro perfeito” ou “IA resolve tudo”. Olist, Bling, ANYMARKET, Base e ferramentas especializadas são referências indicadas no planejamento. As funcionalidades e preços atuais dos concorrentes não foram revalidados nesta edição. Comparativos públicos futuros precisam de pesquisa primária datada e evidências por recurso.
+
+## 3 Os nove domínios e como trabalham juntos
+
+| Domínio aprovado | Responsabilidade | Entrada principal | Saída esperada no produto completo |
+|---|---|---|---|
+| Radar Core | Empresas, usuários, cargos, permissões e auditoria | Identidade e contexto da empresa | Acesso e execução controlados |
+| Radar ERP | Produtos, compras, estoque, fiscal e financeiro | Catálogo e movimentações | Operação consistente |
+| Radar Commerce | Marketplaces, anúncios, pedidos, preço e logística | Eventos dos canais | Pedidos e publicações sincronizados |
+| Radar Profit | Custos, taxas, ledger, conciliação e resultado | Evidências financeiras | Resultado explicável e divergências |
+| Radar Service | Inbox, atendimento, reclamações e devoluções | Conversas e pedidos | Resolução com contexto e SLA |
+| Radar Market | Concorrência, palavras-chave e performance | Dados permitidos de mercado | Referências comparáveis e oportunidades |
+| Radar Studio | Identidade, imagens, descrições e anúncios | Produto e Brand Profile | Conteúdo revisado por canal |
+| Radar Intelligence | Dashboards, previsões, alertas e insights | Fatos e métricas versionadas | Prioridades e explicações |
+| Radar AI | Chat, voz, agentes, políticas e ferramentas | Intenção humana e eventos | Recomendações ou ações autorizadas |
+
+Esses domínios são a decomposição desejada, não nove serviços já implementados. A recomendação inicial é um monólito modular, com limites de domínio, contratos internos e transações claras. Separar processos ou adotar microsserviços deve responder a uma necessidade medida de escala, isolamento ou equipe, e não ao nome de cada domínio.
+
+### Fluxo operacional desejado
+
+Cadastro ou importação → identidade central do produto/SKU → adaptações de anúncio por canal → publicação confirmada → pedido recebido → reserva de estoque → documento fiscal autorizado → separação e expedição → atualização logística → repasses e custos → conciliação → Profit Engine → prioridade na Central de ações → decisão ou ação supervisionada.
+
+Existem voltas no fluxo. Uma devolução afeta estoque, recebíveis, taxas e análise do anúncio. Uma nota rejeitada bloqueia a etapa que depende dela. Um repasse divergente gera investigação sem apagar o valor esperado. Um anúncio recusado preserva o produto mestre e expõe a rejeição específica do canal. Um concorrente mais barato gera simulação de margem antes de qualquer alteração.
+
+### Fontes de verdade
+
+O produto mestre define a identidade interna; cada canal tem seu identificador externo e suas próprias restrições. O estoque disponível é derivado de estoque físico, reservas e regras de segurança. O documento fiscal autorizado é evidência fiscal. O extrato financeiro do canal é evidência do repasse; a informação bancária é evidência distinta do recebimento. O ledger registra como cada evidência entrou no cálculo. Não se deve tratar o valor de um anúncio como preço de todas as vendas passadas, nem o custo atual como custo histórico de um pedido.
+
+Tiny, Bling e outros ERPs aparecem no futuro como importadores de migração/onboarding. O Radar não deve depender deles para cumprir sua operação principal. Coexistência exige definir qual sistema controla estoque, publicação e emissão em cada etapa, para evitar comandos duplicados.
+
+## 4 Estratégias de uso e criação de valor
+
+### Proteger margem
+
+Identificar pedidos negativos, separar causas e simular correções antes de alterar anúncios. A queda pode vir de comissão, desconto, frete, CMV, Ads ou devolução. A estratégia correta depende da causa: preço não corrige sozinho um produto com devolução excessiva ou uma campanha mal atribuída. A versão local ajuda a ensaiar essa análise com valores manuais; o monitoramento contínuo com dados externos está planejado.
+
+### Melhorar capital de giro
+
+Confrontar giro, cobertura de estoque, prazo de reposição, margem e caixa disponível. A compra sugerida deve considerar compromissos financeiros e estoque em trânsito. Hoje, a tela de Compras usa um mínimo fixo e registra planejamento; não calcula demanda futura ou sazonalidade. No produto completo, a recomendação deverá mostrar horizonte, dados usados, incerteza e restrições de orçamento.
+
+### Reduzir esforço de catálogo
+
+Importar uma planilha, revisar o mapeamento e completar somente os campos ausentes. No futuro, salvar modelos por fornecedor, enriquecer cadastro com confirmação, gerar variantes de anúncio e acompanhar rejeições por canal. Na prévia atual, o reconhecimento é por nomes de coluna e o template fica no navegador. A economia de tempo só deve ser divulgada depois de comparar o processo anterior com uma tarefa equivalente no Radar.
+
+### Transformar atendimento em aprendizado
+
+Relacionar mensagens a pedido, produto, entrega e devolução. Classificar demandas simples, demandas com aprovação e exceções humanas. Devoluções frequentes por medida podem indicar necessidade de melhorar tabela dimensional ou imagem. Esse circuito entre Service, Returns Intelligence, Studio e Listing Agent é planejado; os registros manuais atuais não executam essa análise automaticamente.
+
+### Coordenar campanhas por resultado
+
+ROAS é receita atribuída dividida por gasto em publicidade; não é lucro. Uma campanha com receita alta pode ter margem baixa após taxas, frete, impostos e CMV. O Radar deve preservar a diferença entre receita atribuída, resultado após Ads e resultado incremental estimado. Incrementalidade requer desenho experimental ou método causal adequado; o sistema não pode inferi-la apenas pela soma das vendas atribuídas.
+
+### Vender trabalho realizado
+
+Service as Software significa entregar um processo executado e verificável, como conciliação diária com fila de exceções. Exige definir escopo, qualidade, responsabilidade, intervenção humana e mensuração. “Radar Autopilot” é uma camada comercial proposta, ainda não entregue. A cobrança por automação não pode esconder custo de revisão, falhas e suporte. Toda promessa comercial precisa indicar quais resultados dependem do cliente e de plataformas externas.
+
+## 5 Modelo comercial e previsão de negócio
+
+### Camadas propostas
+
+Radar ERP: fundação operacional. Radar AI: consultas, inteligência e assistência. Radar Autopilot: execução recorrente dentro de políticas. Os nomes e a separação de planos são provisórios. Nenhum preço, limite de uso ou SLA comercial foi aprovado neste projeto. Antes de precificar, medir custo de infraestrutura, conectores, emissão fiscal, modelos, imagens, voz, armazenamento, observabilidade, suporte e onboarding.
+
+### Indicadores para validar o negócio
+
+Ativação: empresa conclui catálogo inicial, primeiro fluxo operacional e conferência do resultado. Tempo até valor: intervalo entre entrada e primeira decisão útil comprovada. Adoção: usuários e processos recorrentes por empresa. Retenção: empresas que continuam ativas ao longo das coortes. Qualidade: divergências não explicadas, falhas de sincronização e retrabalho. Economia: minutos evitados com o mesmo nível de qualidade. Confiança: percentual de valores com origem verificável e aprovações compreendidas pelo operador.
+
+Não otimizar apenas mensagens enviadas ao chatbot ou número de alertas. Um bom alerta tem causa, responsável, prazo, ação possível e desfecho. Um alerta que o usuário ignora sempre pode ser ruído. Uma automação que executa muito mas exige correção manual pode destruir valor.
+
+### Modelo econômico ilustrativo
+
+Os números a seguir são hipóteses para uma planilha de planejamento, não previsão comercial nem recomendação financeira. Exemplo: mensalidade média de R$399; custo variável de atendimento e infraestrutura de R$120 por empresa; contribuição de R$279 antes de despesas fixas. Com R$27.900 mensais de despesas fixas, o equilíbrio simplificado seria 100 empresas ativas. Se o custo variável subir para R$200, a contribuição cai para R$199 e o equilíbrio sobe para aproximadamente 141 empresas. Impostos, inadimplência e aquisição precisam entrar em um modelo completo; não estão calculados nesse exemplo.
+
+| Cenário hipotético | Empresas ativas | Mensalidade média | Receita mensal bruta | Custo variável a R$120 | Contribuição antes de despesas fixas |
+|---|---:|---:|---:|---:|---:|
+| Validação | 20 | R$399 | R$7.980 | R$2.400 | R$5.580 |
+| Piloto ampliado | 100 | R$399 | R$39.900 | R$12.000 | R$27.900 |
+| Expansão | 300 | R$399 | R$119.700 | R$36.000 | R$83.700 |
+
+O quadro não considera churn, descontos, impostos, custos fixos adicionais ou mudança de carga. Para uma previsão mensal, começar pelo saldo de clientes, acrescentar novos pagantes, subtrair cancelamentos e multiplicar pelo ticket efetivo. Separar receita contratada de dinheiro recebido. Medir custo de aquisição por canal e prazo de recuperação pela contribuição, sem usar LTV de uma coorte pequena como certeza.
+
+### Estágios de validação recomendados
+
+Primeiro, entrevistas e observação de rotina. Depois, demonstração local com tarefas reais reproduzidas em dados fictícios. Em seguida, piloto acompanhado com integrações homologadas e reconciliação em paralelo com as fontes originais. Só então escalar aquisição. A amostra e o tempo do piloto devem ser definidos por risco, volume e variabilidade; não existe data de lançamento confiável sem equipe, orçamento e dependências confirmadas.
+
+## 6 Cargos e experiência de trabalho
+
+A visão aprovada prevê workspaces contextuais. Dono/CEO precisa de faturamento, resultado, margem, caixa, capital em estoque, produtos negativos e prioridades. Gerência acompanha operação, anúncios, preço, estoque, SLA e causas de perda. Financeiro trabalha com contas, repasses, conciliações e divergências. Atendimento trabalha com inbox, pedido, histórico e trocas, sem receber DRE por padrão. Estoque/expedição precisa de picking, packing, etiquetas e disponibilidade. Marketing/marketplace trabalha com anúncios, Ads, concorrência e conteúdo.
+
+A implementação atual possui sete papéis e alguns bloqueios reais no servidor, mas ainda usa uma estrutura de tela compartilhada. Menu diferente não equivale a workspace completo. Gestão de usuários, convites, MFA, permissões granulares e separação completa de campos por finalidade precisam evoluir. O papel ANALISTA vem da base anterior; não corresponde automaticamente a um cargo comercial definitivo.
+
+| Operação atual | Papéis autorizados pelo núcleo Radar |
+|---|---|
+| Criar, editar e importar produtos | DONO, GESTOR |
+| Ajustar estoque | DONO, GESTOR, ESTOQUE |
+| Criar anúncios, alterar estado, propor preço e preparar lote | DONO, GESTOR, MARKETING |
+| Aprovar ou rejeitar preço | DONO, GESTOR |
+| Criar pedido | DONO, GESTOR |
+| Separar ou expedir simulação | DONO, GESTOR, ESTOQUE |
+| Cancelar ou devolver pedido | DONO, GESTOR |
+| Criar/baixar contas, registrar despesa e conferir repasse | DONO, GESTOR, FINANCEIRO |
+| Registrar mensagem local | DONO, GESTOR, ATENDIMENTO, ANALISTA |
+| Registrar marca ou concorrente | DONO, GESTOR, MARKETING |
+| Registrar fornecedor, compra e recebimento | DONO, GESTOR, ESTOQUE |
+| Consultar totais financeiros e pergunta de lucro | DONO, GESTOR, FINANCEIRO |
+| Consultar auditoria na nova API | DONO |
+
+A matriz é descritiva do código atual, não a política final aprovada para todos os clientes. Há pontos a corrigir: compras em JSON podem carregar custo para o papel ESTOQUE; diversos papéis recebem pedidos e campos de cliente; algumas telas exibem botões que o servidor rejeita. A revisão deve considerar permissão por campo e propósito, não apenas por endpoint. Um auditor externo ou contador poderá exigir papel próprio.
+
+## 7 Matriz das capacidades atuais e futuras
+
+| Área | Disponível nesta edição | Ainda necessário |
+|---|---|---|
+| Produto mestre | SKU, nome, marca, NCM, descrição, custo, preço e saldo | Variações, GTIN, dimensões, peso, imagens, kits e regras de identidade |
+| Importação | CSV, primeira aba XLS/XLSX, pré-cadastro XML, prévia e confirmação | LLM assistido, templates por tenant/fornecedor, atualização e deduplicação documental |
+| Anúncios | Rascunho por produto/canal, quatro canais locais, pausa e simulação | OAuth, categorias, atributos, publicação e confirmação externas, mídia e rejeições |
+| Pedidos | Um SKU, reserva, separação, expedição simulada, cancelamento, devolução total | Ingestão real, múltiplos itens, split, devolução parcial e logística |
+| Estoque | Físico, reservado, disponível e movimentos | Depósitos, estoque em trânsito, segurança, fulfillment e reconciliação por canal |
+| Compras | Fornecedor manual, planejamento, recebimento total e custo médio | Cotações, pedidos ao fornecedor, recebimento parcial, frete/impostos de aquisição |
+| Fiscal | Campo NCM e indicação de cadastro incompleto | Provedor, certificado, configuração, autorização, eventos e XML fiscal completo |
+| Financeiro | Contas manuais, baixa manual, despesas e conferência informada | Recebíveis automáticos, bancos, extratos de canal, regras de competência e DRE completa |
+| Profit | Lançamentos assinados por valor positivo/negativo, custo congelado e somas por canal/SKU | Ledger econômico completo, evidências externas, versionamento, rateios e fechamento |
+| Preço | Simulador manual e aprovação com piso no custo | Tarifas por faixa, política de margem líquida, vigência e execução no canal |
+| Central de ações | Preço pendente, saldo mínimo e pedido negativo por regra | SLA, atribuição, deduplicação de alertas, priorização e ciclo de resolução |
+| Inbox | Anotações de conversas fictícias | Recebimento, resposta contextual, envio, SLA, comentários e anexos |
+| Studio | Perfil de marca textual e título por regra | Upload, tratamento de imagem, variantes, consistência visual e avaliação |
+| Concorrência | URL HTTPS e observação manual | Coleta permitida, comparação validada, histórico e descoberta automática |
+| IA | Consulta local por palavras-chave, registro estático de agentes | Gateway, modelos, ferramentas versionadas, avaliações e voz |
+| Autopilot | Não disponível | Política configurável, budgets, limites, kill switch, verificação e compensação |
+
+Os quatro nomes disponíveis no catálogo de canais são Mercado Livre, Shopee, TikTok Shop e SHEIN. Amazon aparece na visão de adaptação de conteúdo e possível expansão, mas não integra a lista executável atual. WhatsApp, Instagram, e-mail, emissor fiscal e Ads aparecem como conexões futuras, não como conectores prontos para receber uma chave.
+
+Há diferenças importantes entre intenção e implementação. O registro estático descreve Support Agent como sugestão, mas a tela informa corretamente que sugestão contextual ainda falta. Não usar esse registro como prova de entrega. O estado EXPIRADA existe no schema de ação, mas não há tarefa de expiração automática. O mínimo de estoque nasce em cinco unidades; não há formulário dedicado para alterá-lo na prévia.
+
+## 8 Primeiro acesso e rotina administrativa
+
+### Abrir e reconhecer o ambiente
+
+1. Abra http://127.0.0.1:3000/radar no mesmo computador da instalação.
+2. Se não abrir após reiniciar o computador, execute Iniciar-Radar.cmd na pasta dos entregáveis. Aguarde a confirmação de disponibilidade.
+3. Na tela de acesso, confira o e-mail fictício preenchido e entre. O acesso dono@demo.plataforma usa a senha demo1234 apenas nesta demonstração.
+4. Confirme a faixa “Ambiente local de avaliação”. Ela informa que marketplaces, NF-e e envios externos não estão conectados.
+5. Abra “Como usar” para percorrer as cinco etapas. Para o guia diretamente, use /radar/guia.
+
+O endereço 127.0.0.1 só atende no computador em que o programa está rodando. Não é um site publicado para clientes. Reiniciar o backend pode encerrar as sessões; entrar de novo não apaga os dados. Não usar senhas de marketplace nem informações pessoais reais nesta base de demonstração.
+
+### Conhecer os dados fictícios
+
+A loja de exemplo usa o nome Casa Clara. O catálogo inicial inclui persianas, cortina e trilho. Foram criados pedidos fictícios para mostrar uma operação positiva, outra negativa e uma aprovação de preço. Esses dados são exemplos didáticos, não vendas reais, resultados de cliente ou benchmark. O botão “Carregar catálogo de exemplo” aparece quando o catálogo está vazio; não serve como restauração geral.
+
+### Rotina diária sugerida
+
+Ao começar: olhar a Central de ações, pedidos pendentes e estoque mínimo. Antes de cadastrar: confirmar se o SKU já existe. Antes de alterar saldo: conferir contagem física e reservas. Antes de expedir: lembrar que a versão atual apenas simula, sem nota nem frete contratado. Ao encerrar: conferir operações do dia, despesas e divergências; anotar pendências com responsável fora do sistema quando a tela ainda não oferece esse controle.
+
+### Simular outros cargos
+
+Saia pelo botão “Sair”. Entre com gestor@demo.plataforma, financeiro@demo.plataforma, atendimento@demo.plataforma, estoque@demo.plataforma, marketing@demo.plataforma ou analista@demo.plataforma. Todos usam a senha fictícia demo1234 nesta base. Compare a visibilidade e tente apenas ações de demonstração. Se aparecer “Operação não permitida”, pode ser o bloqueio de cargo. A criação desses usuários é uma fixture local, não um fluxo de convite entregue ao cliente.
+
+## 9 Procedimentos de catálogo anúncios e estoque
+
+### Cadastrar e editar um produto
+
+1. Entre como dono ou gestor. Abra “Produtos” e clique em “Novo produto”.
+2. Preencha nome e SKU. O SKU é uma identificação estável dentro da empresa; crie uma convenção antes de importar muitos itens.
+3. Informe marca, descrição e NCM se conhecido. NCM deve ter oito dígitos, mas o sistema apenas valida o formato; ele não confirma a classificação tributária.
+4. Informe custo unitário, preço base e saldo inicial inteiro não negativo. Use valores monetários com até duas casas decimais.
+5. Confirme. Confira o produto na lista e, se houve saldo inicial, o movimento correspondente em Estoque.
+6. Para mudar nome, descrição, marca, NCM, custo ou preço base, use “Editar”. O SKU não é alterado nesse formulário. O estoque deve ser corrigido por movimento, e não por edição do produto.
+
+Alterar custo atual não reescreve o custo congelado dos pedidos antigos. Alterar preço base não altera automaticamente anúncios existentes. NCM preenchido não significa cadastro fiscal completo: GTIN, tributação, unidade e outros campos ainda pertencem à evolução do produto.
+
+### Importar CSV ou Excel
+
+1. Prepare uma planilha com cabeçalho na primeira linha. Na prévia, use a primeira aba do arquivo Excel.
+2. Inclua SKU e nome; acrescente custo, preço, saldo, marca, NCM e descrição quando disponíveis. Formate códigos com zeros à esquerda como texto na origem.
+3. Abra “Importar catálogo”, arraste o arquivo ou escolha-o pelo botão. O limite atual é 10 MB e 3.000 produtos por lote.
+4. Confira cada correspondência: “custo” não pode apontar para preço de venda; “saldo” deve representar unidades, não valor de estoque.
+5. Leia a prévia das dez primeiras linhas, mas também valide o arquivo completo fora da tela. Dez linhas não garantem que todas as outras estão corretas.
+6. Confirme o lote. O backend valida todas as linhas na mesma transação; uma duplicidade de SKU ou dado inválido bloqueia o conjunto.
+7. Confira a quantidade e alguns SKUs no catálogo. O template é salvo neste navegador para um cabeçalho igual.
+
+O leitor não entende qualquer planilha arbitrária. Não há reconhecimento semântico por IA, escolha de múltiplas abas, resolução visual de duplicados ou atualização de produtos existentes. Valores vazios de custo/preço viram zero; isso exige revisão humana antes de usar o financeiro. Códigos numéricos podem perder zeros se a planilha os armazenar como número. Mais de duas casas decimais são rejeitadas pelo servidor, inclusive em custos importados; normalize conscientemente e confira a prévia. Não descartar precisão fiscal sem definir uma regra de negócio.
+
+### Importar XML de NF-e de entrada
+
+O fluxo atual lê itens det e extrai cProd, xProd, vUnCom e NCM. O SKU será o código encontrado no arquivo; ele pode ser o código do fornecedor, não o seu SKU interno. Preço de venda e saldo entram como zero. Documento com entidades ou DOCTYPE é bloqueado no leitor local. Essa proteção não equivale a validação fiscal, assinatura digital ou autenticação do emissor.
+
+1. Escolha um XML fictício ou autorizado para teste.
+2. Confira os códigos e descrições na prévia; ajuste o mapeamento quando possível.
+3. Importe somente se os SKUs correspondem à identidade desejada e ainda não existem.
+4. Complete o cadastro e registre o recebimento físico por um único caminho. Não incremente manualmente o estoque e depois receba a mesma compra novamente.
+
+Fornecedor, chave da NF-e, quantidade fiscal e impostos completos não são persistidos automaticamente por esse importador. O desenho aprovado prevê deduplicação pela chave, vínculo de fornecedor, atualização de custo/estoque e perguntas sobre dados faltantes; essas etapas ainda não estão implementadas.
+
+### Preparar anúncios
+
+Abra “Produtos” e use “Criar anúncio” para escolher canal, título e preço. Ou use “Preparar 4 canais” para criar rascunhos nos quatro canais suportados localmente. Se já existir anúncio daquele produto naquele canal, o lote não deve duplicá-lo. A restrição atual permite um anúncio por produto/canal, o que precisará evoluir para múltiplas contas e ofertas.
+
+Em “Anúncios”, confira produto, canal, preço e estado. “Simular publicação” muda somente o estado local; não cria anúncio no marketplace. “Pausar local” também não pausa uma oferta real. “Pausar todos localmente” atua nos anúncios carregados pela interface; devido ao limite de consulta, não interpretar o botão como garantia de processar um catálogo ilimitado. Publicação massiva externa, alteração de preço em massa por seleção e tratamento individual de rejeições fazem parte do roadmap.
+
+### Ajustar estoque
+
+Abra “Estoque”, selecione o produto e informe uma quantidade de ajuste positiva para entrada ou negativa para saída. Informe o motivo de forma rastreável: contagem física, avaria ou correção, por exemplo. Confirme e verifique o movimento. O sistema bloqueia um ajuste que deixaria o físico abaixo do reservado.
+
+Disponível = físico − reservado. Se há dez unidades físicas e duas reservadas, oito estão disponíveis. Reservar não diminui o físico. Expedir diminui físico e reserva. Cancelar antes da expedição libera a reserva. Uma devolução só aumenta o físico quando marcada como inspecionada e apta à revenda. O saldo atual é de um único estoque, sem depósitos, lotes ou localização.
+
+### Planejar e receber compra
+
+1. Em “Compras”, veja os produtos no mínimo. A indicação é uma regra fixa, não previsão de demanda.
+2. Registre o fornecedor se necessário. Não há envio de pedido ao fornecedor.
+3. Clique em “Planejar” para um produto sugerido. Confira produto, quantidade, custo unitário, fornecedor e observação.
+4. Quando as unidades estiverem fisicamente conferidas, use “Conferir recebimento” e confirme o recebimento total.
+5. Confira aumento de estoque, novo custo médio e conta a pagar criada.
+
+O recebimento só pode ocorrer uma vez. Não há parcial, estorno de recebimento ou edição estruturada de ordem de compra. A conta criada vence na data do recebimento; prazo e parcelamento devem evoluir. O custo médio considera o saldo físico e custo atual mais a compra, arredondando para duas casas. Frete de aquisição, impostos recuperáveis e despesas de entrada não são rateados automaticamente.
+
+## 10 Procedimentos de pedidos financeiro e preço
+
+### Criar e acompanhar pedido
+
+1. Entre como dono ou gestor. Abra “Pedidos” e “Pedido local”.
+2. Selecione produto e canal. Use um nome de cliente fictício.
+3. Informe quantidade inteira e preço unitário. Informe comissão, frete, imposto, Ads, embalagem e desconto como totais do pedido, não percentuais nem valores unitários.
+4. Confirme. O sistema gera um número R- e reserva o estoque. O custo unitário é congelado naquele momento.
+5. Use “Separar” para mudar de RESERVADO para SEPARADO.
+6. Use “Simular expedição” e leia a confirmação. A baixa física acontece, mas nenhuma NF-e é emitida e nenhum transporte é contratado.
+
+Não é possível expedir diretamente um pedido reservado. A sequência é parte da proteção contra movimentos inconsistentes. Um pedido atual possui um SKU; criar duas linhas exige dois pedidos, o que não substitui o modelo futuro de itens em uma mesma venda.
+
+### Cancelar e devolver
+
+Antes de expedir, dono ou gestor pode cancelar. A reserva é liberada e os lançamentos do pedido local recebem estornos. Como não existe canal externo, esse procedimento não significa que o comprador foi reembolsado ou que uma venda real foi cancelada.
+
+Depois de expedir, registre devolução total. Informe se o produto foi inspecionado e pode voltar à venda. Quando sim, a unidade retorna ao físico e o CMV correspondente é revertido. Quando não, o custo permanece como perda. Receita e desconto são revertidos. Comissão, frete, imposto, Ads e embalagem permanecem registrados até uma política/evidência futura de recuperação. Não presumir recuperação de imposto ou taxa só porque houve devolução.
+
+### Entender a tela Financeiro
+
+Receita registrada é a soma dos lançamentos do tipo RECEITA, incluindo reversões. Resultado local é a soma de todos os lançamentos assinados. “A pagar” e “A receber” somam títulos abertos carregados pela tela. Esses indicadores representam objetos diferentes; uma conta criada não é automaticamente despesa e uma baixa não movimenta dinheiro real.
+
+A tabela de resultado por pedido mostra pedidos que não estão cancelados ou devolvidos. O razão preserva todos os movimentos. Os agregados por canal e SKU incluem estornos e devoluções, calculados no servidor. Despesas gerais não rateadas entram no total da operação, mas não nos resultados por canal/SKU. Por isso, a soma dos canais pode diferir do total pelo valor das despesas gerais.
+
+### Registrar conta e despesa
+
+Para compromisso financeiro, clique em “Conta”, escolha PAGAR ou RECEBER, descrição, valor e vencimento. “Registrar baixa” marca o título como BAIXADO; não acessa banco e não comprova quitação. Para custo geral que afeta resultado, use “Despesa” com descrição e valor positivo; o sistema cria um lançamento negativo. Não repetir a mesma despesa se ela já foi incluída no pedido. A prévia não tem ligação completa entre contas, competência, caixa e razão; a conciliação desse processo precisa de evolução.
+
+### Conferir repasse
+
+Em um pedido elegível, clique em “Conferir”. Informe o recebido. A regra local espera bruto menos comissão, frete e desconto. Ela não lê extrato bancário nem do canal e não modela todas as retenções. Se o valor divergir, o sistema registra uma divergência e informa que o pedido não foi conciliado por aquela tentativa. Se coincidir, marca conferência manual.
+
+Uma divergência é uma evidência a investigar, não prova de erro do marketplace. Não lançar automaticamente a diferença como despesa. Há uma limitação a corrigir: se o pedido já havia sido conciliado e uma nova tentativa diverge, o ramo de divergência não redefine explicitamente o booleano conciliado. Antes de promover esse processo a uso real, criar estados de conciliação e ciclo de resolução, com teste de regressão.
+
+### Simular e aprovar preço
+
+1. Abra “Precificação”, escolha produto e informe preço de venda, comissão percentual, imposto percentual, frete, Ads e margem desejada.
+2. Revise os valores ilustrativos já preenchidos. Eles não são tarifas oficiais do canal.
+3. Compare o resultado estimado e o preço indicado para a margem alvo.
+4. Clique em propor para um anúncio existente e escreva o motivo.
+5. Abra “Central de ações”. Dono ou gestor confere antes/depois e aprova ou rejeita.
+6. Confira o novo preço local no anúncio e o registro em Auditoria.
+
+A aprovação valida papel, estado pendente, versão do anúncio e piso no custo atual do produto. Não garante a margem desejada do simulador: frete, comissão, impostos, Ads e despesas não compõem o piso do backend atual. Se o anúncio mudou depois da proposta, a aprovação é bloqueada; crie uma nova proposta com dados atuais. Não existe obrigação de aprovador diferente do proponente nesta versão.
+
+## 11 Atendimento Studio concorrência e ajuda
+
+### Conversas locais
+
+Abra “Atendimento” e use “Conversa local”. Informe cliente fictício, canal e mensagem. O registro aparece como anotação. Consulte o pedido no módulo correspondente. Não há sincronização, resposta enviada, vinculação automática, histórico externo ou SLA calculado. A política mostrada é orientação para o produto futuro: FAQ/status podem chegar a automação, troca/atraso/defeito exigem revisão, fraude e exceções financeiras exigem humano.
+
+### Brand Profile e rascunho
+
+Em “Brand Studio”, salve nome da marca, cores, tom de voz e regras de identidade. A paleta exibida na página é ilustrativa; não significa que todo o sistema aplicou suas cores. Na área Listing Agent, selecione um dos produtos exibidos, revise o título sugerido por concatenação de nome/marca, escolha canal e preço e salve o rascunho. A interface apresenta apenas os cinco primeiros produtos nessa área; o catálogo completo fica em Produtos. Não há geração de imagem, logo, remoção de fundo ou aprendizado de conversão.
+
+### Referências de concorrência
+
+Clique em adicionar concorrente, informe nome, link HTTPS, produto comparável, preço e observações sobre frete, condições e data. O Radar armazena a referência, não visita a página nem coleta alterações. Compare itens equivalentes: dimensão, embalagem, quantidade, qualidade, entrega e promoção. Um preço isolado sem essas condições pode levar a uma decisão ruim. Coleta automática só deve ser implementada com método permitido e revisão de qualidade do pareamento.
+
+### Consultas ao Radar AI
+
+Pergunte “Quanto sobrou na operação?”, “Como está o estoque?” ou “Quais pedidos estão pendentes?”. O sistema identifica palavras-chave e executa consultas determinísticas. Abra “Como cheguei nessa resposta” para ver as referências de cálculo. Uma pergunta sobre uma persiana específica ou causa complexa pode não ser atendida; essa limitação é preferível a inventar uma análise. Não há captação de áudio. O histórico do chat na tela é transitório; a auditoria registra a consulta sintetizada, não um produto completo de conversação persistente.
+
+### Integrações e auditoria
+
+Em Integrações, leia o estado “Não conectado”. “Ver requisitos” informa dependências, não abre um fluxo funcional de OAuth ou configuração de token. Em Auditoria, o dono vê data, operação, recurso e detalhes. Os detalhes podem ser técnicos e conter parâmetros; ainda é necessário transformar a trilha em uma experiência legível de antes/depois e proteger dados pessoais por finalidade e retenção.
+
+### Falhas comuns e conduta operacional
+
+| Sintoma | Verificação inicial | Próximo passo |
+|---|---|---|
+| Página não abre | Mesmo computador e iniciador executado? | Consultar logs e portas; não abrir Docker |
+| Sessão voltou ao login | Servidor reiniciou ou sessão expirou? | Entrar novamente |
+| Ação não permitida | Cargo pode realizar a operação? | Usar perfil autorizado; não alterar banco para contornar |
+| SKU duplicado | Produto já foi criado ou importado? | Reutilizar cadastro; importador atual não faz atualização |
+| Importação falhou | Quantidade inteira, NCM e duas casas decimais corretos? | Corrigir origem e repetir lote após conferir que não entrou |
+| Estoque insuficiente | Há reservas ativas? | Conferir pedidos antes de ajustar saldo |
+| Proposta não aprova | Anúncio mudou ou preço ficou abaixo do custo? | Recalcular e criar nova proposta |
+| Resultado não bate | Valores totais versus unitários e despesas duplicadas? | Conferir razão e premissas; não apagar evidência |
+| Algo não aparece | Limite de mil registros ou papel filtrando? | Escalar para desenvolvimento; não concluir que dado sumiu |
+| Falha após clicar salvar | A operação pode ter chegado ao servidor? | Consultar estado antes de repetir; UI ainda não recupera a mesma chave após falha incerta |
+
+## 12 Arquitetura técnica da edição local
+
+Raiz do projeto: C:\Users\Juliana Trabalho\Documents\ECP\kit-inicio. O commit-base identificado na inspeção inicial foi 6eb379b. A implementação do núcleo Radar permanece em alterações locais. O inventário inicial de 393 arquivos era anterior ao incremento; não representa a contagem atual. Use o manifesto atualizado anexado para os arquivos efetivamente usados nesta edição.
+
+| Camada | Tecnologia observada | Responsabilidade |
+|---|---|---|
+| Interface | Next.js 16.3.8, React 19.2.8, TypeScript 5 | Login, módulos de avaliação, formulários, guia e simulador |
+| Estilo | CSS específico Radar e Tailwind 4 no projeto | Apresentação e adaptação de largura |
+| Leitura de planilha | SheetJS xlsx 0.20.3, tarball oficial fixado | Leitura local XLS/XLSX no navegador |
+| Backend | Java 21, Spring Boot 3.3.13 | Sessão, regras, transações e consultas |
+| Persistência | PostgreSQL 16.15 nativo; JDBC 42.7.13 | Dados, RLS, constraints, locks e agregações |
+| Migração convencional | Flyway 10.22.0 | Caminho existente do projeto, separado do boot |
+| Migração local desta estação | NativeBootstrap.java e radar_native_schema | Aplicação transacional com checksum, sem extensão vector |
+| Integração herdada | Camel 4.8.9 e adaptadores de payload | Dependência e normalização; não comprovam conectores vivos |
+
+### Caminho de uma requisição
+
+Navegador → Next em 127.0.0.1:3000 → rewrite /api para Spring em 127.0.0.1:8080 → cadeia Spring Security → FiltroTenant → RadarGuard → RadarController → RadarService → JdbcTemplate/DataSourceComTenant → PostgreSQL em 127.0.0.1:55432. O tenant vem da sessão, não do corpo escolhido pelo cliente. O datasource configura app.tenant_id na conexão para alimentar a policy RLS.
+
+O Spring usa sessão de servidor com cookie. A configuração atual não oferece persistência distribuída de sessão pronta para escala. O segredo de HMAC de documentos e a senha do banco vêm de ambiente. A conexão de aplicação usa app_aplicacao, diferente do usuário administrativo que aplica migrations.
+
+### Mapa de manutenção
+
+| Arquivo ou pasta relativa | Onde atuar |
+|---|---|
+| frontend/src/app/radar/radar.tsx | Telas, navegação por estado, formulários, importação, simulador, chat e guia |
+| frontend/src/app/radar/radar.css | Layout e estilos da interface nova |
+| frontend/src/app/radar/page.tsx | Entrada /radar |
+| frontend/src/app/radar/guia/page.tsx | Entrada /radar/guia com página inicial do guia |
+| frontend/src/lib/marca.ts | Nome de exibição Radar |
+| frontend/next.config.ts | Rewrite do backend e configuração de build |
+| backend/src/main/java/com/plataforma/radar/RadarController.java | Três endpoints do núcleo local |
+| backend/src/main/java/com/plataforma/radar/RadarService.java | Regras, consultas, autorizações por comando e transações |
+| backend/src/main/java/com/plataforma/radar/RadarGuard.java | Restrições adicionais de cargo e cabeçalho |
+| backend/src/main/java/com/plataforma/radar/RadarErrors.java | Erros HTTP sanitizados do controlador Radar |
+| backend/src/main/java/com/plataforma/autenticacao | Login JSON, sessão, BCrypt e papéis |
+| backend/src/main/java/com/plataforma/comum/tenant | Contexto, filtro e datasource com tenant |
+| backend/src/main/resources/db/migration/V017__radar_operacao.sql | Dez tabelas do incremento, RLS, grants e papéis |
+| infra/local-native | Inicialização nativa, fixtures, testes locais e notas de execução |
+| docs/decisoes | Histórico de decisões anteriores; confrontar com o código atual |
+
+O frontend novo é um componente grande; o serviço de backend concentra vários domínios. Isso acelera uma avaliação local, mas não é o desenho final de manutenção. Extrair módulos com testes antes de ampliar integrações. Os modelos analíticos anteriores de catálogo/pedido/margem não foram substituídos nem unificados automaticamente com radar_*. Não ler ambos e somar resultados sem política explícita de identidade e origem.
+
+## 13 Banco de dados e contratos de estado
+
+As dez tabelas novas possuem tenant_id. O schema usa UUID, timestamps com fuso e valores numéricos com duas casas. Chaves compostas ligam produto/pedido/anúncio à mesma empresa. RLS está habilitada e forçada. O usuário de aplicação tem SELECT/INSERT; UPDATE é concedido só às tabelas mutáveis. Não recebe DELETE nas tabelas novas. Essa proteção é relativa ao usuário da aplicação, não a um administrador do banco.
+
+| Tabela | Conteúdo principal | Invariantes e observações |
+|---|---|---|
+| radar_produto | SKU, nome, marca, NCM, descrição, custo, preço, físico, reservado, mínimo | SKU único por tenant; reservado entre zero e físico; mínimo default 5 |
+| radar_anuncio | Produto, canal, título, preço, estado, versão | Um por produto/canal/tenant; preço positivo; versão protege proposta |
+| radar_pedido | Produto, cliente, canal, quantidade, preço, custo congelado, custos e estado | Quantidade positiva; um SKU; número único por tenant |
+| radar_movimento | Produto, pedido opcional, tipo, deltas físico/reserva, motivo, ator | Registro de movimentação sem UPDATE para aplicação |
+| radar_lancamento | Pedido opcional, tipo, valor com sinal, fonte | Razão gerencial; reversões são novos lançamentos |
+| radar_titulo | Descrição, PAGAR/RECEBER, valor, vencimento, estado, pedido opcional | Valor positivo; ABERTO ou BAIXADO |
+| radar_acao | Anúncio, antes/depois, versão, motivo, proponente/aprovador | PENDENTE, EXECUTADA, REJEITADA ou EXPIRADA; último não automatizado |
+| radar_registro | Tipo e JSONB | Mensagens, marcas, concorrentes, fornecedores, compras e divergências |
+| radar_auditoria | Ator, operação, recurso e detalhes JSONB | Append-only na permissão da aplicação; sem assinatura WORM |
+| radar_comando | Tenant, chave, ator, hash e resultado | Chave primária tenant/id; replay não repete efeito |
+
+### Máquina de estados do pedido
+
+RESERVADO → SEPARADO → EXPEDIDO → DEVOLVIDO. RESERVADO ou SEPARADO também pode ir para CANCELADO. EXPEDIDO exige confirmar_simulacao=true. Não existe retorno direto de SEPARADO para RESERVADO, reabertura do cancelado ou segunda devolução. Qualquer ampliação deve definir movimentos de compensação e comportamento em repetição.
+
+### Máquina de estados do anúncio e da ação
+
+O anúncio alterna entre RASCUNHO, SIMULADO e PAUSADO conforme comandos locais. Cada alteração de estado incrementa a versão. A proposta guarda essa versão e o preço anterior. Ao aprovar, o serviço verifica se a versão ainda coincide. A aprovação muda o preço e incrementa versão, depois resolve a ação. Propostas antigas continuam pendentes quando bloqueadas por conflito; rejeitá-las ou criar fluxo de expiração é uma tarefa futura.
+
+### Evolução recomendada do modelo
+
+Separar product, variant/SKU, channel account e listing; separar order e order item; criar warehouses e reservas próprias; modelar purchase order e receipts; criar fiscal document e events; criar payable/receivable/settlement; preservar financial source evidence e regras de cálculo versionadas; introduzir action intent, approval, execution attempt e external confirmation. JSONB genérico não deve continuar substituindo contratos validados para módulos financeiros e operacionais maduros.
+
+O SQL integral da V017 está no anexo técnico. Migrations anteriores permanecem no plano histórico e no manifesto. Não editar V017 aplicada: criar nova versão e testar upgrade com dados existentes. Um script U de rollback é um instrumento destrutivo; não equivale a backup e não deve ser executado como solução rápida para uma falha de tela.
+
+## 14 APIs e catálogo de comandos
+
+### Sessão e transporte
+
+POST /api/login recebe email e senha e, quando aceito, retorna 204 e cookie de sessão. POST /api/logout encerra sessão. GET /api/sessao retorna identidade conforme contrato existente. Para chamadas de navegador, o frontend usa /api relativo e o rewrite evita dependência direta da porta do backend na interface.
+
+GET /api/radar retorna usuario, modo, financeiroPermitido, produtos, anuncios, pedidos, movimentos, lancamentos, titulos, acoes, registros, auditoria, resumo, porCanal, porSku, divergencias e agentes. Valores BigDecimal das estruturas retornadas são normalizados como texto. Muitas coleções usam ordem criado_em desc e limite 1.000; não há cursor/paginação. Os totais financeiros consultam a base inteira, portanto podem abranger dados fora da listagem visível.
+
+POST /api/radar/comandos recebe JSON com op e campos específicos. Exige Idempotency-Key em formato UUID e X-Radar-Request: 1. Retorna normalmente 200 com mensagem e, conforme a operação, id ou contagens. POST /api/radar/perguntar recebe texto de até 500 caracteres e retorna resposta, fontes e modelo. A resposta atual identifica heurística local.
+
+### Idempotência e concorrência
+
+O comando abre transação e adquire pg_advisory_xact_lock sobre o hash textual do tenant. Calcula SHA-256 da serialização JSON recebida e procura a chave. Se já existir com mesmo ator e hash, devolve o resultado gravado. Se ator ou hash diferirem, responde 409. A ação, seus movimentos, auditoria e registro idempotente são persistidos na mesma transação.
+
+Esse desenho serializa comandos por empresa. É simples para a prévia, mas pode limitar throughput e bloquear operações independentes. O hash é da serialização, não um contrato de canonicalização semântica; clientes devem repetir exatamente o payload associado à chave. Hoje, o frontend gera nova chave por submissão e não mantém a chave para uma recuperação após timeout. Corrigir antes de operações externas: uma resposta perdida não autoriza repetir o efeito com outra chave.
+
+| op | Campos relevantes | Efeito e cuidados |
+|---|---|---|
+| produto | sku, nome, custo, preco, saldo; marca, ncm, descricao opcionais | Cria cadastro e movimento de abertura |
+| produto_atualizar | id, nome, custo, preco, marca, ncm, descricao | Atualiza cadastro; campos omitidos opcionais podem voltar a vazio; preservar valores ao editar |
+| importar | itens, de 1 a 3.000 objetos de produto | Lote transacional; duplica SKU → bloqueia tudo |
+| estoque | produto_id, quantidade inteira com sinal, motivo | Ajusta físico sem violar reserva |
+| anuncio | produto_id, canal, titulo, preco | Cria rascunho local |
+| anuncios_lote | produto_id | Cria até quatro rascunhos; ignora pares já existentes |
+| anuncio_estado | id, estado | RASCUNHO, SIMULADO ou PAUSADO; incrementa versão |
+| anuncios_estado_lote | ids de 1 a 1.000, estado | SIMULADO ou PAUSADO; operação transacional |
+| propor_preco | id do anúncio, preco, motivo | Cria ação pendente e congela versão |
+| aprovar | id da ação | Verifica papel, estado, versão e piso de custo; aplica localmente |
+| rejeitar | id da ação | Resolve proposta sem alterar preço |
+| pedido | produto_id, canal, cliente, quantidade, preco e seis custos | Reserva, congela custo e cria oito componentes do razão |
+| pedido_estado | id, estado; confirmar_simulacao ou retornar_estoque | Executa transição válida e movimentos relacionados |
+| titulo | descricao, tipo, valor, vencimento YYYY-MM-DD | Cria conta manual |
+| baixar_titulo | id | Marca conta aberta como baixada sem transferência |
+| despesa | descricao, valor positivo | Cria lançamento DESPESA negativo sem pedido |
+| conciliar | id do pedido, valor | Compara valor manual e registra divergência ou conferência |
+| registro | tipo e dados objeto | Salva conteúdo permitido por papel; até 10.000 caracteres serializados |
+| receber_compra | id do registro COMPRA | Recebe total uma vez, atualiza custo médio e gera PAGAR |
+
+Para registro, os tipos aceitos são MENSAGEM, MARCA, CONCORRENTE, FORNECEDOR e COMPRA. COMPRA exige produto_id, quantidade inteira positiva e custo_unitario. CONCORRENTE exige URL começando com https://; isso é validação mínima, não verificação da confiabilidade do destino. DIVERGENCIA é criada internamente por conciliar. POLITICA aparece na filtragem de leitura para alguns papéis, mas não possui comando de configuração entregue.
+
+### Exemplo de contrato para cliente técnico
+
+Use uma sessão autenticada do tenant de teste. Não cole segredos em documentos ou logs.
+
+```json
+{
+  "op": "pedido",
+  "produto_id": "UUID-DE-UM-PRODUTO-DO-TENANT",
+  "canal": "Shopee",
+  "cliente": "Cliente fictício",
+  "quantidade": 2,
+  "preco": "50.00",
+  "comissao": "10.00",
+  "frete": "5.00",
+  "imposto": "3.00",
+  "ads": "4.00",
+  "embalagem": "2.00",
+  "desconto": "1.00"
+}
+```
+
+Substitua o marcador por UUID real de teste e envie com chave nova; em retry da mesma tentativa, reutilize a chave. O custo unitário vem do produto, não do corpo. O corpo mostrado não deve ser enviado a produção.
+
+### Erros e contratos futuros
+
+400 indica validação ou transição inválida; 401 sessão ausente; 403 cargo/cabeçalho; 404 recurso não encontrado dentro do tenant; 409 conflito de chave, versão, duplicidade ou vínculo. O advice Radar sanitiza ResponseStatusException e DataIntegrityViolationException. Outros erros de binding ou execução podem seguir o tratamento geral do Spring; não há envelope uniforme com código de negócio/correlation ID para todos os casos. Padronizar antes de expor SDKs ou integrações públicas.
+
+APIs anteriores preservadas incluem /api/pergunta, /api/margem/periodo, /api/margem/periodo/consolidado, /api/painel/gestor, /api/painel/analista e /api/canais/{id}/escopo. Não confundir essas consultas analíticas com os novos dados radar_*. A relação entre modelos deve ser explicitada na refatoração.
+
+## 15 Cálculos financeiros e rastreabilidade
+
+### Resultado local do pedido
+
+Bruto = preço unitário × quantidade. CMV = custo unitário congelado × quantidade. Resultado = bruto − CMV − comissão − frete − imposto − Ads − embalagem − desconto. Os seis custos são totais informados. O backend registra RECEITA positiva e os demais componentes negativos; resultado é soma de valores, não uma porcentagem armazenada.
+
+Exemplo usado nos testes: duas unidades a R$50, custo de R$20 cada, comissão R$10, frete R$5, imposto R$3, Ads R$4, embalagem R$2 e desconto R$1. Receita R$100; CMV R$40; demais custos R$25; resultado R$35. Margem sobre receita bruta, se usada como métrica, seria 35%; é necessário nomear o denominador. “Margem” sem definição não é um contrato suficiente.
+
+No cancelamento local anterior à expedição, todos esses lançamentos são estornados, resultando zero para aquele pedido. Na devolução total com produto recuperado, receita, desconto e CMV são revertidos; os outros R$24 de custos permanecem, resultando −R$24. Se o produto não é recuperado, o CMV também permanece e o resultado é −R$64. Uma política futura só pode recuperar comissão, imposto ou frete com regra e evidência adequadas.
+
+### Custo médio de compra
+
+Novo custo = (físico anterior × custo atual + quantidade recebida × custo da compra) ÷ novo físico, arredondado HALF_UP a duas casas. Dez unidades a R$20 mais dez recebidas a R$30 resultam em vinte a R$25. Os pedidos anteriores preservam seu custo congelado. O cálculo atual não distingue camadas, estoque avariado, frete de compra, devolução ao fornecedor ou impostos recuperáveis. Recebimento e devolução em períodos diferentes devem ganhar política de valorização explícita.
+
+### Simulação de preço
+
+Resultado estimado por unidade = preço × (1 − comissão% − imposto%) − custo − frete − Ads. Preço sugerido = (custo + frete + Ads) ÷ (1 − comissão% − imposto% − margem-alvo%). Denominador não positivo torna o cenário inviável. O simulador arredonda em centavos e não inclui todos os custos, faixas de tarifa, promoções ou despesas. É uma calculadora de premissas, não o Profit Engine final.
+
+### O Profit Engine aprovado
+
+O objetivo é um resultado auditável por marketplace, pedido e SKU com taxas, fretes, CMV, impostos, Ads, devoluções e despesas. Cada componente precisa de origem, data econômica, data de conhecimento, estado estimado/confirmado, regra e versão. Dados ausentes devem produzir lacuna, não zero silencioso. Um número pode ser provisório e depois confirmado; a mudança deve ser explicável sem apagar o histórico.
+
+Especificar receita bruta/líquida, contribuição, resultado após Ads, despesas alocadas e resultado total separadamente. Definir regime de competência e visão de caixa. Separar repasse de receita e taxa de desconto. Evitar descontar duas vezes um valor já embutido no líquido informado pelo canal. Definir moeda, timezone, centavos residuais, descontos por item e ordem de rateio.
+
+O ledger atual é uma lista gerencial de componentes com sinal; não é um razão contábil de partidas dobradas completo. Para o produto alvo, decidir o modelo econômico/contábil com responsável financeiro e fiscal, modelar reversões, fechamentos, reprocessamento e reconciliação. “Lucro real” na comunicação do produto deve ser explicado como resultado econômico apurado com dados completos; não confundir automaticamente com o regime tributário brasileiro de mesmo nome.
+
+### Contrato de aceite financeiro
+
+Um pedido de referência deve permitir abrir cada componente, chegar à fonte e reproduzir o resultado. Um reprocessamento da mesma evidência não duplica valor. Uma nova tarifa não altera retroativamente um período sem versão e justificativa. Uma devolução parcial ajusta apenas os itens afetados. Somar por SKU, canal e empresa deve fechar depois de considerar rateios e despesas não alocadas. Dados ausentes e estimativas aparecem ao lado do resultado. O operador consegue explicar a diferença entre previsto, repassado e recebido.
+
+## 16 Segurança isolamento políticas e agentes
+
+### O que existe
+
+Tenant derivado da identidade, filtro de tenant, datasource que define app.tenant_id, policies RLS, constraints de vínculo e papel de banco restrito. BCrypt de custo 12 no login existente. RadarGuard é registrado na ordem −98, após o filtro de tenant indicado no projeto; verifica cargo atual no banco. Comandos também verificam papéis dentro do serviço. Escritas no novo namespace exigem cabeçalho não simples. A configuração local permite origens específicas, não um curinga.
+
+Esses controles não constituem auditoria de segurança completa. A configuração existente desabilita CSRF globalmente; o cabeçalho adicional do Radar não substitui automaticamente a revisão de login, logout e endpoints antigos. Revisar sessão, cookies, CORS, CSRF, autorização por campo, limite de payload, rate limiting e rotas herdadas antes de produção. Nunca tornar app_aplicacao superusuário para resolver uma falha de permissão.
+
+### Contrato de ação planejado
+
+Usuário → Radar AI → intenção estruturada → Policy Engine → checagem de permissão → ferramenta tipada → serviço de domínio → banco/API → confirmação → audit log. O modelo não recebe credenciais administrativas nem escreve SQL arbitrário. A ferramenta deve declarar tenant, ator, recurso, versão, operação, parâmetros, risco, idempotency key, prazo, política aplicada e resultado esperado.
+
+Nível recomendar: apenas proposta. Nível aprovação: proposta aguarda pessoa autorizada, com resumo revisável. Nível autopilot: uma política prévia permite classe de ações dentro de limites concretos. Nenhuma dessas categorias elimina verificação de canal, recurso e concorrência. A aprovação deve expirar ou invalidar quando contexto relevante muda. Autopilot exige orçamento, limites de frequência, canal/conta, margem mínima, logs, kill switch e compensação possível.
+
+### AI Gateway e Agent Registry planejados
+
+Gateway deve abstrair provedores, credenciais por ambiente, modelos, limites de custo, timeouts, fallback, minimização de dados, registros e avaliações. Fallback não pode reduzir controles ou mudar silenciosamente capacidade de ferramenta. Registry deve versionar agente, finalidade, ferramentas, permissões, entradas, saídas, risco, métricas e estado de habilitação. A lista estática atual é apenas uma apresentação de capacidades locais e futuras, sem esses contratos completos.
+
+### Agentes do escopo aprovado
+
+| Agente | Trabalho desejado | Dependência e avaliação principal |
+|---|---|---|
+| Import Agent | Entender estrutura, propor campos e pedir confirmação | Dataset heterogêneo; medir erros por campo e bloqueio de duplicação |
+| Product Agent | Completar lacunas sem inventar atributos | Proveniência de dados e aprovação humana |
+| Business Copilot | Consultar operação com fontes e filtros | Permissão, exatidão numérica e recusa de consulta sem dados |
+| Listing Agent | Adaptar conteúdo por canal e aprender com desempenho | Regras de canal, factualidade e experimentos controlados |
+| Profit Guardian | Detectar perdas e oferecer correção | Dados de custo completos e qualidade do alerta |
+| Support Agent | Resolver casos simples ou transferir com contexto | Política por categoria, envio idempotente e revisão de qualidade |
+| Inventory and Purchase Agent | Sugerir reposição com prazo, giro, caixa e margem | Previsão validada e restrições de orçamento |
+| Pricing Agent | Propor/aplicar preço dentro de política | Tarifas reais, margem, aprovação e confirmação externa |
+| Reconciliation Agent | Investigar esperado versus repassado/recebido | Evidências, classificação e não apagar divergência |
+| Ads Profit Agent | Relacionar gasto e resultado econômico | Atribuição versionada; causalidade não presumida |
+| Competitor Agent | Encontrar comparáveis e interpretar movimentos | Coleta permitida, pareamento e confiança |
+| Fiscal Agent | Detectar cadastro/nota/certificado em risco | Regras oficiais, provedor homologado e responsabilidade fiscal |
+| Returns Intelligence | Analisar motivos e sugerir correções de anúncio/produto | Categorias, amostra, privacidade e ligação com Studio |
+| Radar Operator | Coordenar plano de trabalho entre domínios | Todos os controles anteriores, orçamento e verificação de cada ação |
+
+Voz deve acrescentar transcrição/reprodução sem enfraquecer confirmação. Uma transcrição ambígua de preço, quantidade ou SKU precisa ser esclarecida. Informações pessoais não devem atravessar provedores sem política de tratamento e minimização definida. Conteúdo de mensagem, anúncio e arquivo importado é dado não confiável; não pode instruir o agente a ignorar permissões ou executar outra ferramenta.
+
+## 17 Execução manutenção backup e diagnóstico
+
+### Topologia local sem Docker
+
+O launcher em infra/local-native/launch.ps1 recebe RuntimeRoot e opcionalmente ProjectRoot. Nesta estação, o runtime está sob a pasta work/runtime da tarefa Codex que originou a entrega. Ele contém o binário portátil postgres/pgsql, pgdata, native-config.json e logs. O atalho Iniciar-Radar.cmd já contém os caminhos instalados. Esse atalho não é um instalador portátil para qualquer computador.
+
+O launcher verifica o PostgreSQL, inicia-o se necessário, inicia backend e frontend se as portas não têm listener e testa health/página. Ele não baixa dependências, não compila um JAR novo, não inicializa outro banco e não encerra processos de terceiros. O teste de porta e página é básico; identificação forte de processos, supervisor e tratamento de conflito devem evoluir. Todos os serviços devem continuar vinculados a loopback nesta avaliação.
+
+O Java usado nesta estação está em C:\Program Files\Eclipse Adoptium\jdk-21.0.12.8-hotspot\bin\java.exe. Node está em C:\Program Files\nodejs\node.exe. O launcher usa um diretório temporário curto sob Documents\Codex\radar-tmp. Não mudar o ambiente temporário global do Windows como correção genérica. Não copiar valores de native-config.json para o livro, slides, chat público ou Git.
+
+### Compilar e validar uma mudança
+
+1. Inspecione git status e preserve trabalho não commitado. Leia as orientações aplicáveis do repositório, inclusive AGENTS.md gerado pelo Next.
+2. Faça backup ou snapshot recuperável antes de mudança de dados. Use uma base de teste, não a demonstração principal, para ensaiar migrations.
+3. No frontend, execute npm ci quando precisar restaurar dependências pelo lockfile; depois npm run lint, npx tsc --noEmit, npm test e npm run build conforme o tipo da alteração.
+4. No backend, use mvnw.cmd e Java 21. package com -DskipTests compila/empacota, mas não comprova testes.
+5. No Windows, pare somente o processo verificado do JAR Radar antes de reempacotar o mesmo arquivo; o JAR em uso pode impedir rename. Não encerrar todos os processos Java.
+6. Reinicie pelo launcher, confirme health e interface, refaça login quando necessário e teste o fluxo alterado.
+7. Registre comando, resultado, data, versão e limitações. Atualize este livro e os testes relevantes.
+
+A suíte histórica de banco usa Testcontainers e não foi executada sem Docker. Para continuar respeitando a preferência do usuário, adaptar testes de integração para uma instância PostgreSQL nativa isolada, com mesma semântica de RLS e migrations. Não trocar por um banco em memória que não represente essas garantias.
+
+### Migração nativa e pgvector
+
+NativeBootstrap.java usa JDBC porque psql.exe foi bloqueado pelo controle de aplicativos do Windows. A proteção não foi desativada. O bootstrap aplica migrations por ordem, armazena checksum em radar_native_schema e falha se um arquivo já aplicado mudou. Somente a criação da extensão vector, sem uso funcional comprovado, é omitida em memória. O SQL versionado original permanece intacto.
+
+Esse histórico não é flyway_schema_history. Para migrar a instalação a outro modelo, inventarie versões/checksums, faça backup, ensaie a adoção em cópia e valide schema/dados antes de qualquer baseline. Não mandar Flyway executar tudo novamente sobre a mesma base. A ausência de pgvector não deve ser “corrigida” por uma instalação não validada só porque IA está no nome do produto.
+
+### Backup e restauração
+
+Ainda não há rotina de backup/restauração ensaiada. A próxima entrega de infraestrutura deve escolher backup lógico ou físico suportado, definir retenção, criptografia, destino e credenciais separadas. Uma cópia comum de pgdata com o banco em execução não é backup consistente. Se ferramentas forem bloqueadas pela política do Windows, resolver pelo caminho autorizado, sem desabilitar proteção.
+
+Aceite mínimo: restaurar em diretório e porta de teste, abrir a aplicação contra a cópia, conferir quantidades, saldos, referências, RLS, auditoria e um conjunto de cálculos. Medir tempo de recuperação e perda potencial de dados. Documentar RPO/RTO como metas acordadas, não garantias já entregues. Segredos necessários à recuperação devem ser protegidos separadamente e não incluídos nos materiais comerciais.
+
+### Observabilidade e incidentes
+
+Logs atuais ficam no runtime: backend.log, backend-error.log, frontend.log, frontend-error.log e postgres.log. Actuator health permite verificar saúde básica, mas não prova sincronização, qualidade de cálculo ou sucesso de ação externa. Para o produto completo, adicionar correlation ID, tenant com proteção adequada, métricas de fila, atraso de eventos, retries, divergências, ações pendentes, erro por canal e custo/latência de IA.
+
+Em incidente: identificar impacto e versão; suspender apenas a capacidade afetada quando possível; preservar evidências; decidir mitigação; validar recuperação; registrar causa e prevenção. Não reexecutar lote externo até esclarecer se já produziu efeitos. Não registrar senhas, tokens, certificado, mensagens completas ou documentos pessoais indiscriminadamente nos logs.
+
+## 18 Qualidade técnica evidências e riscos conhecidos
+
+### Evidências disponíveis
+
+Na execução anterior desta tarefa passaram 44 testes existentes do frontend, lint, TypeScript, build Next, empacotamento Maven, 16 cenários HTTP dos fluxos novos e seis verificações diretas de RLS/permissão no banco. Os testes locais usam empresas fictícias separadas da demonstração. O build final e a auditoria npm de dependências de execução registraram sucesso e zero vulnerabilidades reportadas naquele momento. Isso não é garantia de ausência de falhas nem avaliação atual de todas as dependências Java.
+
+O teste manual de Excel mostrou leitura e prévia corretas de um XLSX. Não transformar isso em afirmação de cobertura de todas as versões de Excel, todas as planilhas ou todas as importações XML. A interface foi inspecionada no navegador para acesso, painel e guia; não existe evidência de uma suíte visual completa de todos os cargos e breakpoints.
+
+### Cobertura dos cenários novos
+
+Idempotência, conflito de chave, rollback de importação, isolamento entre empresas, restrição de atendimento, cabeçalho obrigatório, reserva e cálculo de R$35, estoque insuficiente, sequência de expedição, devolução com custos preservados, cancelamento, proposta obsoleta, preço abaixo do custo, recebimento único, custo histórico e rascunhos sem duplicação. No banco: ausência de tenant sem leitura, escrita em outro tenant bloqueada e DELETE não concedido nas quatro tabelas imutáveis.
+
+Esses testes não cobrem toda concorrência, degradação, carga, recuperação, erros de rede, spoofing de sessão, integração fiscal, APIs externas ou comportamento semântico de agentes reais. A trava transacional é uma proteção no código; um ensaio concorrente precisa provar o comportamento sob duas ou mais requisições simultâneas e timeout.
+
+### Fila de endurecimento antes do piloto real
+
+| Prioridade | Problema concreto | Mudança e prova de conclusão |
+|---|---|---|
+| P0 | Duas bases de domínio sem contrato de unificação | ADR de identidade/origem, migração ensaiada e teste sem dupla contagem |
+| P0 | Custos ausentes viram zero no fluxo local | Modelar unknown/estimated/confirmed e bloquear promessas de lucro sem cobertura |
+| P0 | Idempotency key do navegador não sobrevive a tentativa incerta | Persistir tentativa, consultar status e testar resposta perdida |
+| P0 | Permissões por campo incompletas e rotas herdadas | Matriz de autorização negativa e testes por papel/tenant |
+| P0 | CSRF global e segurança de sessão precisam revisão | Modelo de ameaça, proteção consistente e testes de origem/sessão |
+| P0 | Conciliação é booleano e pode conservar confirmação anterior após divergência | Estado versionado e teste de reconciliação/reabertura |
+| P0 | Sem backup/restauração comprovados | Ensaio recuperável com dados e RLS verificados |
+| P1 | Listagem limitada a mil com totais de toda a base | Paginação, filtro, total explícito e teste acima do limite |
+| P1 | Componentes monolíticos e JSON genérico | Extrair serviços/DTOs sem mudar contratos silenciosamente |
+| P1 | Dinheiro e simulador JS em limites extremos | Decimal exato, limites de domínio e teste de arredondamento/overflow |
+| P1 | Logs de auditoria podem conter dados pessoais | Minimização, retenção, acesso e apresentação legível |
+| P1 | Policy de preço só usa custo | Engine versionada de margem e simulação com custos completos |
+| P1 | UI mostra ações não autorizadas e cadastro genérico | Ações por capability e mensagens claras com teste por cargo |
+| P1 | Registro de agentes contém descrições além do executável | Estado derivado de implementação/configuração e evidência por capability |
+
+A lista é uma revisão direcionada desta documentação, não uma auditoria completa ou declaração de todos os defeitos existentes. Tratar os itens como backlog verificável, com reprodução, dono e critério de aceite.
+
+## 19 Caminho de implementação e dependências
+
+O plano completo de 16 fases está reproduzido ao final. Sua fotografia inicial precede a versão local; por isso, stack e contagem de arquivos históricas não substituem os capítulos atuais. A ordem recomendada permanece: fundações confiáveis, evidência de integração, catálogo/estoque, anúncio/pedido/fiscal, financeiro, inteligência e automações. A investigação de homologações deve começar cedo, mesmo quando a implementação do conector vier depois.
+
+| Marco | Entrega que comprova progresso | Dependências principais |
+|---|---|---|
+| M0 Base de engenharia | Contratos, autorização, testes nativos, backup e decisões de modelo | Responsável técnico e acesso ao projeto |
+| M1 Operação local robusta | Múltiplos itens, paginação, recebíveis, importação segura, histórico coerente | M0 e regras operacionais/financeiras |
+| M2 Um canal completo | OAuth, catálogo, publicação, pedido, estoque e confirmação externa | App aprovado, permissões e sandbox/cenários reais autorizados |
+| M3 Fiscal e expedição | Documento autorizado/retornado e fluxo logístico verificado | Provedor, certificado, regras e homologação |
+| M4 Verdade financeira | Extratos, conciliação, lacunas e cálculo auditável | Fontes de taxas, frete, Ads, custos e devoluções |
+| M5 Segundo canal | Mesmo ciclo validado sem duplicação ou venda excessiva | M2–M4 e capacidades do segundo canal |
+| M6 Serviço e conteúdo | Inbox contextual, Studio e Listing Agent com revisão | APIs permitidas, políticas e avaliação de qualidade |
+| M7 Autonomia controlada | Agentes e Operator com política e verificação | Dados confiáveis, ferramentas, métricas e kill switch |
+
+Não definir o V1 apenas como “todas as telas desenhadas”. O primeiro ERP comercial precisa executar uma jornada operacional real, com regras fiscais e financeiras verificadas, recuperação de falhas e apoio ao cliente. A prévia atual serve para validar experiência e contratos, mas não satisfaz todos esses critérios.
+
+### Especificação por integração
+
+Para cada canal, manter uma matriz: autenticação, escopos, múltiplas contas, categoria/atributos, imagem, anúncio, preço, estoque, pedido, cancelamento, logística, nota, mensagens, devolução, repasse e Ads. Cada célula precisa de estado disponível/indisponível/restrito, documentação oficial, ambiente de teste, contrato, exemplo sanitizado, limites e erro recuperável. Não extrapolar uma API de perguntas para concluir que mensagens pós-venda de todos os canais funcionam igual.
+
+Ingestão deve preservar payload original com segurança, deduplicar identificador/evento, registrar ordem e versão, validar assinatura quando aplicável e projetar para domínio. Comandos externos devem ter outbox, fila, tentativas, backoff, circuit breaker quando necessário e consulta de confirmação. Resposta HTTP aceita pelo canal não equivale sempre a publicação concluída. Não depender de scraping proibido para concorrência.
+
+### Critérios de liberação por marco
+
+Para cada marco, combinar teste automatizado, demonstração manual, dados de referência e evidência externa quando aplicável. Abrir uma página não comprova emissão fiscal. Uma requisição de estoque não comprova saldo convergente. Um prompt convincente não comprova veracidade. Uma suíte verde não comprova backup recuperável. O gate deve verificar o resultado relevante para aquele domínio.
+
+## 20 Implantação comercial e suporte ao cliente
+
+### Preparação do piloto
+
+Selecionar cliente com escopo conhecido, operador responsável e disponibilidade para conferência. Registrar sistemas de origem, SKUs, contas de canal, saldos, custos, certificados e calendário de corte. Definir a fonte de verdade em cada fase e impedir duplo controle. Ensaiar importação e reconciliação antes de tornar o Radar responsável por estoque ou documento fiscal.
+
+O onboarding futuro deve mostrar progresso: empresa e usuários, catálogo, validação de SKU, estoque inicial, custos, canais, fiscal, primeiro pedido e primeira conferência financeira. Cada etapa precisa de responsável, pendência e evidência. A importação inteligente não deve esconder campos que faltam nem criar confiança indevida em uma classificação sugerida.
+
+### Operação assistida
+
+Durante o piloto, comparar pedidos, saldos, documentos e repasses com as fontes originais. Registrar discrepâncias em fila de exceções. Estabelecer canal de suporte e procedimento de incidentes. Evitar ativar autopilot antes de conhecer taxa de falso alerta, qualidade de dados e reversibilidade das ações. Expandir autonomia por classe de tarefa e por cliente, não por uma chave global “IA ligada”.
+
+### Expansão e migração
+
+Importadores Tiny/Bling/outros devem preservar identidades, datas e origem. Uma migração não é simples cópia de tabela: exige deduplicação, compatibilidade de SKU, avaliação de saldos, anexos/documentos, consentimentos e encerramento de responsabilidades. Testar migração incremental e comparação antes do corte. Não vender compatibilidade com ERP externo enquanto o importador correspondente não estiver validado.
+
+## 21 Base editorial para divulgação e apresentações
+
+### Mensagem central por estágio
+
+Na avaliação atual: “O Radar reúne uma operação local de e-commerce para testar cadastro, estoque, pedidos e resultado com registros verificáveis.” Na visão de produto: “O Radar será um sistema operacional de e-commerce que conecta operação, dinheiro e ações supervisionadas.” Quando uma integração ou agente for homologado, trocar o verbo somente para aquela capacidade comprovada.
+
+Evitar “IA fiscal autônoma”, “lucro real garantido”, “integra todos os canais”, “substitui sua equipe” ou “elimina qualquer erro”. Também não transformar os nomes de planos futuros em ofertas já contratáveis. Materiais públicos não devem conter credenciais de demonstração, caminhos pessoais, nomes de clientes ou segredos técnicos deste livro interno.
+
+### Matriz de mensagem e prova
+
+| Mensagem | Prova mínima para divulgação | Estado nesta edição |
+|---|---|---|
+| Centraliza cadastro local | Demonstração de criação/edição e importação | Disponível com limites descritos |
+| Ajuda a entender o resultado informado | Exemplo reproduzível e razão de componentes | Disponível localmente, sem apuração externa |
+| Publica nos marketplaces | Oferta criada e confirmada no canal autorizado | Pendente |
+| Emite NF-e integrada ao pedido | Autorização, chave/XML e tratamento de rejeição | Pendente |
+| IA sugere ações com dados da operação | Avaliação de fontes, cálculo e aprovação | Apenas heurísticas locais parciais |
+| Concilia automaticamente | Extratos reais e exceções auditáveis | Pendente |
+| Economiza determinada quantidade de horas | Estudo comparativo com tarefa e amostra definidas | Não medido |
+| Protege margem automaticamente | Política, tarifas, execução e confirmação comprovadas | Pendente |
+
+### Roteiro de apresentação de dez slides
+
+1. Problema: dados e decisões espalhados na rotina do seller.
+2. Visão: registro, inteligência e ação em um único produto.
+3. Jornada: produto até resultado, com devoluções e exceções.
+4. Demonstração atual: catálogo e importação, com limites explícitos.
+5. Operação: reserva, separação e expedição simulada.
+6. Dinheiro: memória de cálculo de uma venda e diferença entre margem e caixa.
+7. Decisão: simulação de preço, aprovação e auditoria.
+8. Pessoas: experiências por cargo e responsabilidade.
+9. Evolução: integrações, fiscal e agentes previstos, sem prometer datas não confirmadas.
+10. Próximo passo: piloto com critérios, escopo e métricas acordados.
+
+Para público técnico, substituir slides 4–8 por contratos, isolamento, modelo de dados, confiabilidade e evolução modular. Para cliente operacional, reduzir jargão e usar uma tarefa por slide. Para investidor/parceiro, separar tese, evidências, hipóteses econômicas e riscos; não apresentar cenário de receita como venda contratada.
+
+### Roteiro de vídeo ou demonstração de cinco minutos
+
+Abrir a faixa de avaliação local e explicar o contexto. Mostrar um produto, preparar rascunho por canal e criar pedido fictício. Mostrar reserva no estoque, avançar para separação e explicar o que uma expedição real ainda exigirá. Abrir o razão e decompor receita, CMV e custos. Propor um novo preço e mostrar aprovação. Encerrar no roadmap com os próximos marcos. Se usar os pedidos de exemplo, dizer que são fictícios e não atribuir os resultados ao uso do software.
+
+### Biblioteca de tutoriais a produzir
+
+Um tutorial por tarefa: entrar e escolher cargo; cadastrar SKU; importar planilha; revisar XML; preparar anúncio; registrar pedido; conferir estoque; receber compra; entender resultado; conferir repasse; propor preço; consultar auditoria; usar chat; entender estados de integração. Cada material precisa informar pré-requisitos, papel, entradas, passos, resultado esperado, erros frequentes e versão da tela. Este livro contém a base; screenshots devem ser atualizados depois de mudanças de interface.
+
+## 22 Exercícios treinamento e critérios de aprendizagem
+
+### Exercício completo em empresa fictícia
+
+Crie um SKU de treinamento com dez unidades, custo R$20 e preço R$50. Prepare um rascunho Shopee. Crie pedido de duas unidades com os custos do capítulo 15. Confira físico dez, reservado dois e disponível oito. Resultado esperado R$35. Separe e simule expedição; físico oito, reservado zero. Devolva o total com produto recuperado; físico dez e resultado daquele pedido −R$24. A evidência é o movimento e o razão, não apenas a cor de um card.
+
+Planeje compra de dez unidades a R$30 e receba uma vez. O físico passa a vinte e o custo médio a R$25. Verifique que o pedido antigo ainda tem custo congelado R$20. Tente receber novamente e confirme bloqueio. Faça isso em um tenant de treinamento e use SKU único para não misturar com exemplos anteriores.
+
+### Exercício de aprovação
+
+Proponha um preço acima do custo e confira que ele ainda não mudou. Altere o estado do anúncio; a versão muda. Tente aprovar a proposta antiga e confirme conflito. Crie outra proposta com contexto atualizado, aprove e confira auditoria. Depois, proponha preço abaixo do custo e confirme o bloqueio. Explique por que “acima do custo” ainda não prova margem líquida saudável.
+
+### Exercício de permissões
+
+Entre como atendimento e confira ausência de ledger financeiro e de auditoria completa. Tente uma operação de cadastro não autorizada e observe a recusa do servidor. Entre como dono para concluir. Não ensinar o usuário a contornar permissão alterando parâmetros, sessão ou banco. Uma falha visual que mostra botão indevido deve virar relato de melhoria, não concessão de acesso.
+
+### Perguntas para avaliar entendimento
+
+O que diferencia físico, reservado e disponível? Alterar custo muda vendas passadas? Baixar uma conta faz transferência? Simular publicação cria anúncio real? Por que uma devolução pode continuar negativa? Por que faturamento e repasse são diferentes? Quem aprova preço? Quais dados o copiloto atual sabe consultar? Qual é a evidência de que um recurso está pronto? Quem não consegue explicar essas diferenças ainda precisa de treinamento antes de operar dados reais.
+
+## 23 Pacote de continuidade para outra IA ou desenvolvedor
+
+### Ordem de leitura e trabalho
+
+1. Leia este livro, especialmente capítulos 7 e 12–19. Leia o estado original preservado e o plano completo nos anexos.
+2. Abra o projeto real e confira git status, commit, arquivos modificados e instruções locais. Não suponha que o código corresponde a uma edição antiga do livro.
+3. Compare hashes do manifesto para arquivos críticos. Atualize o inventário quando houver divergência.
+4. Faça uma primeira entrega de diagnóstico e plano de alteração com critérios, sem refazer o produto inteiro nem apagar a implementação anterior.
+5. Priorize os itens P0. Trabalhe em incrementos pequenos com contrato de domínio e teste relevante.
+6. Use PostgreSQL nativo isolado para desenvolvimento/teste nesta estação. A usuária pediu explicitamente alternativa ao Docker.
+7. Separe implementação local de ativação externa. Não publique, envie mensagens, emita nota ou altere contas reais sem o escopo e a autorização correspondentes.
+8. Documente o resultado e as limitações; não marque uma fase pronta só porque a tela existe.
+
+### Brief de continuidade reutilizável
+
+“Continue o Radar no projeto ECP/kit-inicio, preservando o trabalho local existente. O produto aprovado é um Commerce OS 100% e-commerce com ERP, hub, Profit Engine auditável, atendimento, Studio, mercado e agentes supervisionados. A versão atual é uma prévia local sem conectores externos. Leia o Manual mestre, plano e manifesto; confirme estado do código. Não use Docker nesta estação. Antes de ampliar recursos, resolva contratos entre modelo analítico antigo e radar_*, autorização por campo, idempotência da UI, lacunas de custo, paginação e recuperação. Não permita LLM escrever diretamente no banco. Implemente por domínio, com testes e critérios de aceite. Não trate dados fictícios como reais nem UI como prova de integração. Produção, commits, push e efeitos externos dependem do escopo autorizado na sessão em que você estiver trabalhando.”
+
+Esse brief é material de contexto para o próximo responsável, não uma substituição das instruções e permissões da sessão futura. Não transporta autorização irrestrita para contas, arquivos ou serviços externos.
+
+### Modelo de tarefa executável
+
+Título e problema concreto. Capacidade e domínio. Estado atual com arquivo/linha. Comportamento desejado com exemplo. Entradas, saídas, permissões e invariantes. Migração necessária. Dependências externas. Casos normais, negativos e de repetição. Evidência de aceite. Estratégia de rollback/compensação. Observabilidade. Atualização de documentação. O responsável deve registrar também o que ficou fora da tarefa, para impedir que um mock seja confundido com conector entregue.
+
+### Decisões pendentes
+
+Escolha do primeiro canal e conta de teste; provedor fiscal e responsabilidade tributária; política de CMV/valorização; plano de contas e conceito de resultado; resolução de identidade produto/SKU entre modelos; matriz final de cargos; governança de dados pessoais; provedores de IA/imagem/voz; modelo de cobrança e budgets; alojamento de produção; metas de disponibilidade/recuperação; operação de suporte; critérios de migração de clientes. Não preencher essas decisões com fatos inventados. Avançar na engenharia independente enquanto se obtém a informação específica.
+
+## 24 Glossário e controle editorial
+
+| Termo | Significado neste projeto |
+|---|---|
+| Tenant | Empresa/espaço isolado de dados e execução |
+| SKU | Identificador de unidade de estoque vendável |
+| Produto mestre | Identidade central de produto com futuros SKUs/variações |
+| Listing | Anúncio específico de um produto em conta/canal |
+| CMV | Custo da mercadoria vendida segundo política definida |
+| Ledger | Registro de componentes/movimentos que permite reconstruir resultado |
+| Repasse | Valor liquidado pelo canal; distinto de receita e de recebimento bancário |
+| Conciliação | Comparação entre esperado e evidência de liquidação/recebimento |
+| RLS | Política do PostgreSQL que restringe linhas conforme contexto |
+| RBAC | Autorização baseada em papéis |
+| Policy Engine | Regras que limitam uma ação conforme contexto e risco |
+| Idempotência | Repetir uma tentativa identificada não repetir o efeito |
+| Outbox e inbox | Padrões para registrar envio/recepção confiáveis de eventos e comandos |
+| Webhook | Notificação recebida de sistema externo |
+| Capability | Capacidade específica disponível e permitida em um contexto |
+| Homologação | Validação em ambiente/processo aceito pelo provedor competente |
+| Autopilot | Execução dentro de política pré-autorizada, com limites e evidência |
+| WMS | Gestão operacional de armazém, ainda não entregue integralmente |
+| ROAS | Receita atribuída dividida pelo gasto de publicidade |
+| RPO e RTO | Metas de perda de dados e tempo de recuperação |
+| Service as Software | Oferta de processo/trabalho executado pelo software com supervisão |
+
+### Controle da edição
+
+Edição 1 consolida escopo aprovado, entrega local e leitura dirigida do código em 30/09/2026. Não introduz nova funcionalidade no programa. Não altera banco, permissões ou integrações. Preserva o conteúdo da entrega inicial e inclui o plano anterior como evidência histórica, identificado para evitar confusão de versões.
+
+Este é um documento interno completo para continuidade e formação de materiais. Antes de enviá-lo a clientes, produza uma versão pública sem caminhos pessoais, credenciais fictícias, detalhes operacionais internos e afirmações de roadmap que possam ser confundidas com compromisso contratado. Toda nova versão deve indicar data, responsável, alteração, evidência e impacto nos tutoriais e na comunicação.

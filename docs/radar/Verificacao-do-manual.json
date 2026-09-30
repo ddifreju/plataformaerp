@@ -1,0 +1,19 @@
+{
+  "builtAt": "2026-09-30T18:04:20.046Z",
+  "chapters": 24,
+  "sections": 30,
+  "approximateWords": 26281,
+  "sourceFiles": 316,
+  "preservedOriginalSha256": "7608bbe2e0630570ad216d4dd6110dbb447b4db19c66c47fbc496bed040b6530",
+  "htmlBytes": 337917,
+  "documentationChecks": {
+    "originalPreserved": true,
+    "uniqueAnchors": true,
+    "localLinksExist": true,
+    "sectionCount": 30,
+    "javascriptSyntax": true,
+    "accentInsensitiveSearch": true,
+    "emptySearchRestoresAll": true,
+    "visualBrowserPreview": "Não verificada: política do navegador bloqueou file://; nenhuma tentativa de contorno realizada."
+  }
+}

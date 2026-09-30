@@ -15,5 +15,5 @@ package com.plataforma.autenticacao;
 public enum PapelUsuario {
     DONO,
     GESTOR,
-    ANALISTA
+    ANALISTA, FINANCEIRO, ATENDIMENTO, ESTOQUE, MARKETING
 }

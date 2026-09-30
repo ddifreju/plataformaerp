@@ -46,3 +46,10 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Instalação nativa local — nunca publicar dados ou segredos
+native-config.json
+pgdata/
+work/runtime/
+init-password.txt
+configure-role.sql

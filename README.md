@@ -1,3 +1,9 @@
+# Radar
+
+[**Manual mestre, operação e plano de desenvolvimento →**](docs/radar/README.md)
+
+A versão local atual funciona sem Docker. Veja a documentação acima para distinguir capacidades disponíveis e recursos planejados. O conteúdo abaixo preserva o histórico do projeto.
+
 # Plataforma [NOME A DEFINIR]
 
 Sistema unificado de gestão para e-commerce brasileiro. Multi-tenant,

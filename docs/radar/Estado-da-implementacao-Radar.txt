@@ -1,0 +1,41 @@
+RADAR LOCAL — 30/09/2026
+
+Objetivo: prévia funcional persistente do Commerce OS. Não é conclusão das 16 fases do plano, não é ambiente fiscal homologado e não conecta marketplaces.
+
+Execução nesta estação:
+  launch.ps1 -RuntimeRoot "<pasta que contém native-config.json, postgres e pgdata>"
+O atalho outputs/Iniciar-Radar.cmd da tarefa já contém o caminho correto.
+O launcher inicia processos ocultos com bind 127.0.0.1, reaproveita portas existentes e verifica health + página Radar. Não encerra serviços de terceiros. Não altera serviços do Windows. Não inicia Docker.
+Portas: frontend 3000, Spring 8080, PostgreSQL 55432.
+Processos persistem após encerrar a tarefa, até reinício ou encerramento pelo usuário.
+Dados e segredos: work/runtime da tarefa; jamais copiar native-config.json ao Git. Preservar pgdata e esse arquivo para preservar a instalação. O launcher NÃO baixa nem inicializa novamente o banco.
+
+Bootstrap nativo:
+PostgreSQL 16.15 portátil obtido da distribuição oficial EDB. psql.exe foi bloqueado pelo controle de aplicativos do Windows; essa proteção não foi alterada. NativeBootstrap.java usa o driver JDBC já instalado, variáveis RADAR_ADMIN_PASSWORD e RADAR_APP_PASSWORD, e recebe o caminho do projeto como primeiro argumento.
+O bootstrap verifica checksum e aplica as migrations V001–V017 em transações. Apenas a criação de pgvector, que não é usada pelo código, é omitida em memória. As migrations originais são preservadas. O histórico local usa radar_native_schema e NÃO flyway_schema_history. Não apontar Flyway nem produção diretamente para essa base sem uma migração de adoção planejada.
+LocalFixtures.java cria somente contas de demonstração e duas empresas fictícias de QA nessa base explicitamente local. Não usar em produção.
+
+Validação:
+44 testes anteriores do frontend, lint e TypeScript; build Next; Maven package; 16 verificações HTTP em verify-local.mjs; 6 verificações de RLS/permissão em verify-db.java. A suíte histórica com Testcontainers não foi executada porque este ambiente não usa Docker.
+verify-local.mjs usa localhost:3000 e usuários qa-a/qa-b criados por LocalFixtures. O relatório pode ser passado como primeiro argumento; padrão target/radar-local-verification.json. Cada execução cria SKUs identificados por timestamp e preserva evidências nos tenants fictícios.
+verify-db.java exige RADAR_APP_PASSWORD no ambiente e driver PostgreSQL no classpath. Não imprime credenciais. Verifica falha fechada sem tenant, bloqueio de escrita em outro tenant e ausência de DELETE nas quatro tabelas imutáveis.
+Importação XLSX validada no navegador com planilha fictícia. A leitura XLS é suportada pela mesma biblioteca, mas um arquivo XLS não foi testado manualmente. NF-e XML é pré-cadastro, sem recebimento automático nem validação fiscal.
+
+Arquitetura deste incremento:
+Endpoints /api/radar, /api/radar/comandos, /api/radar/perguntar. Campos monetários BigDecimal no servidor, NUMERIC no banco. Idempotency-Key vincula payload e ator. Trava transacional por tenant protege estoque e execução única. RLS forçada e FKs compostas protegem identidade da empresa. Guard restringe cargo e exige cabeçalho nos novos comandos. Recursos antigos foram preservados; guarda adicional restringe consultas financeiras antigas.
+O núcleo operacional radar_* está separado do modelo analítico anterior. Não representa a arquitetura modular completa aprovada. Próxima refatoração deve extrair serviços por domínio, contratos versionados, projeções paginadas, outbox/inbox, persistência de sessão, Policy Engine configurável e AI Gateway real.
+Autorização de preço usa permissão, versão e piso no custo; não garante margem líquida mínima. Não há autopilot. Audit log de aplicação é append-only para app_aplicacao, mas não possui retenção WORM ou assinatura criptográfica contra administrador.
+
+Limitações materiais:
+- Sem APIs externas, NF-e real, eventos/webhooks, retries por canal, refresh OAuth, expedição logística, imagens generativas ou voz.
+- Sem LLM externo; consultas e sugestões atuais são heurísticas explicitamente identificadas.
+- Um SKU por pedido, devolução total, um saldo físico; sem WMS, lotes, kits, múltiplos depósitos ou variações completas.
+- CSV/XLS/XLSX/XML criam novos SKUs; duplicados bloqueiam tudo. Templates somente no navegador. Sem atualização por XML, upload de fotos, mapeamento por modelo de IA ou deduplicação de documento.
+- Até 1.000 registros por coleção na tela. Totais financeiros por canal/SKU são agregados no servidor sobre todo o ledger, mas listagens ainda precisam paginação.
+- Taxas, fretes, impostos e Ads manuais. Sem integração de repasse/banco, DRE contábil homologada, rateio de despesas, plano de contas/double-entry ou causalidade Ads incremental.
+- Estimativas de preço na interface não substituem engine de tarifas por faixa nem política de margem. Valores exibidos no simulador usam números JS; não homologado para montantes extremos.
+- Atendimento, marcas e referências de concorrentes são registros manuais. Sem coleta, envio, upload de marca ou geração real de imagens.
+- RBAC cobre sete papéis e bloqueios no servidor; workspaces completos específicos por cargo, gestão de usuários, MFA, convites e ciclo de vida do tenant ainda faltam.
+- Sem backup/restauração ensaiados, pentest, carga, SLOs, alertas e observabilidade de produção completos.
+
+Não houve commit, push ou deploy. Continuar seguindo o plano de ação completo; esta entrega não deve ser promovida diretamente a produção.

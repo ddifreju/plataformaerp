@@ -1,0 +1,23 @@
+{
+  "date": "2026-09-30T17:38:11.989Z",
+  "passed": 16,
+  "checks": [
+    "Idempotência devolve mesmo produto",
+    "Chave reutilizada com conteúdo diferente é bloqueada",
+    "Importação com linha duplicada reverte o lote inteiro",
+    "Outra empresa não lê nem altera o produto",
+    "Atendimento não recebe custo, ledger ou audit log",
+    "Comando sem cabeçalho de proteção é bloqueado",
+    "Pedido reserva estoque e calcula R$35 de resultado",
+    "Não permite consumir estoque reservado ou vender além do saldo",
+    "Expedição exige sequência válida e confirmação local",
+    "Devolução conserva despesas e recupera apenas mercadoria inspecionada",
+    "Cancelamento libera reserva e estorna o pedido local",
+    "Proposta obsoleta não sobrescreve alteração posterior",
+    "Política impede aprovar preço inferior ao custo",
+    "Compra atualiza custo médio e contas a pagar uma única vez",
+    "Pedidos antigos mantêm CMV congelado após mudança de custo",
+    "Rascunhos multicanal não duplicam anúncios existentes"
+  ],
+  "scope": "Integração HTTP local com PostgreSQL nativo. Tenants fictícios isolados. Não testa APIs externas."
+}
