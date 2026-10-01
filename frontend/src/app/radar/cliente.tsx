@@ -372,8 +372,11 @@ export default function Clientes(props: Props) {
         )}
         <p className="rd-note">
           Lead: cadastrado sem compra. Primeira compra: um pedido. Recorrente:
-          dois ou mais. Pedidos cancelados não contam. CPF/CNPJ aparece completo
-          só ao abrir o cadastro.
+          dois ou mais. Pedidos cancelados não contam. O cliente é reconhecido
+          só pelo CPF/CNPJ, nunca pelo nome: pedido sem documento cria um
+          cadastro novo. Ao completar um cadastro com um CPF/CNPJ que já existe,
+          os pedidos são juntados no cliente existente. CPF/CNPJ aparece
+          completo só ao abrir o cadastro.
         </p>
       </section>
     </>
@@ -1065,7 +1068,9 @@ function ClienteForm({
           {carregado.origem === "PEDIDO"
             ? "Criado automaticamente por um pedido. "
             : ""}
-          Complete os campos com * (os que a nota fiscal exige) e salve.
+          Complete os campos com * (os que a nota fiscal exige) e salve. Se o
+          CPF/CNPJ já for de outro cliente, os pedidos deste cadastro passam
+          para ele.
         </p>
       )}
       {erro && (

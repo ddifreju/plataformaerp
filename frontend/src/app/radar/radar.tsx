@@ -315,7 +315,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           label: "Cliente cadastrado",
           required: false,
           options: [
-            { value: "", label: "Cliente novo (cadastra sozinho pelo nome abaixo)" },
+            { value: "", label: "Cliente novo ou não encontrado na lista" },
             ...(data?.clientes ?? []).map((c) => ({
               value: str(c.id),
               label: `${str(c.codigo)} · ${str(c.nome)}`,
@@ -323,7 +323,11 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           ],
         },
         { key: "cliente", label: "Nome do cliente (se for novo)", required: false },
-        { key: "cliente_documento", label: "CPF/CNPJ do cliente (opcional)", required: false },
+        {
+          key: "cliente_documento",
+          label: "CPF/CNPJ (com ele, o pedido vai para o cliente já cadastrado)",
+          required: false,
+        },
         { key: "quantidade", label: "Quantidade", type: "integer", value: "1" },
         amount("preco", "Preço unitário"),
         amount("comissao", "Comissão total"),

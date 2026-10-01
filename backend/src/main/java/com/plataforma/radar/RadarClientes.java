@@ -36,7 +36,7 @@ import java.util.UUID;
  *
  * <p>Salvo pela tela, o cliente precisa dos dados que a NF-e exige (nome, tipo de pessoa, CPF/CNPJ
  * válido e endereço completo). Criado automaticamente por um pedido, entra só com o nome e fica
- * marcado como incompleto até alguém completar.
+ * marcado como incompleto até alguém completar. Só CPF/CNPJ identifica o cliente; o nome nunca.
  *
  * <p>CPF/CNPJ é dado pessoal: guardado completo, devolvido mascarado na lista e completo só no
  * detalhe, para os cargos que atendem ou faturam o cliente.
@@ -192,6 +192,30 @@ public class RadarClientes {
         boolean novo = n.path("id").asText("").isBlank();
         UUID id = novo ? UUID.randomUUID() : id(n, "id");
         Map<String, Object> c = colunas(n, id);
+
+        // CPF/CNPJ é o que identifica o cliente (nome repete entre pessoas). Se outro cadastro
+        // já tem este documento: um cadastro incompleto (criado por pedido) é juntado a ele;
+        // fora isso, é engano de digitação ou duplicata e a gravação é recusada.
+        String documento = (String) c.get("documento");
+        if (documento != null) {
+            var outro =
+                    db.queryForList(
+                            "select id, codigo from radar_cliente where tenant_id=?"
+                                    + " and documento=? and id<>?",
+                            tenant(),
+                            documento,
+                            id);
+            if (!outro.isEmpty()) {
+                var destino = outro.getFirst();
+                if (novo || !incompleto(id))
+                    erro(
+                            "Já existe um cliente com este CPF/CNPJ (código "
+                                    + destino.get("codigo")
+                                    + ").");
+                return juntar(id, (UUID) destino.get("id"), (String) destino.get("codigo"));
+            }
+        }
+
         String codigo = (String) c.get("codigo");
         if (codigo == null) {
             if (novo) c.put("codigo", codigo = proximoCodigo());
@@ -227,29 +251,72 @@ public class RadarClientes {
     }
 
     /**
-     * Cliente de um pedido sem cliente escolhido. Com documento, procura só por ele (nome repete
-     * entre pessoas diferentes); sem documento, pelo nome. Sem achar, cria o cliente com origem
-     * PEDIDO, marcado como incompleto. Roda dentro da trava por empresa do {@link RadarService}.
+     * Passa pedidos e anexos do cadastro incompleto para o cliente que já tem o mesmo CPF/CNPJ e
+     * apaga o incompleto. Os dados do cliente existente não mudam.
+     */
+    private Map<String, Object> juntar(UUID origem, UUID destino, String codigoDestino) {
+        int pedidos =
+                db.update(
+                        "update radar_pedido set cliente_id=? where tenant_id=? and cliente_id=?",
+                        destino,
+                        tenant(),
+                        origem);
+        db.update(
+                "update radar_cliente_anexo set cliente_id=? where tenant_id=? and cliente_id=?",
+                destino,
+                tenant(),
+                origem);
+        confirmar(
+                db.update(
+                        "delete from radar_cliente where tenant_id=? and id=? and incompleto",
+                        tenant(),
+                        origem));
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("id", destino);
+        r.put("juntado_de", origem);
+        r.put("pedidos_movidos", pedidos);
+        r.put(
+                "mensagem",
+                "Este CPF/CNPJ já era do cliente "
+                        + codigoDestino
+                        + ". Juntamos os "
+                        + pedidos
+                        + " pedido(s) nele; confira o cadastro.");
+        return r;
+    }
+
+    private boolean incompleto(UUID id) {
+        var linhas =
+                db.queryForList(
+                        "select incompleto from radar_cliente where tenant_id=? and id=?",
+                        Boolean.class,
+                        tenant(),
+                        id);
+        if (linhas.isEmpty())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente não encontrado.");
+        return Boolean.TRUE.equals(linhas.getFirst());
+    }
+
+    /**
+     * Cliente de um pedido sem cliente escolhido. Só o CPF/CNPJ identifica: pessoas diferentes têm
+     * o mesmo nome. Com documento já cadastrado, o pedido vai para esse cliente; sem documento, ou
+     * com um novo, cria um cliente com origem PEDIDO, marcado como incompleto. Roda dentro da trava
+     * por empresa do {@link RadarService}.
      */
     UUID clienteDoPedido(String nome, String documentoInformado) {
         String documento = soAlfanumerico(documentoInformado);
         if (documento != null && documento.isEmpty()) documento = null;
         if (documento != null && !cpfValido(documento) && !cnpjValido(documento))
             erro("CPF/CNPJ do cliente inválido: confira os dígitos.");
-        var achados =
-                documento != null
-                        ? db.queryForList(
-                                "select id from radar_cliente where tenant_id=? and documento=?",
-                                UUID.class,
-                                tenant(),
-                                documento)
-                        : db.queryForList(
-                                "select id from radar_cliente where tenant_id=? and"
-                                    + " lower(nome)=lower(?) order by criado_em, id limit 1",
-                                UUID.class,
-                                tenant(),
-                                nome);
-        if (!achados.isEmpty()) return achados.getFirst();
+        if (documento != null) {
+            var achados =
+                    db.queryForList(
+                            "select id from radar_cliente where tenant_id=? and documento=?",
+                            UUID.class,
+                            tenant(),
+                            documento);
+            if (!achados.isEmpty()) return achados.getFirst();
+        }
         UUID id = UUID.randomUUID();
         db.update(
                 "insert into radar_cliente(id,tenant_id,codigo,nome,tipo_pessoa,documento,"
@@ -283,7 +350,7 @@ public class RadarClientes {
         Integer existentes =
                 db.queryForObject(
                         "select count(*) from radar_cliente_anexo where tenant_id=? and"
-                            + " cliente_id=?",
+                                + " cliente_id=?",
                         Integer.class,
                         tenant(),
                         clienteId);
@@ -372,18 +439,6 @@ public class RadarClientes {
                     erro("CPF inválido: confira os dígitos.");
             }
             default -> documento = null;
-        }
-        if (documento != null) {
-            var outro =
-                    db.queryForList(
-                            "select codigo from radar_cliente where tenant_id=? and documento=?"
-                                    + " and id<>?",
-                            String.class,
-                            tenant(),
-                            documento,
-                            id);
-            if (!outro.isEmpty())
-                erro("Já existe um cliente com este CPF/CNPJ (código " + outro.getFirst() + ").");
         }
         c.put("documento", documento);
         String estrangeiro = campo(n, "documento_estrangeiro", 20, "Documento estrangeiro");

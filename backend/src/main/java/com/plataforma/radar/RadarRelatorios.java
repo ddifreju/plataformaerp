@@ -141,13 +141,13 @@ public class RadarRelatorios {
     private List<Map<String, Object>> curvaAbc(Object[] periodo) {
         var linhas =
                 db.queryForList(
-                        "select pr.sku, pr.nome, coalesce(sum(l.valor) filter (where"
+                        "select pr.id, pr.sku, pr.nome, coalesce(sum(l.valor) filter (where"
                             + " l.tipo='RECEITA'),0) receita, sum(l.valor) resultado from"
                             + " radar_lancamento l join radar_pedido p on p.tenant_id=l.tenant_id"
                             + " and p.id=l.pedido_id join radar_produto pr on"
                             + " pr.tenant_id=p.tenant_id and pr.id=p.produto_id where l.tenant_id=?"
-                            + " and l.criado_em>=? and l.criado_em<? group by pr.sku, pr.nome order"
-                            + " by receita desc, pr.sku",
+                            + " and l.criado_em>=? and l.criado_em<? group by pr.id, pr.sku,"
+                            + " pr.nome order by receita desc, pr.sku",
                         periodo);
         BigDecimal total =
                 linhas.stream()
@@ -185,14 +185,18 @@ public class RadarRelatorios {
         return dinheiroComoTexto(out);
     }
 
+    // Agrupa pelo id interno do cliente, nunca pelo nome: pessoas diferentes têm o mesmo nome.
     private List<Map<String, Object>> porCliente(Object[] periodo) {
         return dinheiroComoTexto(
                 db.queryForList(
-                        "select p.cliente nome, count(distinct p.id) pedidos, coalesce(sum(l.valor)"
-                            + " filter (where l.tipo='RECEITA'),0) receita from radar_lancamento l"
-                            + " join radar_pedido p on p.tenant_id=l.tenant_id and p.id=l.pedido_id"
-                            + " where l.tenant_id=? and l.criado_em>=? and l.criado_em<? group by"
-                            + " p.cliente order by receita desc limit 20",
+                        "select c.id, c.codigo, coalesce(c.nome,'Sem cliente') nome, count(distinct"
+                            + " p.id) pedidos, coalesce(sum(l.valor) filter (where"
+                            + " l.tipo='RECEITA'),0) receita from radar_lancamento l join"
+                            + " radar_pedido p on p.tenant_id=l.tenant_id and p.id=l.pedido_id left"
+                            + " join radar_cliente c on c.tenant_id=p.tenant_id and"
+                            + " c.id=p.cliente_id where l.tenant_id=? and l.criado_em>=? and"
+                            + " l.criado_em<? group by c.id, c.codigo, c.nome order by receita desc"
+                            + " limit 20",
                         periodo));
     }
 
