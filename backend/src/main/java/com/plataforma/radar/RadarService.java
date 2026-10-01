@@ -4,12 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plataforma.autenticacao.UsuarioAutenticado;
 import com.plataforma.comum.tenant.ContextoTenant;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.time.LocalDate;
-import java.util.*;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -17,17 +12,40 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.LocalDate;
+import java.util.*;
+
 /** Local operational core. External effects deliberately require a future certified connector. */
 @Service
 public class RadarService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
+    private final RadarCadastros cadastros;
+    private final RadarPromocoes promocoes;
+    private final RadarRelatorios relatorios;
     private static final Set<String> CANAIS =
             Set.of("Mercado Livre", "Shopee", "TikTok Shop", "SHEIN");
 
-    public RadarService(JdbcTemplate db, ObjectMapper json) {
+    public RadarService(
+            JdbcTemplate db,
+            ObjectMapper json,
+            RadarCadastros cadastros,
+            RadarPromocoes promocoes,
+            RadarRelatorios relatorios) {
         this.db = db;
         this.json = json;
+        this.cadastros = cadastros;
+        this.promocoes = promocoes;
+        this.relatorios = relatorios;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> relatorios(String de, String ate) {
+        return relatorios.gerar(papel(), de, ate);
     }
 
     private UUID tenant() {
@@ -141,7 +159,7 @@ public class RadarService {
     private void auditar(String op, String recurso, Object d) {
         db.update(
                 "insert into radar_auditoria(id,tenant_id,ator,operacao,recurso,detalhes)"
-                    + " values(?,?,?,?,?,?::jsonb)",
+                        + " values(?,?,?,?,?,?::jsonb)",
                 UUID.randomUUID(),
                 tenant(),
                 user().usuarioId(),
@@ -170,7 +188,7 @@ public class RadarService {
     private void lancar(UUID pedido, String tipo, BigDecimal v, String fonte) {
         db.update(
                 "insert into radar_lancamento(id,tenant_id,pedido_id,tipo,valor,fonte)"
-                    + " values(?,?,?,?,?,?)",
+                        + " values(?,?,?,?,?,?)",
                 UUID.randomUUID(),
                 tenant(),
                 pedido,
@@ -232,11 +250,12 @@ public class RadarService {
                                     "MENSAGEM",
                                     "MARCA",
                                     "CONCORRENTE",
+                                    "PRECO_REFERENCIA",
                                     "POLITICA",
                                     "FORNECEDOR",
                                     "COMPRA");
                     case "ATENDIMENTO", "ANALISTA" -> Set.of("MENSAGEM");
-                    case "MARKETING" -> Set.of("MARCA", "CONCORRENTE");
+                    case "MARKETING" -> Set.of("MARCA", "CONCORRENTE", "PRECO_REFERENCIA");
                     case "ESTOQUE" -> Set.of("FORNECEDOR", "COMPRA");
                     default -> Set.of("FORNECEDOR", "COMPRA");
                 };
@@ -251,9 +270,9 @@ public class RadarService {
                 f
                         ? db.queryForList(
                                 "select p.canal nome,sum(l.valor) resultado from radar_lancamento l"
-                                    + " join radar_pedido p on p.id=l.pedido_id and"
-                                    + " p.tenant_id=l.tenant_id where l.tenant_id=? group by"
-                                    + " p.canal order by p.canal",
+                                        + " join radar_pedido p on p.id=l.pedido_id and"
+                                        + " p.tenant_id=l.tenant_id where l.tenant_id=? group by"
+                                        + " p.canal order by p.canal",
                                 tenant())
                         : List.of());
         out.put(
@@ -261,10 +280,10 @@ public class RadarService {
                 f
                         ? db.queryForList(
                                 "select pr.sku nome,sum(l.valor) resultado from radar_lancamento l"
-                                    + " join radar_pedido p on p.id=l.pedido_id and"
-                                    + " p.tenant_id=l.tenant_id join radar_produto pr on"
-                                    + " pr.id=p.produto_id and pr.tenant_id=p.tenant_id where"
-                                    + " l.tenant_id=? group by pr.sku order by pr.sku",
+                                        + " join radar_pedido p on p.id=l.pedido_id and"
+                                        + " p.tenant_id=l.tenant_id join radar_produto pr on"
+                                        + " pr.id=p.produto_id and pr.tenant_id=p.tenant_id where"
+                                        + " l.tenant_id=? group by pr.sku order by pr.sku",
                                 tenant())
                         : List.of());
         out.put(
@@ -273,8 +292,8 @@ public class RadarService {
                         ? db
                                 .queryForList(
                                         "select dados,criado_em from radar_registro where"
-                                            + " tenant_id=? and tipo='DIVERGENCIA' order by"
-                                            + " criado_em desc limit 1000",
+                                                + " tenant_id=? and tipo='DIVERGENCIA' order by"
+                                                + " criado_em desc limit 1000",
                                         tenant())
                                 .stream()
                                 .map(
@@ -286,6 +305,8 @@ public class RadarService {
                         : List.of());
         out.put("resumo", f ? resumo() : Map.of());
         out.put("agentes", agentes());
+        out.putAll(cadastros.dados(p, f));
+        out.putAll(promocoes.dados());
         normalizarDinheiro(out);
         return out;
     }
@@ -327,7 +348,7 @@ public class RadarService {
                         "Disponível localmente",
                         "descricao",
                         "Mapeamento de colunas assistido por regras; confirmação antes de"
-                            + " importar."),
+                                + " importar."),
                 Map.of(
                         "nome",
                         "Product Agent",
@@ -455,14 +476,16 @@ public class RadarService {
                 String ncm = n.path("ncm").asText("");
                 if (!ncm.isBlank() && !ncm.matches("[0-9]{8}")) erro("NCM deve ter 8 dígitos.");
                 db.update(
-                        "update radar_produto set nome=?,marca=?,ncm=?,descricao=?,custo=?,preco=?"
-                            + " where tenant_id=? and id=?",
+                        "update radar_produto set nome=?,marca=?,ncm=?,descricao=?,custo=?,preco=?,"
+                                + "categoria_id=?,embalagem_id=? where tenant_id=? and id=?",
                         texto(n, "nome", 250),
                         n.path("marca").asText(""),
                         ncm,
                         n.path("descricao").asText(""),
                         valor(n, "custo"),
                         valor(n, "preco"),
+                        cadastros.vinculoOpcional(n, "categoria_id", "radar_categoria"),
+                        cadastros.vinculoOpcional(n, "embalagem_id", "radar_embalagem"),
                         tenant(),
                         pid);
                 result.put("id", pid);
@@ -519,7 +542,7 @@ public class RadarService {
                     um("radar_anuncio", aid);
                     db.update(
                             "update radar_anuncio set estado=?,versao=versao+1 where tenant_id=?"
-                                + " and id=?",
+                                    + " and id=?",
                             estado,
                             tenant(),
                             aid);
@@ -564,7 +587,7 @@ public class RadarService {
                 UUID aid = UUID.randomUUID();
                 db.update(
                         "insert into radar_anuncio(id,tenant_id,produto_id,canal,titulo,preco)"
-                            + " values(?,?,?,?,?,?)",
+                                + " values(?,?,?,?,?,?)",
                         aid,
                         tenant(),
                         pid,
@@ -584,7 +607,7 @@ public class RadarService {
                     erro("Estado inválido.");
                 db.update(
                         "update radar_anuncio set estado=?,versao=versao+1 where tenant_id=? and"
-                            + " id=?",
+                                + " id=?",
                         estado,
                         tenant(),
                         aid);
@@ -627,7 +650,7 @@ public class RadarService {
                         erro("Política local: preço abaixo do custo bloqueado.");
                     db.update(
                             "update radar_anuncio set preco=?,versao=versao+1 where tenant_id=? and"
-                                + " id=?",
+                                    + " id=?",
                             a.get("depois"),
                             tenant(),
                             a.get("anuncio_id"));
@@ -642,7 +665,7 @@ public class RadarService {
                         "mensagem",
                         op.equals("aprovar")
                                 ? "Aprovado e aplicado ao anúncio local. Canal externo"
-                                      + " desconectado."
+                                        + " desconectado."
                                 : "Proposta rejeitada.");
             }
             case "pedido" -> {
@@ -668,7 +691,7 @@ public class RadarService {
                 }
                 db.update(
                         "insert into radar_titulo(id,tenant_id,descricao,tipo,valor,vencimento)"
-                            + " values(?,?,?,?,?,?)",
+                                + " values(?,?,?,?,?,?)",
                         UUID.randomUUID(),
                         tenant(),
                         texto(n, "descricao", 250),
@@ -731,22 +754,33 @@ public class RadarService {
                     result.put(
                             "mensagem",
                             "Conferência manual concluída. Custos e impostos continuam informados"
-                                + " pelo usuário.");
+                                    + " pelo usuário.");
                 }
             }
             case "registro" -> {
                 String tipo = texto(n, "tipo", 40);
                 switch (tipo) {
                     case "MENSAGEM" -> permitir("DONO", "GESTOR", "ATENDIMENTO", "ANALISTA");
-                    case "MARCA", "CONCORRENTE" -> permitir("DONO", "GESTOR", "MARKETING");
+                    case "MARCA", "CONCORRENTE", "PRECO_REFERENCIA" ->
+                            permitir("DONO", "GESTOR", "MARKETING");
                     case "FORNECEDOR", "COMPRA" -> permitir("DONO", "GESTOR", "ESTOQUE");
                     default -> erro("Tipo de registro não permitido.");
                 }
                 JsonNode d = n.path("dados");
                 if (!d.isObject() || enc(d).length() > 10000) erro("Conteúdo inválido.");
+                if (tipo.equals("PRECO_REFERENCIA")) {
+                    // Observação de preço de uma referência monitorada (área Mercado).
+                    var ref = um("radar_registro", id(d, "referencia_id"));
+                    if (!ref.get("tipo").equals("CONCORRENTE"))
+                        erro("Referência monitorada não encontrada.");
+                    if (valor(d, "preco").signum() == 0) erro("Informe o preço observado.");
+                }
                 if (tipo.equals("CONCORRENTE")) {
                     String url = d.path("url").asText();
                     if (!url.startsWith("https://")) erro("Use uma URL HTTPS.");
+                    if (!d.path("produto_id").asText("").isBlank())
+                        um("radar_produto", id(d, "produto_id"));
+                    if (!d.path("preco").asText("").isBlank()) valor(d, "preco");
                 }
                 if (tipo.equals("COMPRA")) {
                     um("radar_produto", id(d, "produto_id"));
@@ -774,7 +808,7 @@ public class RadarService {
                                 .divide(BigDecimal.valueOf(fisico + q), 2, RoundingMode.HALF_UP);
                 db.update(
                         "update radar_produto set fisico=fisico+?,custo=? where tenant_id=? and"
-                            + " id=?",
+                                + " id=?",
                         q,
                         medio,
                         tenant(),
@@ -790,7 +824,7 @@ public class RadarService {
                 if (total.signum() > 0)
                     db.update(
                             "insert into radar_titulo(id,tenant_id,descricao,tipo,valor,vencimento)"
-                                + " values(?,?,?,'PAGAR',?,current_date)",
+                                    + " values(?,?,?,'PAGAR',?,current_date)",
                             UUID.randomUUID(),
                             tenant(),
                             "Compra " + cid,
@@ -798,9 +832,15 @@ public class RadarService {
                 result.put(
                         "mensagem",
                         "Compra recebida uma vez; estoque, custo médio e conta a pagar"
-                            + " atualizados.");
+                                + " atualizados.");
             }
-            default -> erro("Operação não reconhecida.");
+            default -> {
+                if (RadarCadastros.OPERACOES.contains(op))
+                    result.putAll(cadastros.executar(op, n, papel()));
+                else if (RadarPromocoes.OPERACOES.contains(op))
+                    result.putAll(promocoes.executar(op, n, papel()));
+                else erro("Operação não reconhecida.");
+            }
         }
         auditar(
                 op,
@@ -808,7 +848,7 @@ public class RadarService {
                 Map.of("resultado", result, "parametros", n));
         db.update(
                 "insert into radar_comando(tenant_id,id,ator,hash,resultado)"
-                    + " values(?,?,?,?,?::jsonb)",
+                        + " values(?,?,?,?,?::jsonb)",
                 tenant(),
                 chave,
                 user().usuarioId(),
@@ -831,8 +871,8 @@ public class RadarService {
         UUID id = UUID.randomUUID();
         db.update(
                 "insert into"
-                    + " radar_produto(id,tenant_id,sku,nome,marca,ncm,descricao,custo,preco,fisico)"
-                    + " values(?,?,?,?,?,?,?,?,?,?)",
+                    + " radar_produto(id,tenant_id,sku,nome,marca,ncm,descricao,custo,preco,fisico,categoria_id,embalagem_id)"
+                    + " values(?,?,?,?,?,?,?,?,?,?,?,?)",
                 id,
                 tenant(),
                 sku,
@@ -842,7 +882,9 @@ public class RadarService {
                 n.path("descricao").asText(""),
                 valor(n, "custo"),
                 valor(n, "preco"),
-                saldo);
+                saldo,
+                cadastros.vinculoOpcional(n, "categoria_id", "radar_categoria"),
+                cadastros.vinculoOpcional(n, "embalagem_id", "radar_embalagem"));
         if (saldo > 0) movimento(id, null, "ABERTURA", saldo, 0, "Saldo inicial informado");
         return id;
     }
@@ -856,19 +898,32 @@ public class RadarService {
         BigDecimal preco = valor(n, "preco");
         if (preco.signum() == 0) erro("Preço deve ser positivo.");
         BigDecimal bruto = preco.multiply(BigDecimal.valueOf(q));
-        if (valor(n, "desconto").compareTo(bruto) > 0) erro("Desconto maior que a venda.");
+        String canal = canal(n);
+        // Com promoção escolhida, o desconto vem dela (e fica rastreável pelo
+        // promocao_id); sem promoção, vale o desconto digitado.
+        UUID promocaoId = null;
+        BigDecimal desconto = valor(n, "desconto");
+        if (!n.path("promocao_id").asText("").isBlank()) {
+            promocaoId = id(n, "promocao_id");
+            desconto = promocoes.desconto(promocaoId, pid, canal, preco, q);
+        }
+        if (desconto.compareTo(bruto) > 0) erro("Desconto maior que a venda.");
+        // Cliente cadastrado é opcional; sem ele, vale o nome digitado no pedido.
+        UUID clienteId = cadastros.vinculoOpcional(n, "cliente_id", "radar_cliente");
+        String cliente =
+                clienteId != null ? cadastros.nomeDoCliente(clienteId) : texto(n, "cliente", 160);
         UUID id = UUID.randomUUID();
         String num = "R-" + id.toString().substring(0, 8).toUpperCase();
         db.update(
                 "insert into"
-                    + " radar_pedido(id,tenant_id,produto_id,numero,canal,cliente,quantidade,preco,custo_unitario,comissao,frete,imposto,ads,embalagem,desconto)"
-                    + " values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    + " radar_pedido(id,tenant_id,produto_id,numero,canal,cliente,quantidade,preco,custo_unitario,comissao,frete,imposto,ads,embalagem,desconto,cliente_id,promocao_id)"
+                    + " values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 id,
                 tenant(),
                 pid,
                 num,
-                canal(n),
-                texto(n, "cliente", 160),
+                canal,
+                cliente,
                 q,
                 preco,
                 p.get("custo"),
@@ -877,7 +932,9 @@ public class RadarService {
                 valor(n, "imposto"),
                 valor(n, "ads"),
                 valor(n, "embalagem"),
-                valor(n, "desconto"));
+                desconto,
+                clienteId,
+                promocaoId);
         db.update(
                 "update radar_produto set reservado=reservado+? where tenant_id=? and id=?",
                 q,
@@ -890,8 +947,13 @@ public class RadarService {
                 "CMV",
                 bd(p.get("custo")).multiply(BigDecimal.valueOf(q)).negate(),
                 "Custo congelado no pedido");
-        for (String k : List.of("comissao", "frete", "imposto", "ads", "embalagem", "desconto"))
+        for (String k : List.of("comissao", "frete", "imposto", "ads", "embalagem"))
             lancar(id, k.toUpperCase(), valor(n, k).negate(), "Valor informado no pedido local");
+        lancar(
+                id,
+                "DESCONTO",
+                desconto.negate(),
+                promocaoId != null ? "Promoção " + promocaoId : "Valor informado no pedido local");
         return id;
     }
 
@@ -908,7 +970,7 @@ public class RadarService {
                 erro("Expedição local exige confirmação de simulação; não há NF-e emitida.");
             db.update(
                     "update radar_produto set fisico=fisico-?,reservado=reservado-? where"
-                        + " tenant_id=? and id=?",
+                            + " tenant_id=? and id=?",
                     q,
                     q,
                     tenant(),
@@ -943,7 +1005,7 @@ public class RadarService {
             for (var x :
                     db.queryForList(
                             "select tipo,valor from radar_lancamento where tenant_id=? and"
-                                + " pedido_id=? and tipo in ('RECEITA','DESCONTO','CMV')",
+                                    + " pedido_id=? and tipo in ('RECEITA','DESCONTO','CMV')",
                             tenant(),
                             id)) {
                 if (!x.get("tipo").equals("CMV") || revenda)
@@ -1000,7 +1062,7 @@ public class RadarService {
             int qtd =
                     db.queryForObject(
                             "select count(*) from radar_produto where tenant_id=? and"
-                                + " fisico-reservado<=minimo",
+                                    + " fisico-reservado<=minimo",
                             Integer.class,
                             tenant());
             resposta =
@@ -1014,7 +1076,7 @@ public class RadarService {
             int qtd =
                     db.queryForObject(
                             "select count(*) from radar_pedido where tenant_id=? and estado in"
-                                + " ('RESERVADO','SEPARADO')",
+                                    + " ('RESERVADO','SEPARADO')",
                             Integer.class,
                             tenant());
             resposta =

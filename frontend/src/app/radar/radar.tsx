@@ -1,10 +1,26 @@
 "use client";
 /* eslint-disable react/jsx-key -- Table wraps each supplied cell in a keyed td; these arrays are table data, not rendered sibling lists. */
 
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import "./radar.css";
+import {
+  Badge,
+  Empty,
+  Table,
+  cents,
+  centMoney,
+  date,
+  money,
+  str,
+  type Field,
+  type ModalSpec,
+  type Row,
+} from "./ui";
+import Mercado from "./mercado";
+import Cadastro from "./cadastros";
+import Promocoes, { situacao } from "./promocoes";
+import Relatorios from "./relatorios";
 
-type Row = Record<string, string | number | boolean | Record<string, unknown>>;
 type Data = {
   usuario: { nome: string; papel: string };
   financeiroPermitido: boolean;
@@ -22,36 +38,57 @@ type Data = {
   auditoria: Row[];
   agentes: { nome: string; estado: string; descricao: string }[];
   resumo: Record<string, string>;
-};
-type Field = {
-  key: string;
-  label: string;
-  type?: string;
-  value?: string;
-  options?: { value: string; label: string }[];
-  required?: boolean;
+  clientes: Row[];
+  fornecedores: Row[];
+  categorias: Row[];
+  embalagens: Row[];
+  promocoes: Row[];
 };
 const canais = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 const nav = [
-  ["visao", "Visão geral", "⌂"],
+  ["visao", "Painel", "⌂"],
   ["missao", "Central de ações", "◎"],
   ["produtos", "Produtos", "▣"],
   ["importar", "Importar catálogo", "↥"],
   ["anuncios", "Anúncios", "▤"],
+  ["clientes", "Clientes", "☺"],
+  ["fornecedores", "Fornecedores", "⇲"],
+  ["categorias", "Categorias", "#"],
+  ["embalagens", "Embalagens", "▢"],
   ["pedidos", "Pedidos", "▢"],
+  ["promocoes", "Promoções", "%"],
   ["estoque", "Estoque", "▦"],
   ["compras", "Compras", "↙"],
   ["fiscal", "Notas fiscais", "▧"],
   ["financeiro", "Financeiro", "◈"],
   ["precos", "Precificação", "↗"],
+  ["relatorios", "Relatórios", "▥"],
   ["inbox", "Atendimento", "☏"],
   ["studio", "Brand Studio", "✧"],
-  ["mercado", "Concorrência", "◉"],
+  ["mercado", "Mercado", "◉"],
   ["ia", "Radar AI", "✳"],
   ["integracoes", "Integrações", "⇄"],
   ["auditoria", "Auditoria", "≡"],
   ["guia", "Como usar", "?"],
 ];
+// Menu lateral em grupos. Páginas fora daqui (Central de ações, Importar
+// catálogo) continuam acessíveis pelos botões dentro de Painel e Produtos.
+const grupos: { id: string; rotulo: string; icone: string; itens: string[] }[] = [
+  { id: "painel", rotulo: "Painel", icone: "⌂", itens: ["visao"] },
+  {
+    id: "cadastros",
+    rotulo: "Cadastros",
+    icone: "▣",
+    itens: ["produtos", "anuncios", "clientes", "fornecedores", "categorias", "embalagens"],
+  },
+  { id: "vendas", rotulo: "Vendas", icone: "▢", itens: ["pedidos", "inbox", "promocoes"] },
+  { id: "suprimentos", rotulo: "Suprimentos", icone: "▦", itens: ["estoque", "compras", "fiscal"] },
+  { id: "financas", rotulo: "Finanças", icone: "◈", itens: ["financeiro", "precos", "relatorios"] },
+  { id: "marketing", rotulo: "Marketing", icone: "✧", itens: ["studio"] },
+  { id: "mercado", rotulo: "Mercado", icone: "◉", itens: ["mercado"] },
+  { id: "ia", rotulo: "Radar AI", icone: "✳", itens: ["ia"] },
+];
+const rodape = ["integracoes", "auditoria", "guia"];
 const titles: Record<string, [string, string]> = {
   visao: ["Sua operação, em um só lugar", "Acompanhe o que importa e encontre seu próximo passo."],
   missao: ["O que precisa de você", "Prioridades com contexto, responsáveis e ações."],
@@ -79,8 +116,8 @@ const titles: Record<string, [string, string]> = {
   inbox: ["Conversas com contexto", "Prepare respostas e consulte a operação no mesmo lugar."],
   studio: ["Sua marca, consistente", "Identidade e rascunhos de conteúdo para seus produtos."],
   mercado: [
-    "Olhe para o mercado",
-    "Organize referências e compare sem perder sua margem de vista.",
+    "Inteligência de Mercado",
+    "Acompanhe preços, ofertas, posicionamento, avaliações, tendências e sinais do mercado para tomar decisões melhores sobre seus produtos.",
   ],
   ia: [
     "Pergunte. Entenda. Decida.",
@@ -92,69 +129,16 @@ const titles: Record<string, [string, string]> = {
   ],
   auditoria: ["Histórico que dá confiança", "Quem fez, o que mudou e quando aconteceu."],
   guia: ["Conheça seu Radar", "Um passeio simples pelo trabalho do dia a dia."],
+  clientes: ["Seus clientes", "Quem compra de você, com contato e histórico em um só lugar."],
+  fornecedores: ["Seus fornecedores", "Contatos e prazos de quem abastece sua operação."],
+  categorias: ["Categorias", "Organize o catálogo do jeito que seu cliente procura."],
+  embalagens: ["Embalagens", "Custos e medidas das embalagens que você usa nos envios."],
+  promocoes: ["Promoções", "Planeje descontos por produto, canal e período, vendo a margem antes."],
+  relatorios: [
+    "Relatórios",
+    "Vendas, resultado, curva ABC e estoque do período, prontos para exportar.",
+  ],
 };
-function cents(v: unknown) {
-  const s = String(v ?? "0");
-  const [i, f = ""] = s.split(".");
-  return Number(i) * 100 + (i.startsWith("-") ? -1 : 1) * Number(f.padEnd(2, "0").slice(0, 2));
-}
-function money(v: unknown) {
-  return (cents(v) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-function centMoney(v: number) {
-  return (v / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-function date(v: unknown) {
-  return new Date(String(v)).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-}
-function str(v: unknown) {
-  return String(v ?? "");
-}
-function Badge({ children, tone = "gray" }: { children: ReactNode; tone?: string }) {
-  return <span className={`rd-badge ${tone}`}>{children}</span>;
-}
-function Empty({
-  text = "Ainda não há registros.",
-  action,
-}: {
-  text?: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="rd-empty">
-      <span>◇</span>
-      <h3>{text}</h3>
-      <p>Comece com um cadastro ou explore o guia do Radar.</p>
-      {action}
-    </div>
-  );
-}
-function Table({ headers, rows }: { headers: string[]; rows: ReactNode[][] }) {
-  return rows.length ? (
-    <div className="rd-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            {headers.map((h) => (
-              <th key={h}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
-              {r.map((c, j) => (
-                <td key={j}>{c}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  ) : (
-    <Empty />
-  );
-}
 async function call(path: string, body?: unknown, key?: string) {
   const res = await fetch("/api/radar" + path, {
     method: body ? "POST" : "GET",
@@ -182,13 +166,9 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [notice, setNotice] = useState(""),
     [error, setError] = useState(""),
     [search, setSearch] = useState(""),
-    [modal, setModal] = useState<{
-      title: string;
-      fields: Field[];
-      op: string;
-      extra?: Record<string, unknown>;
-    } | null>(null),
+    [modal, setModal] = useState<ModalSpec | null>(null),
     [tour, setTour] = useState(0),
+    [abertos, setAbertos] = useState<string[]>([]),
     [menu, setMenu] = useState(false);
   const refresh = useCallback(async () => {
     const d = await call("");
@@ -263,6 +243,20 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   const baixos = products.filter((p) => Number(p.fisico) - Number(p.reservado) <= Number(p.minimo));
   const pendentes = data?.acoes.filter((a) => a.estado === "PENDENTE") ?? [];
   const records = (t: string) => data?.registros.filter((r) => r.tipo === t) ?? [];
+  const vinculo = (key: string, label: string, linhas: Row[], value = ""): Field => ({
+    key,
+    label,
+    required: false,
+    value,
+    options: [
+      { value: "", label: "Nenhuma" },
+      ...linhas.map((l) => ({ value: str(l.id), label: str(l.nome) })),
+    ],
+  });
+  const categoriaField = (value = "") =>
+    vinculo("categoria_id", "Categoria", data?.categorias ?? [], value);
+  const embalagemField = (value = "") =>
+    vinculo("embalagem_id", "Embalagem", data?.embalagens ?? [], value);
   function produtoModal() {
     setModal({
       title: "Cadastrar produto",
@@ -276,6 +270,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
         amount("custo", "Custo unitário"),
         amount("preco", "Preço base"),
         { key: "saldo", label: "Saldo inicial", type: "integer", value: "0" },
+        categoriaField(),
+        embalagemField(),
       ],
     });
   }
@@ -297,6 +293,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
         },
         amount("custo", "Custo atual", str(p.custo)),
         amount("preco", "Preço base", str(p.preco)),
+        categoriaField(str(p.categoria_id)),
+        embalagemField(str(p.embalagem_id)),
       ],
     });
   }
@@ -307,7 +305,16 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       fields: [
         productField,
         channelField,
-        { key: "cliente", label: "Nome do cliente (use dados fictícios)" },
+        {
+          key: "cliente_id",
+          label: "Cliente cadastrado",
+          required: false,
+          options: [
+            { value: "", label: "Não cadastrado (digite o nome ao lado)" },
+            ...(data?.clientes ?? []).map((c) => ({ value: str(c.id), label: str(c.nome) })),
+          ],
+        },
+        { key: "cliente", label: "Nome do cliente", required: false },
         { key: "quantidade", label: "Quantidade", type: "integer", value: "1" },
         amount("preco", "Preço unitário"),
         amount("comissao", "Comissão total"),
@@ -315,7 +322,18 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
         amount("imposto", "Imposto total informado"),
         amount("ads", "Ads atribuídos"),
         amount("embalagem", "Embalagem"),
-        amount("desconto", "Desconto total"),
+        amount("desconto", "Desconto total (sem promoção)"),
+        {
+          key: "promocao_id",
+          label: "Promoção",
+          required: false,
+          options: [
+            { value: "", label: "Nenhuma" },
+            ...(data?.promocoes ?? [])
+              .filter((p) => situacao(p).vale)
+              .map((p) => ({ value: str(p.id), label: str(p.nome) })),
+          ],
+        },
       ],
     });
   }
@@ -364,9 +382,19 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   if (!data) return <Login onLogin={refresh} />;
   const filtered = (items: Row[]) =>
     items.filter((x) => JSON.stringify(x).toLowerCase().includes(search.toLowerCase()));
-  const available = nav
-    .filter(([p]) => !(p === "financeiro" || p === "precos") || data.financeiroPermitido)
-    .filter(([p]) => p !== "auditoria" || can("DONO"));
+  const liberadas = new Set(
+    nav
+      .map(([p]) => p)
+      .filter(
+        (p) => !["financeiro", "precos", "relatorios"].includes(p) || data.financeiroPermitido,
+      )
+      .filter((p) => p !== "auditoria" || can("DONO"))
+      .filter(
+        (p) => p !== "clientes" || can("DONO", "GESTOR", "ATENDIMENTO", "FINANCEIRO", "ANALISTA"),
+      )
+      .filter((p) => p !== "fornecedores" || can("DONO", "GESTOR", "ESTOQUE", "FINANCEIRO")),
+  );
+  const rotuloDe = (id: string) => nav.find((x) => x[0] === id)?.[1] ?? id;
   return (
     <div className="radar-app">
       <aside className={`rd-sidebar ${menu ? "open" : ""}`}>
@@ -382,20 +410,64 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
         </div>
         <p className="rd-nav-label">SEU COMMERCE OS</p>
         <nav>
-          {available.map(([id, label, icon]) => (
-            <button key={id} className={page === id ? "active" : ""} onClick={() => go(id)}>
-              <span className="rd-nav-icon">{icon}</span>
-              {label}
-              {id === "missao" && pendentes.length > 0 && <b>{pendentes.length}</b>}
-            </button>
-          ))}
+          {grupos.map((g) => {
+            const itens = g.itens.filter((id) => liberadas.has(id));
+            if (!itens.length) return null;
+            const ativo = itens.includes(page) || (g.id === "painel" && page === "missao");
+            if (itens.length === 1 && g.itens.length === 1)
+              return (
+                <button
+                  key={g.id}
+                  className={`${ativo ? "active" : ""} ${g.id === "ia" ? "rd-nav-ai" : ""}`}
+                  onClick={() => go(itens[0])}
+                >
+                  <span className="rd-nav-icon">{g.icone}</span>
+                  {g.rotulo}
+                  {g.id === "painel" && pendentes.length > 0 && <b>{pendentes.length}</b>}
+                </button>
+              );
+            const aberto = ativo || abertos.includes(g.id);
+            return (
+              <div key={g.id} className="rd-nav-group">
+                <button
+                  className={ativo ? "rd-nav-parent current" : "rd-nav-parent"}
+                  aria-expanded={aberto}
+                  onClick={() =>
+                    setAbertos(
+                      abertos.includes(g.id)
+                        ? abertos.filter((x) => x !== g.id)
+                        : [...abertos, g.id],
+                    )
+                  }
+                >
+                  <span className="rd-nav-icon">{g.icone}</span>
+                  {g.rotulo}
+                  <i>{aberto ? "⌃" : "⌄"}</i>
+                </button>
+                {aberto &&
+                  itens.map((id) => (
+                    <button
+                      key={id}
+                      className={`rd-nav-child ${page === id ? "active" : ""}`}
+                      onClick={() => go(id)}
+                    >
+                      {rotuloDe(id)}
+                    </button>
+                  ))}
+              </div>
+            );
+          })}
         </nav>
-        <div className="rd-side-help">
-          <span>✧</span>
-          <strong>Seu próximo passo, mais claro.</strong>
-          <p>Conheça o fluxo em poucos minutos.</p>
-          <button onClick={() => go("guia")}>Abrir guia visual →</button>
-        </div>
+        <nav className="rd-nav-footer">
+          {rodape
+            .filter((id) => liberadas.has(id))
+            .map((id) => (
+              <button key={id} className={page === id ? "active" : ""} onClick={() => go(id)}>
+                <span className="rd-nav-icon">{nav.find((x) => x[0] === id)?.[2]}</span>
+                {rotuloDe(id)}
+              </button>
+            ))}
+        </nav>
         <div className="rd-user">
           <div className="rd-avatar">{data.usuario.nome.slice(0, 1)}</div>
           <span>
@@ -1003,7 +1075,16 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                                   type: "integer",
                                   value: "10",
                                 },
-                                { key: "fornecedor", label: "Fornecedor" },
+                                data.fornecedores.length
+                                  ? {
+                                      key: "fornecedor",
+                                      label: "Fornecedor",
+                                      options: data.fornecedores.map((f) => ({
+                                        value: str(f.nome),
+                                        label: str(f.nome),
+                                      })),
+                                    }
+                                  : { key: "fornecedor", label: "Fornecedor" },
                                 { key: "observacao", label: "Prazo / observação", required: false },
                               ],
                             })
@@ -1020,32 +1101,25 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                 <section className="rd-card">
                   <div className="rd-card-head">
                     <h2>Fornecedores</h2>
-                    <button
-                      onClick={() =>
-                        setModal({
-                          title: "Cadastrar fornecedor",
-                          op: "registro",
-                          extra: { tipo: "FORNECEDOR" },
-                          fields: [
-                            { key: "nome", label: "Nome" },
-                            { key: "contato", label: "Contato", required: false },
-                            { key: "prazo", label: "Prazo de entrega", required: false },
-                          ],
-                        })
-                      }
-                    >
-                      + Adicionar
-                    </button>
+                    <button onClick={() => go("fornecedores")}>Gerenciar →</button>
                   </div>
-                  {records("FORNECEDOR").map((r) => (
-                    <div className="rd-task" key={str(r.id)}>
-                      <i>↙</i>
-                      <div>
-                        <strong>{str((r.dados as Record<string, unknown>).nome)}</strong>
-                        <small>{str((r.dados as Record<string, unknown>).prazo)}</small>
+                  {data.fornecedores.length ? (
+                    data.fornecedores.slice(0, 6).map((f) => (
+                      <div className="rd-task" key={str(f.id)}>
+                        <i>⇲</i>
+                        <div>
+                          <strong>{str(f.nome)}</strong>
+                          <small>
+                            {f.prazo_entrega_dias == null
+                              ? "Prazo não informado"
+                              : `Entrega em ${str(f.prazo_entrega_dias)} dias`}
+                          </small>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <Empty text="Nenhum fornecedor cadastrado." />
+                  )}
                 </section>
               </div>
               <section className="rd-card">
@@ -1557,43 +1631,58 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               <RecordCards title="Perfis salvos" records={records("MARCA")} />
             </>
           )}
+          {page === "clientes" && (
+            <Cadastro
+              tipo="clientes"
+              linhas={data.clientes}
+              podeEditar={can("DONO", "GESTOR", "ATENDIMENTO")}
+              abrirModal={setModal}
+            />
+          )}
+          {page === "fornecedores" && (
+            <Cadastro
+              tipo="fornecedores"
+              linhas={data.fornecedores}
+              podeEditar={can("DONO", "GESTOR", "ESTOQUE")}
+              abrirModal={setModal}
+            />
+          )}
+          {page === "categorias" && (
+            <Cadastro
+              tipo="categorias"
+              linhas={data.categorias}
+              podeEditar={can("DONO", "GESTOR", "MARKETING")}
+              abrirModal={setModal}
+            />
+          )}
+          {page === "embalagens" && (
+            <Cadastro
+              tipo="embalagens"
+              linhas={data.embalagens}
+              podeEditar={can("DONO", "GESTOR", "ESTOQUE")}
+              abrirModal={setModal}
+            />
+          )}
+          {page === "promocoes" && (
+            <Promocoes
+              promocoes={data.promocoes}
+              produtos={products}
+              podeEditar={can("DONO", "GESTOR", "MARKETING")}
+              veCusto={data.financeiroPermitido}
+              abrirModal={setModal}
+            />
+          )}
+          {page === "relatorios" && data.financeiroPermitido && <Relatorios />}
           {page === "mercado" && (
-            <>
-              <div className="rd-toolbar">
-                <Badge>Referências manuais · sem coleta automática</Badge>
-                <button
-                  className="primary"
-                  onClick={() =>
-                    setModal({
-                      title: "Acompanhar referência",
-                      op: "registro",
-                      extra: { tipo: "CONCORRENTE" },
-                      fields: [
-                        { key: "nome", label: "Concorrente / anúncio" },
-                        { key: "url", label: "Link HTTPS", type: "url" },
-                        { key: "produto", label: "Produto comparável" },
-                        { key: "preco", label: "Preço observado", type: "number" },
-                        {
-                          key: "observacao",
-                          label: "Frete / condições / data da observação",
-                          type: "textarea",
-                        },
-                      ],
-                    })
-                  }
-                >
-                  + Adicionar concorrente
-                </button>
-              </div>
-              <RecordCards title="Radar de concorrência" records={records("CONCORRENTE")} />
-              <section className="rd-card rd-start">
-                <div>
-                  <h2>Preço baixo só faz sentido com margem.</h2>
-                  <p>Confira o impacto dos custos antes de acompanhar uma oferta concorrente.</p>
-                </div>
-                <button onClick={() => go("precos")}>Simular preço →</button>
-              </section>
-            </>
+            <Mercado
+              registros={data.registros}
+              produtos={products}
+              anuncios={listings}
+              podeEditar={can("DONO", "GESTOR", "MARKETING")}
+              veCusto={data.financeiroPermitido}
+              abrirModal={setModal}
+              go={go}
+            />
           )}
           {page === "ia" && (
             <>
@@ -1682,7 +1771,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             </section>
           )}
           {page === "guia" && <Guide step={tour} onStep={setTour} go={go} />}
-          {!data.financeiroPermitido && ["financeiro", "precos"].includes(page) && (
+          {!data.financeiroPermitido && ["financeiro", "precos", "relatorios"].includes(page) && (
             <Empty text="Seu cargo não tem acesso a dados financeiros." />
           )}
           <footer className="rd-footer">
@@ -1717,7 +1806,9 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   const v = String(form.get(f.key) ?? "");
                   values[f.key] =
                     f.type === "integer"
-                      ? Number(v)
+                      ? v === "" && f.required === false
+                        ? ""
+                        : Number(v)
                       : f.key === "retornar_estoque"
                         ? v === "true"
                         : v;
@@ -1786,9 +1877,14 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   );
 }
 
+// Espera até ~3 minutos pelo servidor acordar (18 × 10 s).
+const ESPERA_MAX_TENTATIVAS = 18;
+const ESPERA_ENTRE_TENTATIVAS_MS = 10_000;
+
 function Login({ onLogin }: { onLogin: () => Promise<void> }) {
   const [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [acordando, setAcordando] = useState(0);
   return (
     <div className="radar-app rd-login">
       <div className="rd-login-story">
@@ -1823,21 +1919,39 @@ function Login({ onLogin }: { onLogin: () => Promise<void> }) {
             onSubmit={async (e) => {
               e.preventDefault();
               setBusy(true);
+              setError("");
               const f = new FormData(e.currentTarget);
+              const corpo = JSON.stringify({ email: f.get("email"), senha: f.get("senha") });
               try {
-                const r = await fetch("/api/login", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ email: f.get("email"), senha: f.get("senha") }),
-                });
-                if (!r.ok)
-                  throw new Error(
-                    "Não foi possível entrar. Confira o acesso ou aguarde o servidor local.",
-                  );
+                // No plano gratuito o servidor dorme sem uso e leva alguns minutos para
+                // acordar. Enquanto responde 5xx (ou nem responde), esperamos e tentamos de novo.
+                for (let tentativa = 1; ; tentativa++) {
+                  let status = 0;
+                  try {
+                    const r = await fetch("/api/login", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: corpo,
+                    });
+                    status = r.status;
+                  } catch {
+                    status = 0;
+                  }
+                  if (status >= 200 && status < 300) break;
+                  if (status === 401 || status === 400)
+                    throw new Error("E-mail ou senha incorretos.");
+                  if (tentativa >= ESPERA_MAX_TENTATIVAS)
+                    throw new Error(
+                      "O servidor não respondeu. Aguarde um pouco e tente entrar de novo.",
+                    );
+                  setAcordando(tentativa);
+                  await new Promise((pronto) => setTimeout(pronto, ESPERA_ENTRE_TENTATIVAS_MS));
+                }
                 await onLogin();
               } catch (e) {
                 setError((e as Error).message);
               } finally {
+                setAcordando(0);
                 setBusy(false);
               }
             }}
@@ -1862,13 +1976,19 @@ function Login({ onLogin }: { onLogin: () => Promise<void> }) {
                 autoComplete="current-password"
               />
             </label>
+            {acordando > 0 && (
+              <div className="rd-note" role="status">
+                Acordando o servidor… isso leva de 1 a 3 minutos depois de um tempo sem uso. Não
+                precisa clicar de novo.
+              </div>
+            )}
             {error && (
               <div className="rd-error" role="alert">
                 {error}
               </div>
             )}
             <button className="primary" disabled={busy}>
-              {busy ? "Entrando…" : "Entrar no Radar →"}
+              {acordando > 0 ? "Aguardando o servidor…" : busy ? "Entrando…" : "Entrar no Radar →"}
             </button>
           </form>
           <div className="rd-note">
