@@ -70,7 +70,7 @@ class RadarCadastrosIsolamentoTest {
                     }
                 };
         db = new JdbcTemplate(new DataSourceComTenant(app));
-        cadastros = new RadarCadastros(db);
+        cadastros = new RadarCadastros(db, JSON);
     }
 
     @AfterEach
@@ -202,6 +202,68 @@ class RadarCadastrosIsolamentoTest {
                                 "embalagem",
                                 json("{\"nome\":\"Caixa G\",\"custo\":\"1.805\"}"),
                                 "DONO"));
+    }
+
+    @Test
+    void categoriaGanhaVinculoComMarketplaceQueOutraEmpresaNaoAlcanca() throws SQLException {
+        UUID categoria = criar(EMPRESA_A, "categoria", "{\"nome\":\"Blackout\"}");
+        String vinculo =
+                "{\"categoria_id\":\""
+                        + categoria
+                        + "\",\"canal\":\"Shopee\",\"codigo_externo\":\"100629\","
+                        + "\"nome_externo\":\"Casa e Decoração > Cortinas\"}";
+
+        ContextoTenant.definir(EMPRESA_B);
+        assertThrows(
+                ResponseStatusException.class,
+                () -> cadastros.executar("categoria_vinculo", json(vinculo), "DONO"));
+        ContextoTenant.definir(EMPRESA_A);
+        cadastros.executar("categoria_vinculo", json(vinculo), "DONO");
+        cadastros.executar("categoria_vinculo", json(vinculo.replace("100629", "100630")), "DONO");
+        var canais = linhas(cadastros.dados("DONO", true), "categoriaCanais");
+        assertEquals(1, canais.size());
+        assertEquals("100630", canais.getFirst().get("codigo_externo"));
+
+        cadastros.executar("categoria_vinculo", json(vinculo.replace("100629", "")), "DONO");
+        assertTrue(linhas(cadastros.dados("DONO", true), "categoriaCanais").isEmpty());
+    }
+
+    @Test
+    void embalagensSugeridasEntramUmaVezComTagsECustoZero() throws SQLException {
+        ContextoTenant.definir(EMPRESA_B);
+        cadastros.executar("embalagens_sugeridas", json("{}"), "ESTOQUE");
+        cadastros.executar("embalagens_sugeridas", json("{}"), "ESTOQUE");
+        var embalagens = linhas(cadastros.dados("DONO", true), "embalagens");
+        long sugeridas =
+                embalagens.stream().filter(e -> Boolean.TRUE.equals(e.get("sugerida"))).count();
+        assertEquals(RadarCadastros.SUGERIDAS.size(), sugeridas);
+        var caixa =
+                embalagens.stream()
+                        .filter(e -> e.get("nome").toString().startsWith("Caixa de papelão P"))
+                        .findFirst()
+                        .orElseThrow();
+        assertEquals(0, ((java.math.BigDecimal) caixa.get("custo")).signum());
+        assertEquals("CAIXA", caixa.get("tipo"));
+        assertTrue(caixa.get("tags").toString().contains("papelão"));
+        assertTrue(linhas(cadastros.dados("DONO", true), "embalagens").size() >= 19);
+    }
+
+    @Test
+    void embalagemSalvaTipoETagsSemRepetir() {
+        UUID id =
+                criar(
+                        EMPRESA_A,
+                        "embalagem",
+                        "{\"nome\":\"Caixa sob medida\",\"custo\":\"2.50\",\"tipo\":\"caixa\","
+                                + "\"tags\":[\"Frágil\",\"frágil\",\"cortina\"]}");
+        ContextoTenant.definir(EMPRESA_A);
+        var e =
+                linhas(cadastros.dados("DONO", true), "embalagens").stream()
+                        .filter(x -> x.get("id").equals(id))
+                        .findFirst()
+                        .orElseThrow();
+        assertEquals("CAIXA", e.get("tipo"));
+        assertEquals("[\"frágil\", \"cortina\"]", e.get("tags").toString());
     }
 
     // ---- apoio -----------------------------------------------------------------------------

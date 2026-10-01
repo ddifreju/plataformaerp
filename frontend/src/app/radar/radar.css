@@ -2303,3 +2303,70 @@ img.rd-product-thumb {
   font-size: 12px;
   font-weight: 600;
 }
+
+/* Categorias e embalagens */
+.rd-vinculos {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+.rd-vinculos span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  align-items: baseline;
+}
+.rd-vinculos span.ok {
+  color: #047857;
+  font-weight: 600;
+}
+.rd-vinculos span.falta {
+  color: var(--rd-muted);
+}
+.rd-vinculos small {
+  color: var(--rd-muted);
+  font-weight: 400;
+}
+.rd-vinculo-canal {
+  display: grid;
+  grid-template-columns: 120px 1fr 2fr;
+  gap: 8px;
+  align-items: center;
+}
+.rd-vinculo-canal strong {
+  font-size: 12px;
+}
+.rd-aviso-categoria .rd-vinculo-canal {
+  grid-template-columns: 1fr 2fr;
+  margin: 8px 0 4px;
+}
+.rd-aviso-categoria {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 12px;
+  margin: 0;
+}
+.rd-aviso-categoria p {
+  margin: 6px 0 0;
+}
+.rd-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.rd-tags span {
+  background: #f1f5f9;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #475569;
+}
+@media (max-width: 720px) {
+  .rd-vinculo-canal,
+  .rd-aviso-categoria .rd-vinculo-canal {
+    grid-template-columns: 1fr;
+  }
+}

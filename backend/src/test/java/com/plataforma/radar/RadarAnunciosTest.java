@@ -52,7 +52,7 @@ class RadarAnunciosTest {
                 importar(
                         empresa,
                         "[{\"id_externo\":\"MLB123\",\"titulo\":\"Cortina"
-                            + " azul\",\"preco\":\"89.90\"}]");
+                                + " azul\",\"preco\":\"89.90\"}]");
         assertEquals(1, r.get("produtosCriados"));
         var a = anuncio(empresa, "MLB123");
         var p = linha(empresa, "select * from radar_produto where id=?", a.get("produto_id"));
@@ -232,6 +232,73 @@ class RadarAnunciosTest {
                                         db.queryForList(
                                                 "select titulo from radar_anuncio", String.class))
                         .equals(List.of("y")));
+    }
+
+    @Test
+    void importacaoTrazACategoriaDoMarketplaceJaVinculada() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        var r =
+                importar(
+                        empresa,
+                        "[{\"id_externo\":\"C1\",\"titulo\":\"a\",\"preco\":\"9.00\","
+                                + "\"categoria_codigo\":\"MLB1234\",\"categoria_nome\":"
+                                + "\"Casa > Cortinas > Blackout\"},"
+                                + "{\"id_externo\":\"C2\",\"titulo\":\"b\",\"preco\":\"9.00\","
+                                + "\"categoria_codigo\":\"MLB1234\",\"categoria_nome\":"
+                                + "\"Casa > Cortinas > Blackout\"}]");
+        assertEquals(1, r.get("categoriasCriadas"));
+        var produto1 =
+                linha(
+                        empresa,
+                        "select categoria_id from radar_produto where id=?",
+                        anuncio(empresa, "C1").get("produto_id"));
+        var produto2 =
+                linha(
+                        empresa,
+                        "select categoria_id from radar_produto where id=?",
+                        anuncio(empresa, "C2").get("produto_id"));
+        assertEquals(produto1.get("categoria_id"), produto2.get("categoria_id"));
+        var categoria =
+                linha(
+                        empresa,
+                        "select nome, origem from radar_categoria where id=?",
+                        produto1.get("categoria_id"));
+        assertEquals("Blackout", categoria.get("nome"));
+        assertEquals("IMPORTACAO", categoria.get("origem"));
+        var vinculo =
+                linha(
+                        empresa,
+                        "select codigo_externo, nome_externo from radar_categoria_canal"
+                                + " where categoria_id=?",
+                        produto1.get("categoria_id"));
+        assertEquals("MLB1234", vinculo.get("codigo_externo"));
+        assertEquals("Casa > Cortinas > Blackout", vinculo.get("nome_externo"));
+    }
+
+    @Test
+    void categoriaRenomeadaContinuaRecebendoAImportacao() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        String item =
+                "\"preco\":\"9.00\",\"categoria_codigo\":\"MLB9\",\"categoria_nome\":\"Persianas\"";
+        importar(empresa, "[{\"id_externo\":\"N1\",\"titulo\":\"a\"," + item + "}]");
+        UUID categoria =
+                (UUID)
+                        linha(
+                                        empresa,
+                                        "select categoria_id from radar_produto where id=?",
+                                        anuncio(empresa, "N1").get("produto_id"))
+                                .get("categoria_id");
+        BancoRadarDeTeste.executarComoDono(
+                "update radar_categoria set nome='Persianas da Ju' where id=?", categoria);
+        var r = importar(empresa, "[{\"id_externo\":\"N2\",\"titulo\":\"b\"," + item + "}]");
+        assertEquals(0, r.get("categoriasCriadas"));
+        assertEquals(
+                categoria,
+                linha(
+                                empresa,
+                                "select categoria_id from radar_produto where id=?",
+                                anuncio(empresa, "N2").get("produto_id"))
+                        .get("categoria_id"));
     }
 
     // ---- apoio -----------------------------------------------------------------------------

@@ -23,6 +23,8 @@ import Relatorios from "./relatorios";
 import ProdutoForm, { type Aba as AbaProduto } from "./produto";
 import Clientes from "./cliente";
 import Anuncios from "./anuncios";
+import Categorias from "./categorias";
+import Embalagens from "./embalagens";
 
 type Data = {
   usuario: { nome: string; papel: string };
@@ -43,6 +45,7 @@ type Data = {
   resumo: Record<string, string>;
   clientes: Row[];
   vendedores: Row[];
+  categoriaCanais: Row[];
   fornecedores: Row[];
   categorias: Row[];
   embalagens: Row[];
@@ -847,6 +850,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               busy={busy}
               executar={command}
               abrirModal={setModal}
+              categorias={data.categorias}
+              categoriaCanais={data.categoriaCanais ?? []}
               abrirProduto={(id) => {
                 setPage("produtos");
                 setEditando({ id, aba: "geral", versao: Date.now() });
@@ -1633,19 +1638,22 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             />
           )}
           {page === "categorias" && (
-            <Cadastro
-              tipo="categorias"
-              linhas={data.categorias}
+            <Categorias
+              categorias={data.categorias}
+              categoriaCanais={data.categoriaCanais ?? []}
+              produtos={products}
               podeEditar={can("DONO", "GESTOR", "MARKETING")}
-              abrirModal={setModal}
+              busy={busy}
+              executar={commandResult}
             />
           )}
           {page === "embalagens" && (
-            <Cadastro
-              tipo="embalagens"
-              linhas={data.embalagens}
+            <Embalagens
+              embalagens={data.embalagens}
+              veCusto={data.financeiroPermitido}
               podeEditar={can("DONO", "GESTOR", "ESTOQUE")}
-              abrirModal={setModal}
+              busy={busy}
+              executar={commandResult}
             />
           )}
           {page === "promocoes" && (
