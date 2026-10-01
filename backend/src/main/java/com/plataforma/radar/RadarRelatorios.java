@@ -93,7 +93,7 @@ public class RadarRelatorios {
         r.put(
                 "fonte",
                 "Pedidos não cancelados criados no período; receita e resultado somam os"
-                    + " lançamentos do razão local no período (inclui estornos e devoluções).");
+                        + " lançamentos do razão local no período (inclui estornos e devoluções).");
         return r;
     }
 

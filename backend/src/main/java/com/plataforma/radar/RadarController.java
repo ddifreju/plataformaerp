@@ -2,8 +2,14 @@ package com.plataforma.radar;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,6 +31,35 @@ public class RadarController {
     public Map<String, Object> comando(
             @RequestHeader("Idempotency-Key") UUID chave, @RequestBody JsonNode body) {
         return service.comando(chave, body);
+    }
+
+    @PostMapping(value = "/produtos/{id}/imagens", consumes = "multipart/form-data")
+    public Map<String, Object> enviarImagem(
+            @PathVariable UUID id, @RequestParam("arquivo") MultipartFile arquivo)
+            throws IOException {
+        UUID imagem = service.adicionarImagem(id, arquivo.getBytes(), arquivo.getContentType());
+        return Map.of("id", imagem, "mensagem", "Imagem adicionada.");
+    }
+
+    @GetMapping("/imagens/{id}")
+    public ResponseEntity<byte[]> imagem(@PathVariable UUID id) {
+        var img = service.imagem(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType((String) img.get("tipo_conteudo")))
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(30)).cachePrivate())
+                .body((byte[]) img.get("dados"));
+    }
+
+    @DeleteMapping("/imagens/{id}")
+    public Map<String, Object> removerImagem(@PathVariable UUID id) {
+        service.removerImagem(id);
+        return Map.of("mensagem", "Imagem removida.");
+    }
+
+    @PostMapping("/imagens/{id}/principal")
+    public Map<String, Object> imagemPrincipal(@PathVariable UUID id) {
+        service.tornarImagemPrincipal(id);
+        return Map.of("mensagem", "Imagem principal definida.");
     }
 
     @GetMapping("/relatorios")
