@@ -1,6 +1,6 @@
 "use client";
 
-// Telas de cadastro simples (clientes, fornecedores, categorias, embalagens).
+// Telas de cadastro simples (fornecedores, categorias, embalagens).
 // Cada uma é só configuração: colunas da lista e campos do formulário.
 
 import { useState, type ReactNode } from "react";
@@ -16,9 +16,6 @@ type Config = {
   vazio: string;
 };
 
-const UFS =
-  "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" ");
-
 const opcional = (key: string, label: string, type?: string): Field => ({
   key,
   label,
@@ -27,29 +24,6 @@ const opcional = (key: string, label: string, type?: string): Field => ({
 });
 
 export const CONFIG: Record<string, Config> = {
-  clientes: {
-    op: "cliente",
-    singular: "cliente",
-    vazio: "Nenhum cliente cadastrado ainda.",
-    colunas: [
-      { titulo: "Nome", valor: (r) => <strong>{str(r.nome)}</strong> },
-      { titulo: "Contato", valor: (r) => [r.email, r.telefone].filter(Boolean).join(" · ") || "—" },
-      { titulo: "Cidade", valor: (r) => (r.cidade ? `${str(r.cidade)} / ${str(r.uf)}` : "—") },
-    ],
-    campos: [
-      { key: "nome", label: "Nome" },
-      opcional("email", "E-mail", "email"),
-      opcional("telefone", "Telefone"),
-      opcional("cidade", "Cidade"),
-      {
-        key: "uf",
-        label: "UF",
-        required: false,
-        options: [{ value: "", label: "—" }, ...UFS.map((u) => ({ value: u, label: u }))],
-      },
-      opcional("observacao", "Observações", "textarea"),
-    ],
-  },
   fornecedores: {
     op: "fornecedor",
     singular: "fornecedor",

@@ -28,6 +28,7 @@ public class RadarService {
     private final RadarPromocoes promocoes;
     private final RadarRelatorios relatorios;
     private final RadarProdutos produtos;
+    private final RadarClientes clientes;
     private static final Set<String> CANAIS =
             Set.of("Mercado Livre", "Shopee", "TikTok Shop", "SHEIN");
 
@@ -37,13 +38,15 @@ public class RadarService {
             RadarCadastros cadastros,
             RadarPromocoes promocoes,
             RadarRelatorios relatorios,
-            RadarProdutos produtos) {
+            RadarProdutos produtos,
+            RadarClientes clientes) {
         this.db = db;
         this.json = json;
         this.cadastros = cadastros;
         this.promocoes = promocoes;
         this.relatorios = relatorios;
         this.produtos = produtos;
+        this.clientes = clientes;
     }
 
     /** Usuário da requisição atual, para registrar quem fez cada movimento. */
@@ -75,6 +78,34 @@ public class RadarService {
     @Transactional(readOnly = true)
     public Map<String, Object> imagem(UUID imagemId) {
         return produtos.imagem(imagemId);
+    }
+
+    /** Cliente completo. Abrir o cadastro fica na auditoria: tem CPF/CNPJ e endereço. */
+    @Transactional
+    public Map<String, Object> cliente(UUID clienteId) {
+        var c = clientes.detalhe(papel(), clienteId);
+        auditar("cliente_ver", clienteId.toString(), Map.of());
+        return c;
+    }
+
+    @Transactional
+    public UUID adicionarAnexo(UUID clienteId, String nome, String tipo, byte[] dados) {
+        UUID id = clientes.adicionarAnexo(papel(), clienteId, nome, tipo, dados);
+        auditar("anexo_adicionar", clienteId.toString(), Map.of("anexo", id));
+        return id;
+    }
+
+    @Transactional
+    public void removerAnexo(UUID anexoId) {
+        clientes.removerAnexo(papel(), anexoId);
+        auditar("anexo_remover", anexoId.toString(), Map.of());
+    }
+
+    @Transactional
+    public Map<String, Object> anexo(UUID anexoId) {
+        var a = clientes.anexo(papel(), anexoId);
+        auditar("anexo_baixar", anexoId.toString(), Map.of());
+        return a;
     }
 
     @Transactional(readOnly = true)
@@ -188,6 +219,19 @@ public class RadarService {
         String c = texto(n, "canal", 40);
         if (!CANAIS.contains(c)) erro("Canal não suportado.");
         return c;
+    }
+
+    /** Parâmetros para a auditoria com CPF/CNPJ mascarado (o completo fica só no cadastro). */
+    private static JsonNode semDocumento(JsonNode n) {
+        if (!(n instanceof com.fasterxml.jackson.databind.node.ObjectNode o)) return n;
+        var copia = o.deepCopy();
+        for (String campo : List.of("documento", "cliente_documento"))
+            if (copia.hasNonNull(campo))
+                copia.put(
+                        campo,
+                        RadarClientes.mascarar(
+                                RadarEntrada.soAlfanumerico(copia.get(campo).asText())));
+        return copia;
     }
 
     private void auditar(String op, String recurso, Object d) {
@@ -340,6 +384,7 @@ public class RadarService {
         out.put("resumo", f ? resumo() : Map.of());
         out.put("agentes", agentes());
         out.putAll(cadastros.dados(p, f));
+        out.putAll(clientes.dados(p));
         out.putAll(promocoes.dados());
         out.putAll(this.produtos.dados());
         normalizarDinheiro(out);
@@ -874,6 +919,8 @@ public class RadarService {
             default -> {
                 if (RadarCadastros.OPERACOES.contains(op))
                     result.putAll(cadastros.executar(op, n, papel()));
+                else if (RadarClientes.OPERACOES.contains(op))
+                    result.putAll(clientes.salvar(n, papel()));
                 else if (RadarProdutos.OPERACOES.contains(op))
                     result.putAll(produtos.salvar(n, papel()));
                 else if (RadarPromocoes.OPERACOES.contains(op))
@@ -884,7 +931,7 @@ public class RadarService {
         auditar(
                 op,
                 result.getOrDefault("id", n.path("id").asText("lote")).toString(),
-                Map.of("resultado", result, "parametros", n));
+                Map.of("resultado", result, "parametros", semDocumento(n)));
         db.update(
                 "insert into radar_comando(tenant_id,id,ator,hash,resultado)"
                         + " values(?,?,?,?,?::jsonb)",
@@ -949,10 +996,15 @@ public class RadarService {
             desconto = promocoes.desconto(promocaoId, pid, canal, preco, q);
         }
         if (desconto.compareTo(bruto) > 0) erro("Desconto maior que a venda.");
-        // Cliente cadastrado é opcional; sem ele, vale o nome digitado no pedido.
+        // Sem cliente escolhido, o pedido acha ou cria o cliente pelo documento ou nome
+        // digitado (criado assim, entra como cadastro incompleto).
         UUID clienteId = cadastros.vinculoOpcional(n, "cliente_id", "radar_cliente");
-        String cliente =
-                clienteId != null ? cadastros.nomeDoCliente(clienteId) : texto(n, "cliente", 160);
+        String cliente;
+        if (clienteId != null) cliente = cadastros.nomeDoCliente(clienteId);
+        else {
+            cliente = texto(n, "cliente", 160);
+            clienteId = clientes.clienteDoPedido(cliente, n.path("cliente_documento").asText(""));
+        }
         UUID id = UUID.randomUUID();
         String num = "R-" + id.toString().substring(0, 8).toUpperCase();
         db.update(

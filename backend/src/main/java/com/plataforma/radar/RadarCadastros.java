@@ -24,7 +24,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Cadastros do Radar (V018): clientes, fornecedores, categorias e embalagens.
+ * Cadastros do Radar (V018): fornecedores, categorias e embalagens. Clientes ficam em {@link
+ * RadarClientes}.
  *
  * <p>Chamado pelo {@link RadarService}, que cuida de trava por tenant, idempotência e auditoria.
  * Toda query leva {@code tenant_id} explícito; o RLS da V018 é a segunda camada.
@@ -34,8 +35,6 @@ public class RadarCadastros {
 
     static final Set<String> OPERACOES =
             Set.of(
-                    "cliente",
-                    "cliente_atualizar",
                     "fornecedor",
                     "fornecedor_atualizar",
                     "categoria",
@@ -43,8 +42,6 @@ public class RadarCadastros {
                     "embalagem",
                     "embalagem_atualizar");
 
-    private static final Set<String> VEEM_CLIENTES =
-            Set.of("DONO", "GESTOR", "ATENDIMENTO", "FINANCEIRO", "ANALISTA");
     private static final Set<String> VEEM_FORNECEDORES =
             Set.of("DONO", "GESTOR", "ESTOQUE", "FINANCEIRO");
 
@@ -57,7 +54,6 @@ public class RadarCadastros {
     /** Listas que entram na resposta de GET /api/radar, filtradas pelo cargo. */
     Map<String, Object> dados(String papel, boolean financeiro) {
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("clientes", VEEM_CLIENTES.contains(papel) ? linhas("radar_cliente") : List.of());
         out.put(
                 "fornecedores",
                 VEEM_FORNECEDORES.contains(papel) ? linhas("radar_fornecedor") : List.of());
@@ -74,11 +70,6 @@ public class RadarCadastros {
         boolean novo = !op.endsWith("_atualizar");
         UUID id = novo ? UUID.randomUUID() : id(n, "id");
         switch (op) {
-            case "cliente", "cliente_atualizar" -> {
-                permitir(papel, "DONO", "GESTOR", "ATENDIMENTO");
-                salvarCliente(id, n, novo);
-                r.put("mensagem", novo ? "Cliente cadastrado." : "Cliente atualizado.");
-            }
             case "fornecedor", "fornecedor_atualizar" -> {
                 permitir(papel, "DONO", "GESTOR", "ESTOQUE");
                 salvarFornecedor(id, n, novo);
@@ -120,31 +111,6 @@ public class RadarCadastros {
                 String.class,
                 tenant(),
                 clienteId);
-    }
-
-    private void salvarCliente(UUID id, JsonNode n, boolean novo) {
-        String uf = opcional(n, "uf", 2);
-        if (uf != null) uf = uf.toUpperCase();
-        Object[] valores = {
-            texto(n, "nome", 200),
-            email(n),
-            opcional(n, "telefone", 40),
-            opcional(n, "cidade", 120),
-            uf,
-            opcional(n, "observacao", 1000)
-        };
-        if (novo)
-            db.update(
-                    "insert into"
-                        + " radar_cliente(nome,email,telefone,cidade,uf,observacao,id,tenant_id)"
-                        + " values(?,?,?,?,?,?,?,?)",
-                    concat(valores, id, tenant()));
-        else
-            confirmar(
-                    db.update(
-                            "update radar_cliente set nome=?,email=?,telefone=?,cidade=?,uf=?,"
-                                    + "observacao=? where id=? and tenant_id=?",
-                            concat(valores, id, tenant())));
     }
 
     private void salvarFornecedor(UUID id, JsonNode n, boolean novo) {
