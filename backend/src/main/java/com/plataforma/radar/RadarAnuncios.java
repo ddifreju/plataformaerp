@@ -140,6 +140,7 @@ public class RadarAnuncios {
         if (!itens.isArray() || itens.isEmpty() || itens.size() > MAX_IMPORTACAO)
             erro("Importe entre 1 e " + MAX_IMPORTACAO + " anúncios por vez.");
         int novos = 0, atualizados = 0, vinculados = 0, produtosCriados = 0;
+        int categoriasAntes = contarCategorias();
         for (JsonNode item : itens) {
             String externo = texto(item, "id_externo", 60);
             String titulo = texto(item, "titulo", 250);
@@ -152,6 +153,11 @@ public class RadarAnuncios {
             String gtin = opcional(item, "gtin", 14);
             if (gtin != null && !gtinValido(gtin)) gtin = null;
             String motivo = opcional(item, "motivo_rejeicao", 500);
+            UUID categoria =
+                    categoriaDoMarketplace(
+                            canal,
+                            opcional(item, "categoria_codigo", 60),
+                            opcional(item, "categoria_nome", 300));
 
             int mudou =
                     db.update(
@@ -172,8 +178,15 @@ public class RadarAnuncios {
                 continue;
             }
             UUID produto = produtoPorSkuOuGtin(sku, gtin);
+            if (produto != null && categoria != null)
+                db.update(
+                        "update radar_produto set categoria_id=? where tenant_id=? and id=?"
+                                + " and categoria_id is null",
+                        categoria,
+                        tenant(),
+                        produto);
             if (produto == null) {
-                produto = criarProduto(canal, externo, titulo, sku, gtin, preco);
+                produto = criarProduto(canal, externo, titulo, sku, gtin, preco, categoria);
                 produtosCriados++;
             } else vinculados++;
             db.update(
@@ -197,6 +210,7 @@ public class RadarAnuncios {
         r.put("atualizados", atualizados);
         r.put("vinculadosAProdutoExistente", vinculados);
         r.put("produtosCriados", produtosCriados);
+        r.put("categoriasCriadas", contarCategorias() - categoriasAntes);
         r.put(
                 "mensagem",
                 novos
@@ -213,7 +227,7 @@ public class RadarAnuncios {
             var porSku =
                     db.queryForList(
                             "select id from radar_produto where tenant_id=? and"
-                                + " lower(sku)=lower(?)",
+                                    + " lower(sku)=lower(?)",
                             UUID.class,
                             tenant(),
                             sku);
@@ -232,6 +246,82 @@ public class RadarAnuncios {
         return null;
     }
 
+    /**
+     * Categoria da loja para a categoria do marketplace. Já vinculada: usa o vínculo. Senão, usa a
+     * categoria de mesmo nome (sem vínculo com este canal) ou cria uma, e grava o vínculo. A
+     * lojista pode renomear depois; o vínculo continua.
+     */
+    private UUID categoriaDoMarketplace(String canal, String codigo, String nomeExterno) {
+        if (codigo == null || nomeExterno == null) return null;
+        var vinculada =
+                db.queryForList(
+                        "select categoria_id from radar_categoria_canal where tenant_id=?"
+                                + " and canal=? and codigo_externo=? limit 1",
+                        UUID.class,
+                        tenant(),
+                        canal,
+                        codigo);
+        if (!vinculada.isEmpty()) return vinculada.getFirst();
+        // "Casa > Cortinas > Blackout" vira "Blackout" como nome da categoria da loja.
+        String[] partes = nomeExterno.split(">");
+        String nome = partes[partes.length - 1].trim();
+        if (nome.isEmpty()) nome = nomeExterno.trim();
+        if (nome.length() > 120) nome = nome.substring(0, 120);
+        var mesmoNome =
+                db.queryForList(
+                        "select c.id from radar_categoria c where c.tenant_id=?"
+                                + " and lower(c.nome)=lower(?) and not exists (select 1 from"
+                                + " radar_categoria_canal v where v.tenant_id=c.tenant_id and"
+                                + " v.categoria_id=c.id and v.canal=?)",
+                        UUID.class,
+                        tenant(),
+                        nome,
+                        canal);
+        UUID id;
+        if (!mesmoNome.isEmpty()) id = mesmoNome.getFirst();
+        else {
+            id = UUID.randomUUID();
+            String livre = nome;
+            for (int n = 2; existeCategoria(livre); n++)
+                livre = nome + " (" + canal + " " + n + ")";
+            db.update(
+                    "insert into radar_categoria(id,tenant_id,nome,origem) values(?,?,?,"
+                            + "'IMPORTACAO')",
+                    id,
+                    tenant(),
+                    livre);
+        }
+        db.update(
+                "insert into radar_categoria_canal(tenant_id,categoria_id,canal,codigo_externo,"
+                        + "nome_externo) values(?,?,?,?,?)",
+                tenant(),
+                id,
+                canal,
+                codigo,
+                nomeExterno);
+        return id;
+    }
+
+    private boolean existeCategoria(String nome) {
+        Integer n =
+                db.queryForObject(
+                        "select count(*) from radar_categoria where tenant_id=?"
+                                + " and lower(nome)=lower(?)",
+                        Integer.class,
+                        tenant(),
+                        nome);
+        return n != null && n > 0;
+    }
+
+    private int contarCategorias() {
+        Integer n =
+                db.queryForObject(
+                        "select count(*) from radar_categoria where tenant_id=?",
+                        Integer.class,
+                        tenant());
+        return n == null ? 0 : n;
+    }
+
     /** Produto mínimo a partir do anúncio. Custo zero: a lojista completa no cadastro. */
     private UUID criarProduto(
             String canal,
@@ -239,7 +329,8 @@ public class RadarAnuncios {
             String titulo,
             String sku,
             String gtin,
-            BigDecimal preco) {
+            BigDecimal preco,
+            UUID categoria) {
         UUID id = UUID.randomUUID();
         String base = sku != null ? sku : prefixo(canal) + "-" + externo;
         String codigo = base.length() > 80 ? base.substring(0, 80) : base;
@@ -248,14 +339,15 @@ public class RadarAnuncios {
             codigo = base.substring(0, Math.min(base.length(), 80 - sufixo.length())) + sufixo;
         }
         db.update(
-                "insert into radar_produto(id,tenant_id,sku,nome,custo,preco,gtin,incompleto,"
-                        + "origem_cadastro) values(?,?,?,?,0,?,?,true,'ANUNCIO')",
+                "insert into radar_produto(id,tenant_id,sku,nome,custo,preco,gtin,categoria_id,"
+                        + "incompleto,origem_cadastro) values(?,?,?,?,0,?,?,?,true,'ANUNCIO')",
                 id,
                 tenant(),
                 codigo,
                 titulo,
                 preco,
-                gtin);
+                gtin,
+                categoria);
         return id;
     }
 

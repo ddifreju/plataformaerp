@@ -1,10 +1,10 @@
 "use client";
 
-// Telas de cadastro simples (fornecedores, categorias, embalagens).
+// Telas de cadastro simples (fornecedores).
 // Cada uma é só configuração: colunas da lista e campos do formulário.
 
 import { useState, type ReactNode } from "react";
-import { Empty, Table, money, str, type Field, type ModalSpec, type Row } from "./ui";
+import { Empty, Table, str, type Field, type ModalSpec, type Row } from "./ui";
 
 type Coluna = { titulo: string; valor: (r: Row) => ReactNode };
 
@@ -48,41 +48,6 @@ export const CONFIG: Record<string, Config> = {
       opcional("telefone", "Telefone"),
       opcional("prazo_entrega_dias", "Prazo de entrega (dias)", "integer"),
       opcional("observacao", "Observações", "textarea"),
-    ],
-  },
-  categorias: {
-    op: "categoria",
-    singular: "categoria",
-    vazio: "Nenhuma categoria criada ainda.",
-    colunas: [
-      { titulo: "Categoria", valor: (r) => <strong>{str(r.nome)}</strong> },
-      { titulo: "Descrição", valor: (r) => str(r.descricao) || "—" },
-    ],
-    campos: [{ key: "nome", label: "Nome" }, opcional("descricao", "Descrição", "textarea")],
-  },
-  embalagens: {
-    op: "embalagem",
-    singular: "embalagem",
-    vazio: "Nenhuma embalagem cadastrada ainda.",
-    colunas: [
-      { titulo: "Embalagem", valor: (r) => <strong>{str(r.nome)}</strong> },
-      { titulo: "Custo", valor: (r) => ("custo" in r ? money(r.custo) : "Sem acesso") },
-      {
-        titulo: "Medidas (C × L × A)",
-        valor: (r) =>
-          r.comprimento_cm
-            ? `${str(r.comprimento_cm)} × ${str(r.largura_cm)} × ${str(r.altura_cm)} cm`
-            : "—",
-      },
-      { titulo: "Peso", valor: (r) => (r.peso_g == null ? "—" : `${str(r.peso_g)} g`) },
-    ],
-    campos: [
-      { key: "nome", label: "Nome (ex.: Caixa P)" },
-      { key: "custo", label: "Custo por unidade", type: "number", value: "0" },
-      opcional("comprimento_cm", "Comprimento (cm)", "number"),
-      opcional("largura_cm", "Largura (cm)", "number"),
-      opcional("altura_cm", "Altura (cm)", "number"),
-      opcional("peso_g", "Peso (g)", "integer"),
     ],
   },
 };

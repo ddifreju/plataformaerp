@@ -394,6 +394,12 @@ public class RadarService {
         return out;
     }
 
+    /**
+     * Prepara a resposta: dinheiro vira texto decimal (regra 2) e coluna jsonb vira JSON de
+     * verdade. O driver devolve jsonb como PGobject, que o Jackson serializaria como objeto {@code
+     * {"type":"jsonb","value":"..."}}; comparado pelo nome porque o driver só existe em tempo de
+     * execução.
+     */
     @SuppressWarnings("unchecked")
     private void normalizarDinheiro(Object value) {
         if (value instanceof Map<?, ?> m) {
@@ -401,9 +407,20 @@ public class RadarService {
             for (var key : new ArrayList<>(m.keySet())) {
                 Object v = m.get(key);
                 if (v instanceof BigDecimal b) mutable.put(key, b.toPlainString());
+                else if (v != null && v.getClass().getName().equals("org.postgresql.util.PGobject"))
+                    mutable.put(key, jsonDoBanco(v.toString()));
                 else normalizarDinheiro(v);
             }
         } else if (value instanceof List<?> l) l.forEach(this::normalizarDinheiro);
+    }
+
+    private JsonNode jsonDoBanco(String texto) {
+        if (texto == null) return null;
+        try {
+            return json.readTree(texto);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private Map<String, Object> resumo() {

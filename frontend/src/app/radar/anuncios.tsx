@@ -8,6 +8,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Badge, Empty, Table, money, str, type ModalSpec, type Row } from "./ui";
+import { vinculoDe } from "./categorias";
 
 type Props = {
   anuncios: Row[];
@@ -17,6 +18,8 @@ type Props = {
   executar: (corpo: Record<string, unknown>) => Promise<boolean>;
   abrirModal: (m: ModalSpec) => void;
   abrirProduto: (id: string) => void;
+  categorias: Row[];
+  categoriaCanais: Row[];
 };
 
 const CANAIS = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
@@ -58,10 +61,15 @@ type Filtros = { produto: string; situacao: string; ecommerce: string };
 const SEM_FILTRO: Filtros = { produto: "", situacao: "", ecommerce: "" };
 
 /** Motivos para o anúncio pedir atenção. Vazio = tudo certo. */
-function alertas(a: Row, p: Row | undefined): string[] {
+function alertas(a: Row, p: Row | undefined, categoriaCanais: Row[]): string[] {
   const out: string[] = [];
   if (!p) out.push("Sem produto vinculado");
-  else if (p.incompleto === true) out.push("Produto com cadastro incompleto");
+  else {
+    if (p.incompleto === true) out.push("Produto com cadastro incompleto");
+    if (!p.categoria_id) out.push("Produto sem categoria");
+    else if (!vinculoDe(categoriaCanais, p.categoria_id, str(a.canal)))
+      out.push(`Categoria sem vínculo com o ${str(a.canal)}`);
+  }
   if (a.situacao_ecommerce === "REJEITADO")
     out.push(`Rejeitado pelo marketplace${a.motivo_rejeicao ? `: ${str(a.motivo_rejeicao)}` : ""}`);
   if (a.erro_integracao) out.push(`Erro de integração: ${str(a.erro_integracao)}`);
@@ -72,7 +80,7 @@ export default function Anuncios(props: Props) {
   const [loja, setLoja] = useState<string | null>(null);
   const [novo, setNovo] = useState<string | null>(null);
   const produtoDe = (id: unknown) => props.produtos.find((p) => p.id === id);
-  const atencao = (a: Row) => alertas(a, produtoDe(a.produto_id)).length > 0;
+  const atencao = (a: Row) => alertas(a, produtoDe(a.produto_id), props.categoriaCanais).length > 0;
 
   const formNovo = novo !== null && (
     <NovoAnuncio {...props} canal={novo} fechar={() => setNovo(null)} />
@@ -162,6 +170,7 @@ function ListaDaLoja({
   voltar,
   novoAnuncio,
   produtoDe,
+  categoriaCanais,
 }: Props & {
   canal: string;
   voltar: () => void;
@@ -180,7 +189,7 @@ function ListaDaLoja({
   const naAba = (a: Row, chave: string) =>
     chave === "TODOS" ||
     (chave === "ATENCAO"
-      ? alertas(a, produtoDe(a.produto_id)).length > 0
+      ? alertas(a, produtoDe(a.produto_id), categoriaCanais).length > 0
       : a.situacao_ecommerce === chave);
   const termo = busca.trim().toLowerCase();
   const prodTermo = filtros.produto.trim().toLowerCase();
@@ -376,7 +385,7 @@ function ListaDaLoja({
             ]}
             rows={linhas.map((a) => {
               const p = produtoDe(a.produto_id);
-              const motivos = alertas(a, p);
+              const motivos = alertas(a, p, categoriaCanais);
               const [rotulo, tom] = NO_MARKETPLACE[str(a.situacao_ecommerce)] ?? ["—", "gray"];
               return [
                 podeEditar ? (
@@ -625,6 +634,8 @@ function BuscaProduto({
 function NovoAnuncio({
   canal,
   produtos,
+  categorias,
+  categoriaCanais,
   busy,
   executar,
   fechar,
@@ -634,6 +645,11 @@ function NovoAnuncio({
   const [titulo, setTitulo] = useState("");
   const [preco, setPreco] = useState("");
   const [erro, setErro] = useState("");
+  const [codigoCategoria, setCodigoCategoria] = useState("");
+  const [nomeCategoria, setNomeCategoria] = useState("");
+  const escolhido = produtos.find((x) => x.id === produto);
+  const categoria = categorias.find((c) => c.id === escolhido?.categoria_id);
+  const faltaVinculo = !!categoria && !vinculoDe(categoriaCanais, categoria.id, destino);
 
   function escolher(id: string) {
     setErro("");
@@ -655,6 +671,21 @@ function NovoAnuncio({
             setErro("Escolha primeiro o produto do anúncio. Todo anúncio precisa de um produto.");
             return;
           }
+          // Vínculo da categoria informado aqui é gravado antes do anúncio.
+          if (faltaVinculo && categoria && codigoCategoria.trim()) {
+            if (!nomeCategoria.trim()) {
+              setErro(`Informe também o nome da categoria no ${destino}.`);
+              return;
+            }
+            const ok = await executar({
+              op: "categoria_vinculo",
+              categoria_id: categoria.id,
+              canal: destino,
+              codigo_externo: codigoCategoria.trim(),
+              nome_externo: nomeCategoria.trim(),
+            });
+            if (!ok) return;
+          }
           if (await executar({ op: "anuncio", produto_id: produto, canal: destino, titulo, preco }))
             fechar();
         }}
@@ -668,6 +699,44 @@ function NovoAnuncio({
               Obrigatório: é o produto que dá baixa no estoque e entra no financeiro.
             </small>
           </div>
+          {escolhido && !categoria && (
+            <p className="wide rd-aviso-categoria">
+              ⚠ Este produto não tem categoria. Defina a categoria no cadastro do produto: o
+              marketplace precisa dela para aceitar o anúncio.
+            </p>
+          )}
+          {faltaVinculo && categoria && (
+            <div className="wide rd-aviso-categoria">
+              <strong>
+                ⚠ A categoria &quot;{str(categoria.nome)}&quot; ainda não está vinculada a uma
+                categoria do {destino}.
+              </strong>
+              <p>
+                Diga em qual categoria do {destino} este produto entra. Sem loja conectada, copie o
+                código e o nome na central do vendedor.
+              </p>
+              <div className="rd-vinculo-canal">
+                <input
+                  aria-label={`Código da categoria no ${destino}`}
+                  placeholder="Código (ex.: MLB1234)"
+                  maxLength={60}
+                  value={codigoCategoria}
+                  onChange={(e) => setCodigoCategoria(e.target.value)}
+                />
+                <input
+                  aria-label={`Nome da categoria no ${destino}`}
+                  placeholder="Nome no marketplace (ex.: Casa > Cortinas)"
+                  maxLength={300}
+                  value={nomeCategoria}
+                  onChange={(e) => setNomeCategoria(e.target.value)}
+                />
+              </div>
+              <small className="rd-dica">
+                Se deixar em branco, o anúncio fica em &quot;Necessitam atenção&quot; até você
+                vincular a categoria.
+              </small>
+            </div>
+          )}
           <label>
             2. Loja
             <select value={destino} onChange={(e) => setDestino(e.target.value)}>
