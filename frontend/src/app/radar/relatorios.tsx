@@ -28,6 +28,11 @@ function pct(v: unknown) {
   return v == null ? "—" : `${str(v).replace(".", ",")}%`;
 }
 
+// "C00001 · Ana Souza": o código separa clientes de mesmo nome.
+function cliente(l: Row) {
+  return [str(l.codigo), str(l.nome)].filter(Boolean).join(" · ");
+}
+
 // Exporta a tabela como CSV (separador ;, padrão do Excel em português).
 function exportar(nome: string, cabecalho: string[], linhas: (string | number)[][]) {
   const escapar = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
@@ -240,8 +245,8 @@ export default function Relatorios() {
             <Bloco
               titulo="Principais clientes"
               cabecalho={["Cliente", "Pedidos", "Receita"]}
-              linhas={dados.porCliente.map((l) => [str(l.nome), str(l.pedidos), money(l.receita)])}
-              csv={dados.porCliente.map((l) => [str(l.nome), str(l.pedidos), str(l.receita)])}
+              linhas={dados.porCliente.map((l) => [cliente(l), str(l.pedidos), money(l.receita)])}
+              csv={dados.porCliente.map((l) => [cliente(l), str(l.pedidos), str(l.receita)])}
             />
             <Bloco
               titulo="Estoque a custo por categoria"

@@ -5,6 +5,7 @@ import static com.plataforma.radar.BancoRadarDeTeste.naEmpresa;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -149,26 +150,78 @@ class RadarClientesTest {
     }
 
     @Test
-    void pedidoSemClienteCriaIncompletoEReconheceRecorrencia() throws SQLException {
+    void pedidoReconheceClienteSoPeloDocumentoNuncaPeloNome() throws SQLException {
         UUID empresa = BancoRadarDeTeste.novaEmpresa();
         UUID produto = BancoRadarDeTeste.novoProduto(empresa, "REC-1", "10.00", "30.00");
-        UUID primeiro = naEmpresa(empresa, () -> clientes.clienteDoPedido("Diego Alves", ""));
-        UUID segundo = naEmpresa(empresa, () -> clientes.clienteDoPedido("diego alves", null));
-        assertEquals(primeiro, segundo);
-        var c = linha(empresa, "select * from radar_cliente where id=?", primeiro);
+
+        // Mesmo nome, sem documento: pessoas diferentes podem ter o mesmo nome.
+        UUID semCpf1 = naEmpresa(empresa, () -> clientes.clienteDoPedido("Diego Alves", ""));
+        UUID semCpf2 = naEmpresa(empresa, () -> clientes.clienteDoPedido("Diego Alves", null));
+        assertNotEquals(semCpf1, semCpf2);
+        var c = linha(empresa, "select * from radar_cliente where id=?", semCpf1);
         assertEquals("PEDIDO", c.get("origem"));
         assertEquals(true, c.get("incompleto"));
 
-        // Com documento, procura só por ele: mesmo nome com CPF diferente é outra pessoa.
+        // Mesmo CPF: mesmo cliente, com qualquer nome digitado.
         UUID comCpf = naEmpresa(empresa, () -> clientes.clienteDoPedido("Diego Alves", CPF));
-        assertFalse(comCpf.equals(primeiro));
-        assertEquals(comCpf, naEmpresa(empresa, () -> clientes.clienteDoPedido("D. Alves", CPF)));
+        assertNotEquals(semCpf1, comCpf);
+        assertEquals(
+                comCpf,
+                naEmpresa(empresa, () -> clientes.clienteDoPedido("D. Alves", "529.982.247-25")));
 
-        assertEquals("LEAD", classificacao(empresa, primeiro));
-        vincularPedido(empresa, produto, primeiro);
-        assertEquals("PRIMEIRA_COMPRA", classificacao(empresa, primeiro));
-        vincularPedido(empresa, produto, primeiro);
-        assertEquals("RECORRENTE", classificacao(empresa, primeiro));
+        assertEquals("LEAD", classificacao(empresa, comCpf));
+        vincularPedido(empresa, produto, comCpf);
+        assertEquals("PRIMEIRA_COMPRA", classificacao(empresa, comCpf));
+        vincularPedido(empresa, produto, comCpf);
+        assertEquals("RECORRENTE", classificacao(empresa, comCpf));
+    }
+
+    @Test
+    void incompletoQueRecebeCpfJaCadastradoJuntaOsPedidosNoClienteExistente() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID produto = BancoRadarDeTeste.novoProduto(empresa, "JUN-1", "10.00", "30.00");
+        UUID existente = salvar(empresa, completo("F", CPF, "Gabriela Lima"));
+        vincularPedido(empresa, produto, existente);
+        UUID incompleto = naEmpresa(empresa, () -> clientes.clienteDoPedido("Gabi", null));
+        vincularPedido(empresa, produto, incompleto);
+        vincularPedido(empresa, produto, incompleto);
+
+        var r =
+                naEmpresa(
+                        empresa,
+                        () ->
+                                clientes.salvar(
+                                        json(
+                                                completo("F", CPF, "Gabi")
+                                                        .replaceFirst(
+                                                                "\\{",
+                                                                "{\"id\":\"" + incompleto + "\",")),
+                                        "DONO"));
+        assertEquals(existente, r.get("id"));
+        assertEquals(2, r.get("pedidos_movidos"));
+        assertEquals("RECORRENTE", classificacao(empresa, existente));
+        assertTrue(lista(empresa, "DONO").stream().noneMatch(x -> x.get("id").equals(incompleto)));
+        // Os dados do cliente existente não são trocados pelos do incompleto.
+        assertEquals(
+                "Gabriela Lima",
+                linha(empresa, "select nome from radar_cliente where id=?", existente).get("nome"));
+    }
+
+    @Test
+    void clienteCompletoComCpfDeOutroNaoEJuntadoERecusado() {
+        UUID empresa = naEmpresaNova();
+        salvar(empresa, completo("F", CPF, "Primeira Pessoa"));
+        UUID outro = salvar(empresa, completo("F", "39053344705", "Segunda Pessoa"));
+        var erro =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                salvar(
+                                        empresa,
+                                        completo("F", CPF, "Segunda Pessoa")
+                                                .replaceFirst(
+                                                        "\\{", "{\"id\":\"" + outro + "\",")));
+        assertTrue(erro.getReason().contains("Já existe"));
     }
 
     @Test
@@ -243,6 +296,14 @@ class RadarClientesTest {
     }
 
     // ---- apoio -----------------------------------------------------------------------------
+
+    private static UUID naEmpresaNova() {
+        try {
+            return BancoRadarDeTeste.novaEmpresa();
+        } catch (SQLException e) {
+            throw new IllegalStateException(e);
+        }
+    }
 
     private static String completo(String tipo, String documento, String nome) {
         return "{\"nome\":\""

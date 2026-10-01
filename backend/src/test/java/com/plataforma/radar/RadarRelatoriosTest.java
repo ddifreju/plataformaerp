@@ -104,6 +104,31 @@ class RadarRelatoriosTest {
                                 () -> relatorios.gerar("DONO", "2024-01-01", "2026-01-01")));
     }
 
+    @Test
+    void clientesComMesmoNomeSaoContadosSeparadosPeloId() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID produto = BancoRadarDeTeste.novoProduto(empresa, "HOM-1", "10.00", "100.00");
+        for (String codigo : List.of("C00001", "C00002")) {
+            UUID cliente = UUID.randomUUID();
+            BancoRadarDeTeste.executarComoDono(
+                    "insert into radar_cliente(id,tenant_id,codigo,nome) values(?,?,?,?)",
+                    cliente,
+                    empresa,
+                    codigo,
+                    "Juliana Souza");
+            UUID pedido =
+                    BancoRadarDeTeste.novoPedido(
+                            empresa, produto, "Shopee", "Juliana Souza", "100.00", "10.00");
+            BancoRadarDeTeste.executarComoDono(
+                    "update radar_pedido set cliente_id=? where id=?", cliente, pedido);
+        }
+        var porCliente = lista(gerar(empresa, "DONO"), "porCliente");
+        assertEquals(2, porCliente.size());
+        assertEquals(
+                List.of("C00001", "C00002"),
+                porCliente.stream().map(l -> l.get("codigo").toString()).sorted().toList());
+    }
+
     private static Map<String, Object> gerar(UUID empresa, String papel) {
         return naEmpresa(empresa, () -> relatorios.gerar(papel, null, null));
     }

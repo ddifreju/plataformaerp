@@ -996,8 +996,8 @@ public class RadarService {
             desconto = promocoes.desconto(promocaoId, pid, canal, preco, q);
         }
         if (desconto.compareTo(bruto) > 0) erro("Desconto maior que a venda.");
-        // Sem cliente escolhido, o pedido acha ou cria o cliente pelo documento ou nome
-        // digitado (criado assim, entra como cadastro incompleto).
+        // Sem cliente escolhido, o pedido acha o cliente pelo CPF/CNPJ (nunca pelo nome) ou
+        // cria um novo, que entra como cadastro incompleto.
         UUID clienteId = cadastros.vinculoOpcional(n, "cliente_id", "radar_cliente");
         String cliente;
         if (clienteId != null) cliente = cadastros.nomeDoCliente(clienteId);
