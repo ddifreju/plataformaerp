@@ -22,6 +22,7 @@ import Promocoes, { situacao } from "./promocoes";
 import Relatorios from "./relatorios";
 import ProdutoForm, { type Aba as AbaProduto } from "./produto";
 import Clientes from "./cliente";
+import Anuncios from "./anuncios";
 
 type Data = {
   usuario: { nome: string; papel: string };
@@ -839,90 +840,18 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             <Importer busy={busy} onImport={(items) => command({ op: "importar", itens: items })} />
           )}
           {page === "anuncios" && (
-            <>
-              <div className="rd-toolbar">
-                <Badge tone="amber">Rascunhos e simulações locais</Badge>
-                {can("DONO", "GESTOR", "MARKETING") && listings.length > 0 && (
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      command({
-                        op: "anuncios_estado_lote",
-                        ids: listings.map((a) => a.id),
-                        estado: "PAUSADO",
-                      })
-                    }
-                  >
-                    Pausar todos localmente
-                  </button>
-                )}
-                {can("DONO", "GESTOR", "MARKETING") && (
-                  <button
-                    className="primary"
-                    disabled={!products.length}
-                    onClick={() =>
-                      setModal({
-                        title: "Preparar anúncio",
-                        op: "anuncio",
-                        fields: [
-                          productField,
-                          channelField,
-                          { key: "titulo", label: "Título do anúncio" },
-                          amount("preco", "Preço"),
-                        ],
-                      })
-                    }
-                  >
-                    + Criar anúncio
-                  </button>
-                )}
-              </div>
-              <section className="rd-card">
-                <Table
-                  headers={["Anúncio", "Canal", "SKU", "Preço", "Estado", "Ações"]}
-                  rows={listings.map((a) => [
-                    <strong>{str(a.titulo)}</strong>,
-                    str(a.canal),
-                    str(prod(a.produto_id)?.sku),
-                    money(a.preco),
-                    <Badge tone={a.estado === "SIMULADO" ? "blue" : "gray"}>{str(a.estado)}</Badge>,
-                    can("DONO", "GESTOR", "MARKETING") ? (
-                      <div className="rd-row-actions">
-                        <button
-                          disabled={busy}
-                          onClick={() =>
-                            command({
-                              op: "anuncio_estado",
-                              id: a.id,
-                              estado: a.estado === "SIMULADO" ? "PAUSADO" : "SIMULADO",
-                            })
-                          }
-                        >
-                          {a.estado === "SIMULADO" ? "Pausar local" : "Simular publicação"}
-                        </button>
-                        <button
-                          onClick={() =>
-                            setModal({
-                              title: "Propor novo preço",
-                              op: "propor_preco",
-                              extra: { id: a.id },
-                              fields: [
-                                amount("preco", "Novo preço", str(a.preco)),
-                                { key: "motivo", label: "Motivo da alteração" },
-                              ],
-                            })
-                          }
-                        >
-                          Preço
-                        </button>
-                      </div>
-                    ) : (
-                      "Consulta"
-                    ),
-                  ])}
-                />
-              </section>
-            </>
+            <Anuncios
+              anuncios={listings}
+              produtos={products}
+              podeEditar={can("DONO", "GESTOR", "MARKETING")}
+              busy={busy}
+              executar={command}
+              abrirModal={setModal}
+              abrirProduto={(id) => {
+                setPage("produtos");
+                setEditando({ id, aba: "geral", versao: Date.now() });
+              }}
+            />
           )}
           {page === "pedidos" && (
             <section className="rd-card">

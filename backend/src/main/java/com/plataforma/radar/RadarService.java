@@ -29,6 +29,7 @@ public class RadarService {
     private final RadarRelatorios relatorios;
     private final RadarProdutos produtos;
     private final RadarClientes clientes;
+    private final RadarAnuncios anuncios;
     private static final Set<String> CANAIS =
             Set.of("Mercado Livre", "Shopee", "TikTok Shop", "SHEIN");
 
@@ -39,7 +40,8 @@ public class RadarService {
             RadarPromocoes promocoes,
             RadarRelatorios relatorios,
             RadarProdutos produtos,
-            RadarClientes clientes) {
+            RadarClientes clientes,
+            RadarAnuncios anuncios) {
         this.db = db;
         this.json = json;
         this.cadastros = cadastros;
@@ -47,6 +49,7 @@ public class RadarService {
         this.relatorios = relatorios;
         this.produtos = produtos;
         this.clientes = clientes;
+        this.anuncios = anuncios;
     }
 
     /** Usuário da requisição atual, para registrar quem fez cada movimento. */
@@ -591,14 +594,18 @@ public class RadarService {
                             db.update(
                                     "insert into"
                                         + " radar_anuncio(id,tenant_id,produto_id,canal,titulo,preco)"
-                                        + " values(?,?,?,?,?,?) on"
-                                        + " conflict(tenant_id,produto_id,canal) do nothing",
+                                        + " select ?,?,?,?,?,? where not exists (select 1 from"
+                                        + " radar_anuncio where tenant_id=? and produto_id=? and"
+                                        + " canal=?)",
                                     UUID.randomUUID(),
                                     tenant(),
                                     pid,
                                     c,
                                     p.get("nome"),
-                                    p.get("preco"));
+                                    p.get("preco"),
+                                    tenant(),
+                                    pid,
+                                    c);
                 }
                 result.put(
                         "mensagem",
@@ -661,8 +668,12 @@ public class RadarService {
             }
             case "anuncio" -> {
                 permitir("DONO", "GESTOR", "MARKETING");
+                // Anúncio sem produto não existe: o produto é o primeiro campo do formulário.
+                if (n.path("produto_id").asText("").isBlank())
+                    erro("Escolha o produto do anúncio pelo nome ou SKU.");
                 UUID pid = id(n, "produto_id");
-                um("radar_produto", pid);
+                if ("VARIACAO".equals(um("radar_produto", pid).get("tipo")))
+                    erro("Escolha a variação vendida (cor, tamanho…), não o produto pai.");
                 BigDecimal preco = valor(n, "preco");
                 if (preco.signum() == 0) erro("Preço deve ser maior que zero.");
                 UUID aid = UUID.randomUUID();
@@ -919,6 +930,8 @@ public class RadarService {
             default -> {
                 if (RadarCadastros.OPERACOES.contains(op))
                     result.putAll(cadastros.executar(op, n, papel()));
+                else if (RadarAnuncios.OPERACOES.contains(op))
+                    result.putAll(anuncios.executar(op, n, papel()));
                 else if (RadarClientes.OPERACOES.contains(op))
                     result.putAll(clientes.salvar(n, papel()));
                 else if (RadarProdutos.OPERACOES.contains(op))

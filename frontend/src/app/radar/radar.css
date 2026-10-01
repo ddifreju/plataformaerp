@@ -2069,3 +2069,237 @@ img.rd-product-thumb {
     flex: 1 1 45%;
   }
 }
+
+/* Anúncios */
+.rd-badge.red {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+.rd-lojas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+.rd-loja {
+  background: white;
+  border: 1px solid var(--rd-line);
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.rd-loja header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.rd-loja h3 {
+  margin: 0;
+  font-size: 15px;
+  flex: 1;
+}
+.rd-loja > strong {
+  font-size: 28px;
+  letter-spacing: -1px;
+  line-height: 1.1;
+}
+.rd-loja > small {
+  color: var(--rd-muted);
+  font-size: 12px;
+}
+.rd-loja-sigla {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #edf3ff;
+  color: var(--rd-blue);
+  font-size: 11px;
+  font-weight: 800;
+  flex: none;
+}
+.rd-loja-alerta {
+  margin-top: 8px;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 700;
+}
+.rd-loja footer {
+  margin-top: auto;
+  padding-top: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.rd-loja footer a,
+.rd-anuncios-topo a {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rd-blue);
+}
+.rd-anuncios-topo {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.rd-anuncios-topo h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 18px;
+}
+.rd-acoes-loja {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.rd-mais-acoes,
+.rd-filtros-wrap {
+  position: relative;
+}
+.rd-mais-acoes ul {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  min-width: 290px;
+  background: white;
+  border: 1px solid var(--rd-line);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+}
+.rd-mais-acoes li button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 9px 10px;
+  border-radius: 7px;
+}
+.rd-mais-acoes li button:hover {
+  background: #f1f5f9;
+}
+.rd-alerta-anuncios {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+.rd-alerta-anuncios button {
+  margin-left: auto;
+}
+.rd-tab-num {
+  display: block;
+  font-size: 15px;
+  color: inherit;
+}
+.rd-busca-anuncios {
+  gap: 10px;
+}
+.rd-busca-anuncios .rd-search {
+  flex: 1;
+  max-width: 520px;
+}
+.rd-filtros-painel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  width: 300px;
+  background: white;
+  border: 1px solid var(--rd-line);
+  border-radius: 12px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+}
+.rd-filtros-painel label,
+.rd-motivo-preco {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.rd-motivo {
+  display: block;
+  color: #b45309;
+  font-size: 11px;
+}
+.rd-selecao {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.rd-busca-produto ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  border: 1px solid var(--rd-line);
+  border-radius: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+.rd-busca-produto li button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 9px 10px;
+}
+.rd-busca-produto li button:hover {
+  background: #f1f5f9;
+}
+.rd-busca-produto li.rd-dica {
+  padding: 9px 10px;
+}
+.rd-produto-escolhido {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--rd-blue);
+  background: #edf3ff;
+  border-radius: 8px;
+  padding: 9px 10px;
+}
+@media (max-width: 720px) {
+  .rd-acoes-loja {
+    margin-left: 0;
+    width: 100%;
+  }
+  .rd-filtros-painel,
+  .rd-mais-acoes ul {
+    right: auto;
+    left: 0;
+    width: min(300px, calc(100vw - 48px));
+    min-width: 0;
+  }
+}
+.rd-campo-produto {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
