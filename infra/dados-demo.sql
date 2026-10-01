@@ -91,7 +91,18 @@ BEGIN
     DELETE FROM radar_movimento  WHERE tenant_id = ANY(v_ids);
     DELETE FROM radar_pedido     WHERE tenant_id = ANY(v_ids);
     DELETE FROM radar_anuncio    WHERE tenant_id = ANY(v_ids);
+    -- Cadastros e produto completo (V018-V021).
+    DELETE FROM radar_cliente_anexo      WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_cliente            WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_promocao           WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_kit_item           WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_produto_fornecedor WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_produto_imagem     WHERE tenant_id = ANY(v_ids);
+    UPDATE radar_produto SET pai_id = NULL WHERE tenant_id = ANY(v_ids);
     DELETE FROM radar_produto    WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_fornecedor WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_categoria  WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_embalagem  WHERE tenant_id = ANY(v_ids);
 
     DELETE FROM custo           WHERE tenant_id = ANY(v_ids);
     DELETE FROM item_devolucao  WHERE tenant_id = ANY(v_ids);

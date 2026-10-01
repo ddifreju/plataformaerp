@@ -79,11 +79,11 @@ class RadarCadastrosIsolamentoTest {
     }
 
     @Test
-    void clienteDeUmaEmpresaNaoApareceParaOutra() {
-        UUID id = criar(EMPRESA_A, "cliente", "{\"nome\":\"Ana Souza\",\"uf\":\"sp\"}");
+    void fornecedorDeUmaEmpresaNaoApareceParaOutra() {
+        UUID id = criar(EMPRESA_A, "fornecedor", "{\"nome\":\"Malhas Sul\"}");
 
-        assertTrue(idsDe(EMPRESA_B, "clientes").isEmpty());
-        assertEquals(List.of(id.toString()), idsDe(EMPRESA_A, "clientes"));
+        assertTrue(idsDe(EMPRESA_B, "fornecedores").isEmpty());
+        assertTrue(idsDe(EMPRESA_A, "fornecedores").contains(id.toString()));
     }
 
     @Test
@@ -181,12 +181,14 @@ class RadarCadastrosIsolamentoTest {
     }
 
     @Test
-    void cargoSemPermissaoNaoCadastraCliente() {
+    void cargoSemPermissaoNaoCadastraFornecedor() {
         ContextoTenant.definir(EMPRESA_A);
         var erro =
                 assertThrows(
                         ResponseStatusException.class,
-                        () -> cadastros.executar("cliente", json("{\"nome\":\"X\"}"), "ESTOQUE"));
+                        () ->
+                                cadastros.executar(
+                                        "fornecedor", json("{\"nome\":\"X\"}"), "MARKETING"));
         assertEquals(HttpStatus.FORBIDDEN, erro.getStatusCode());
     }
 

@@ -3,12 +3,15 @@ package com.plataforma.radar;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
@@ -60,6 +63,46 @@ public class RadarController {
     public Map<String, Object> imagemPrincipal(@PathVariable UUID id) {
         service.tornarImagemPrincipal(id);
         return Map.of("mensagem", "Imagem principal definida.");
+    }
+
+    @GetMapping("/clientes/{id}")
+    public Map<String, Object> cliente(@PathVariable UUID id) {
+        return service.cliente(id);
+    }
+
+    @PostMapping(value = "/clientes/{id}/anexos", consumes = "multipart/form-data")
+    public Map<String, Object> enviarAnexo(
+            @PathVariable UUID id, @RequestParam("arquivo") MultipartFile arquivo)
+            throws IOException {
+        UUID anexo =
+                service.adicionarAnexo(
+                        id,
+                        arquivo.getOriginalFilename(),
+                        arquivo.getContentType(),
+                        arquivo.getBytes());
+        return Map.of("id", anexo, "mensagem", "Anexo adicionado.");
+    }
+
+    // Anexo sempre baixa (nunca abre inline) e não fica em cache: pode ter dado pessoal.
+    @GetMapping("/anexos/{id}")
+    public ResponseEntity<byte[]> anexo(@PathVariable UUID id) {
+        var a = service.anexo(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename((String) a.get("nome_arquivo"), StandardCharsets.UTF_8)
+                                .build()
+                                .toString())
+                .cacheControl(CacheControl.noStore())
+                .body((byte[]) a.get("dados"));
+    }
+
+    @DeleteMapping("/anexos/{id}")
+    public Map<String, Object> removerAnexo(@PathVariable UUID id) {
+        service.removerAnexo(id);
+        return Map.of("mensagem", "Anexo removido.");
     }
 
     @GetMapping("/relatorios")

@@ -21,6 +21,7 @@ import Cadastro from "./cadastros";
 import Promocoes, { situacao } from "./promocoes";
 import Relatorios from "./relatorios";
 import ProdutoForm, { type Aba as AbaProduto } from "./produto";
+import Clientes from "./cliente";
 
 type Data = {
   usuario: { nome: string; papel: string };
@@ -40,6 +41,7 @@ type Data = {
   agentes: { nome: string; estado: string; descricao: string }[];
   resumo: Record<string, string>;
   clientes: Row[];
+  vendedores: Row[];
   fornecedores: Row[];
   categorias: Row[];
   embalagens: Row[];
@@ -313,11 +315,15 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           label: "Cliente cadastrado",
           required: false,
           options: [
-            { value: "", label: "Não cadastrado (digite o nome ao lado)" },
-            ...(data?.clientes ?? []).map((c) => ({ value: str(c.id), label: str(c.nome) })),
+            { value: "", label: "Cliente novo (cadastra sozinho pelo nome abaixo)" },
+            ...(data?.clientes ?? []).map((c) => ({
+              value: str(c.id),
+              label: `${str(c.codigo)} · ${str(c.nome)}`,
+            })),
           ],
         },
-        { key: "cliente", label: "Nome do cliente", required: false },
+        { key: "cliente", label: "Nome do cliente (se for novo)", required: false },
+        { key: "cliente_documento", label: "CPF/CNPJ do cliente (opcional)", required: false },
         { key: "quantidade", label: "Quantidade", type: "integer", value: "1" },
         amount("preco", "Preço unitário"),
         amount("comissao", "Comissão total"),
@@ -1677,11 +1683,12 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             </>
           )}
           {page === "clientes" && (
-            <Cadastro
-              tipo="clientes"
-              linhas={data.clientes}
+            <Clientes
+              clientes={data.clientes}
+              vendedores={data.vendedores ?? []}
               podeEditar={can("DONO", "GESTOR", "ATENDIMENTO")}
-              abrirModal={setModal}
+              executar={commandResult}
+              recarregar={refresh}
             />
           )}
           {page === "fornecedores" && (

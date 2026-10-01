@@ -2000,3 +2000,72 @@ img.rd-product-thumb {
     grid-template-columns: 1fr;
   }
 }
+
+/* Clientes */
+.rd-obrigatorio {
+  color: #b91c1c;
+}
+.rd-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.rd-clientes-resumo button.rd-kpi {
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.rd-clientes-resumo button.rd-kpi.ativo {
+  border-color: var(--rd-blue);
+  box-shadow: 0 0 0 2px #dbe7ff;
+}
+.rd-filtros {
+  margin: 4px 0 12px;
+}
+.rd-pessoa input:first-child {
+  flex: 2;
+}
+.rd-pessoa input {
+  flex: 1;
+}
+.rd-anexos {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+  display: grid;
+  gap: 6px;
+}
+.rd-anexos li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--rd-line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.rd-anexos li a {
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.radar-app label.rd-anexo-upload {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px dashed var(--rd-line);
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--rd-blue);
+}
+@media (max-width: 720px) {
+  .rd-pessoa {
+    flex-wrap: wrap;
+  }
+  .rd-pessoa input,
+  .rd-pessoa input:first-child {
+    flex: 1 1 45%;
+  }
+}
