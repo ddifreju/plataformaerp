@@ -1,0 +1,334 @@
+package com.plataforma.radar;
+
+import static com.plataforma.radar.BancoRadarDeTeste.json;
+import static com.plataforma.radar.BancoRadarDeTeste.naEmpresa;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.plataforma.autenticacao.PapelUsuario;
+import com.plataforma.autenticacao.UsuarioAutenticado;
+import com.plataforma.autenticacao.UsuarioParaLogin;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.math.BigDecimal;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/** Cadastro completo de produto (V020): campos, variações, kit, vínculos e isolamento. */
+class RadarProdutosTest {
+
+    private static JdbcTemplate db;
+    private static RadarProdutos produtos;
+    private static UUID empresaA;
+    private static UUID empresaB;
+
+    @BeforeAll
+    static void preparar() throws SQLException {
+        db = BancoRadarDeTeste.comoAplicacao();
+        produtos = new RadarProdutos(db, BancoRadarDeTeste.JSON);
+        empresaA = BancoRadarDeTeste.novaEmpresa();
+        empresaB = BancoRadarDeTeste.novaEmpresa();
+        // Movimentos de estoque registram o usuário logado.
+        var usuario =
+                new UsuarioAutenticado(
+                        new UsuarioParaLogin(
+                                UUID.randomUUID(),
+                                empresaA,
+                                "teste@radar.test",
+                                "x",
+                                "Teste",
+                                PapelUsuario.DONO,
+                                true,
+                                true));
+        SecurityContextHolder.getContext()
+                .setAuthentication(
+                        new UsernamePasswordAuthenticationToken(usuario, null, List.of()));
+    }
+
+    @AfterAll
+    static void limpar() {
+        SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void gtinComDigitoVerificadorErradoERecusado() {
+        assertTrue(RadarEntrada.gtinValido("4006381333931"));
+        assertFalse(RadarEntrada.gtinValido("4006381333932"));
+        assertTrue(RadarEntrada.gtinValido("96385074"));
+        var erro =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                salvar(
+                                        empresaA,
+                                        "{" + base("GTIN-1") + ",\"gtin\":\"4006381333932\"}"));
+        assertTrue(erro.getReason().contains("GTIN"));
+    }
+
+    @Test
+    void produtoSimplesGravaCamposCriaCategoriaEEmbalagemNovas() {
+        UUID id =
+                salvar(
+                        empresaA,
+                        "{"
+                                + base("SIMPLES-1")
+                                + ",\"gtin\":\"4006381333931\",\"origem\":\"0\",\"ncm\":\"6303.12.00\","
+                                + "\"cest\":\"28.038.00\",\"saldo\":\"7\",\"peso_bruto_kg\":\"1,250\",\"categoria_nome\":\"Cortinas"
+                                + " Novas\",\"embalagem_nova\":{\"nome\":\"Caixa sob"
+                                + " medida\",\"largura_cm\":\"30\","
+                                + "\"altura_cm\":\"10\",\"comprimento_cm\":\"40\"},"
+                                + "\"tags\":[\"azul\",\"azul\",\"sala\"],"
+                                + "\"atributos\":[{\"nome\":\"Material\",\"valor\":\"Linho\"}]}");
+        var p = linha(empresaA, "select * from radar_produto where id=?", id);
+        assertEquals("63031200", p.get("ncm"));
+        assertEquals("2803800", p.get("cest"));
+        assertEquals(7, p.get("fisico"));
+        assertEquals(0, new BigDecimal("1.250").compareTo((BigDecimal) p.get("peso_bruto_kg")));
+        assertEquals("[\"azul\", \"sala\"]", p.get("tags").toString());
+        assertEquals(
+                "Cortinas Novas",
+                linha(
+                                empresaA,
+                                "select nome from radar_categoria where id=?",
+                                p.get("categoria_id"))
+                        .get("nome"));
+        assertEquals(
+                "Caixa sob medida",
+                linha(
+                                empresaA,
+                                "select nome from radar_embalagem where id=?",
+                                p.get("embalagem_id"))
+                        .get("nome"));
+    }
+
+    @Test
+    void atualizarNaoMexeNoEstoque() {
+        UUID id = salvar(empresaA, "{" + base("ESTOQUE-1") + ",\"saldo\":\"5\"}");
+        salvar(empresaA, "{\"id\":\"" + id + "\"," + base("ESTOQUE-1") + ",\"saldo\":\"99\"}");
+        assertEquals(
+                5,
+                linha(empresaA, "select fisico from radar_produto where id=?", id).get("fisico"));
+    }
+
+    @Test
+    void variacoesViramProdutosFilhosComEstoqueProprio() {
+        UUID pai =
+                salvar(
+                        empresaA,
+                        "{"
+                                + base("CAMISA", "VARIACAO")
+                                + ",\"tipos_variacao\":[\"Cor\",\"Tamanho\"],\"variacoes\":["
+                                + "{\"sku\":\"CAMISA-AZ-M\",\"atributos\":{\"Cor\":\"Azul\",\"Tamanho\":\"M\"},\"saldo\":\"3\"},"
+                                + "{\"sku\":\"CAMISA-AZ-G\",\"atributos\":{\"Cor\":\"Azul\",\"Tamanho\":\"G\"},\"preco\":\"55.00\"}]}");
+        var filhas =
+                naEmpresa(
+                        empresaA,
+                        () ->
+                                db.queryForList(
+                                        "select * from radar_produto where pai_id=? order by sku",
+                                        pai));
+        assertEquals(2, filhas.size());
+        assertEquals("Produto CAMISA - Azul / G", filhas.get(0).get("nome"));
+        assertEquals(0, new BigDecimal("55.00").compareTo((BigDecimal) filhas.get(0).get("preco")));
+        assertEquals(3, filhas.get(1).get("fisico"));
+        assertEquals(
+                0,
+                linha(empresaA, "select fisico from radar_produto where id=?", pai).get("fisico"));
+
+        // Tirar uma variação da grade não apaga: deixa fora de venda.
+        String id = filhas.get(1).get("id").toString();
+        salvar(
+                empresaA,
+                "{\"id\":\""
+                        + pai
+                        + "\","
+                        + base("CAMISA", "VARIACAO")
+                        + ",\"tipos_variacao\":[\"Cor\",\"Tamanho\"],\"variacoes\":["
+                        + "{\"id\":\""
+                        + id
+                        + "\",\"sku\":\"CAMISA-AZ-M\",\"atributos\":{\"Cor\":\"Azul\",\"Tamanho\":\"M\"}}]}");
+        assertEquals(
+                false,
+                linha(
+                                empresaA,
+                                "select permite_venda from radar_produto where id=?",
+                                filhas.get(0).get("id"))
+                        .get("permite_venda"));
+    }
+
+    @Test
+    void gradeRecusaCombinacaoRepetidaEMaisDeTresTipos() {
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        salvar(
+                                empresaA,
+                                "{"
+                                        + base("REP", "VARIACAO")
+                                        + ",\"tipos_variacao\":[\"Cor\"],\"variacoes\":["
+                                        + "{\"sku\":\"REP-1\",\"atributos\":{\"Cor\":\"Azul\"}},"
+                                        + "{\"sku\":\"REP-2\",\"atributos\":{\"Cor\":\"azul\"}}]}"));
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        salvar(
+                                empresaA,
+                                "{"
+                                        + base("QUATRO", "VARIACAO")
+                                        + ",\"tipos_variacao\":[\"A\",\"B\",\"C\",\"D\"],\"variacoes\":[]}"));
+    }
+
+    @Test
+    void kitSomaOCustoDosComponentesENaoTemEstoqueProprio() {
+        UUID a = salvar(empresaA, "{" + base("KIT-A") + ",\"custo\":\"10.50\"}");
+        UUID b = salvar(empresaA, "{" + base("KIT-B") + ",\"custo\":\"4.25\"}");
+        UUID kit =
+                salvar(
+                        empresaA,
+                        "{"
+                                + base("KIT-1", "KIT")
+                                + ",\"saldo\":\"10\",\"kit\":[{\"componente_id\":\""
+                                + a
+                                + "\",\"quantidade\":\"2\"},{\"componente_id\":\""
+                                + b
+                                + "\",\"quantidade\":\"1\"}]}");
+        var p = linha(empresaA, "select custo, fisico from radar_produto where id=?", kit);
+        assertEquals(new BigDecimal("25.25"), p.get("custo"));
+        assertEquals(0, p.get("fisico"));
+        // Kit dentro de kit é recusado.
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        salvar(
+                                empresaA,
+                                "{"
+                                        + base("KIT-2", "KIT")
+                                        + ",\"kit\":[{\"componente_id\":\""
+                                        + kit
+                                        + "\",\"quantidade\":\"1\"}]}"));
+    }
+
+    @Test
+    void categoriaDeOutraEmpresaNaoPodeSerVinculada() {
+        UUID categoriaB =
+                naEmpresa(
+                        empresaB,
+                        () -> {
+                            UUID id = UUID.randomUUID();
+                            db.update(
+                                    "insert into radar_categoria(id,tenant_id,nome) values(?,?,?)",
+                                    id,
+                                    empresaB,
+                                    "Só da B");
+                            return id;
+                        });
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        salvar(
+                                empresaA,
+                                "{" + base("CAT-B") + ",\"categoria_id\":\"" + categoriaB + "\"}"));
+    }
+
+    @Test
+    void produtoEImagemDeOutraEmpresaNaoAparecem() {
+        UUID produtoA = salvar(empresaA, "{" + base("IMG-1") + "}");
+        UUID imagem =
+                naEmpresa(
+                        empresaA,
+                        () ->
+                                produtos.adicionarImagem(
+                                        "DONO", produtoA, new byte[] {1, 2, 3}, "image/png"));
+        assertNotNull(naEmpresa(empresaA, () -> produtos.imagem(imagem)));
+
+        var erroImagem =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> naEmpresa(empresaB, () -> produtos.imagem(imagem)));
+        assertEquals(HttpStatus.NOT_FOUND, erroImagem.getStatusCode());
+        var erroProduto =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                salvar(
+                                        empresaB,
+                                        "{\"id\":\"" + produtoA + "\"," + base("IMG-1") + "}"));
+        assertEquals(HttpStatus.NOT_FOUND, erroProduto.getStatusCode());
+    }
+
+    @Test
+    void imagemComFormatoOuTamanhoInvalidoERecusada() {
+        UUID id = salvar(empresaA, "{" + base("IMG-2") + "}");
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                empresaA,
+                                () ->
+                                        produtos.adicionarImagem(
+                                                "DONO", id, new byte[] {1}, "image/gif")));
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                empresaA,
+                                () ->
+                                        produtos.adicionarImagem(
+                                                "DONO",
+                                                id,
+                                                new byte[RadarProdutos.MAX_BYTES_IMAGEM + 1],
+                                                "image/png")));
+    }
+
+    @Test
+    void cargoSemPermissaoNaoSalvaProduto() {
+        var erro =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresaA,
+                                        () ->
+                                                produtos.salvar(
+                                                        json("{" + base("X") + "}"), "ESTOQUE")));
+        assertEquals(HttpStatus.FORBIDDEN, erro.getStatusCode());
+    }
+
+    // ---- apoio -----------------------------------------------------------------------------
+
+    private static String base(String sku) {
+        return base(sku, "SIMPLES");
+    }
+
+    private static String base(String sku, String tipo) {
+        return "\"tipo\":\""
+                + tipo
+                + "\",\"sku\":\""
+                + sku
+                + "\",\"nome\":\"Produto "
+                + sku
+                + "\",\"preco\":\"49.90\",\"custo\":\"20.00\"";
+    }
+
+    private static UUID salvar(UUID empresa, String corpo) {
+        return (UUID) naEmpresa(empresa, () -> produtos.salvar(json(corpo), "DONO")).get("id");
+    }
+
+    private static Map<String, Object> linha(UUID empresa, String sql, Object id) {
+        return naEmpresa(empresa, () -> db.queryForMap(sql, id));
+    }
+}

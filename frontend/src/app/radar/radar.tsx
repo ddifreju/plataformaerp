@@ -20,6 +20,7 @@ import Mercado from "./mercado";
 import Cadastro from "./cadastros";
 import Promocoes, { situacao } from "./promocoes";
 import Relatorios from "./relatorios";
+import ProdutoForm, { type Aba as AbaProduto } from "./produto";
 
 type Data = {
   usuario: { nome: string; papel: string };
@@ -43,6 +44,9 @@ type Data = {
   categorias: Row[];
   embalagens: Row[];
   promocoes: Row[];
+  kitItens: Row[];
+  produtoFornecedores: Row[];
+  imagens: Row[];
 };
 const canais = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 const nav = [
@@ -169,6 +173,12 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [modal, setModal] = useState<ModalSpec | null>(null),
     [tour, setTour] = useState(0),
     [abertos, setAbertos] = useState<string[]>([]),
+    // Produto aberto no formulário completo: id null = novo produto.
+    [editando, setEditando] = useState<{
+      id: string | null;
+      aba: AbaProduto;
+      versao: number;
+    } | null>(null),
     [menu, setMenu] = useState(false);
   const refresh = useCallback(async () => {
     const d = await call("");
@@ -205,7 +215,24 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       setBusy(false);
     }
   }
+  // Como command, mas devolve a resposta (para quem precisa do id gerado).
+  async function commandResult(body: Record<string, unknown>) {
+    setError("");
+    setBusy(true);
+    try {
+      const r = await call("/comandos", body, crypto.randomUUID());
+      setNotice(r.mensagem);
+      await refresh();
+      return r as Record<string, unknown>;
+    } catch (e) {
+      setError((e as Error).message);
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
   function go(p: string) {
+    setEditando(null);
     setPage(p);
     setSearch("");
     setMenu(false);
@@ -217,7 +244,35 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     orders = data?.pedidos ?? [],
     listings = data?.anuncios ?? [];
   const prod = (id: unknown) => products.find((x) => x.id === id);
-  const prodOptions = products.map((p) => ({ value: str(p.id), label: `${p.sku} · ${p.nome}` }));
+  // Produto com variações (pai) não é vendido nem estocado: as variações são.
+  // Kit é vendido, mas o estoque fica nos componentes.
+  const principais = products.filter((p) => !p.pai_id);
+  const vendaveis = products.filter((p) => p.tipo !== "VARIACAO" && p.permite_venda !== false);
+  const estocaveis = products.filter((p) => p.tipo !== "VARIACAO" && p.tipo !== "KIT");
+  const prodOptions = vendaveis.map((p) => ({ value: str(p.id), label: `${p.sku} · ${p.nome}` }));
+  const estoqueOptions = estocaveis.map((p) => ({
+    value: str(p.id),
+    label: `${p.sku} · ${p.nome}`,
+  }));
+  const disponivel = (p: Row): number => {
+    if (p.tipo === "VARIACAO")
+      return products
+        .filter((f) => f.pai_id === p.id)
+        .reduce((s, f) => s + Number(f.fisico) - Number(f.reservado), 0);
+    if (p.tipo === "KIT") {
+      const itens = (data?.kitItens ?? []).filter((k) => k.kit_id === p.id);
+      if (!itens.length) return 0;
+      return Math.min(
+        ...itens.map((k) => {
+          const c = products.find((x) => x.id === k.componente_id);
+          return c
+            ? Math.floor((Number(c.fisico) - Number(c.reservado)) / Number(k.quantidade))
+            : 0;
+        }),
+      );
+    }
+    return Number(p.fisico) - Number(p.reservado);
+  };
   const channelField: Field = {
     key: "canal",
     label: "Canal",
@@ -240,64 +295,12 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   const negativos = orders.filter(
     (o) => !["CANCELADO", "DEVOLVIDO"].includes(str(o.estado)) && resultados(o) < 0,
   );
-  const baixos = products.filter((p) => Number(p.fisico) - Number(p.reservado) <= Number(p.minimo));
+  const baixos = estocaveis.filter(
+    (p) =>
+      p.controla_estoque !== false && Number(p.fisico) - Number(p.reservado) <= Number(p.minimo),
+  );
   const pendentes = data?.acoes.filter((a) => a.estado === "PENDENTE") ?? [];
   const records = (t: string) => data?.registros.filter((r) => r.tipo === t) ?? [];
-  const vinculo = (key: string, label: string, linhas: Row[], value = ""): Field => ({
-    key,
-    label,
-    required: false,
-    value,
-    options: [
-      { value: "", label: "Nenhuma" },
-      ...linhas.map((l) => ({ value: str(l.id), label: str(l.nome) })),
-    ],
-  });
-  const categoriaField = (value = "") =>
-    vinculo("categoria_id", "Categoria", data?.categorias ?? [], value);
-  const embalagemField = (value = "") =>
-    vinculo("embalagem_id", "Embalagem", data?.embalagens ?? [], value);
-  function produtoModal() {
-    setModal({
-      title: "Cadastrar produto",
-      op: "produto",
-      fields: [
-        { key: "nome", label: "Nome do produto" },
-        { key: "sku", label: "SKU" },
-        { key: "marca", label: "Marca", required: false },
-        { key: "ncm", label: "NCM (8 dígitos)", required: false },
-        { key: "descricao", label: "Descrição", type: "textarea", required: false },
-        amount("custo", "Custo unitário"),
-        amount("preco", "Preço base"),
-        { key: "saldo", label: "Saldo inicial", type: "integer", value: "0" },
-        categoriaField(),
-        embalagemField(),
-      ],
-    });
-  }
-  function editarProduto(p: Row) {
-    setModal({
-      title: "Editar produto",
-      op: "produto_atualizar",
-      extra: { id: p.id },
-      fields: [
-        { key: "nome", label: "Nome", value: str(p.nome) },
-        { key: "marca", label: "Marca", value: str(p.marca), required: false },
-        { key: "ncm", label: "NCM (8 dígitos)", value: str(p.ncm), required: false },
-        {
-          key: "descricao",
-          label: "Descrição",
-          type: "textarea",
-          value: str(p.descricao),
-          required: false,
-        },
-        amount("custo", "Custo atual", str(p.custo)),
-        amount("preco", "Preço base", str(p.preco)),
-        categoriaField(str(p.categoria_id)),
-        embalagemField(str(p.embalagem_id)),
-      ],
-    });
-  }
   function pedidoModal() {
     setModal({
       title: "Novo pedido local",
@@ -531,7 +534,10 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               {page === "produtos" && can("DONO", "GESTOR") && (
                 <>
                   <button onClick={() => go("importar")}>↥ Importar</button>
-                  <button className="primary" onClick={produtoModal}>
+                  <button
+                    className="primary"
+                    onClick={() => setEditando({ id: null, aba: "geral", versao: Date.now() })}
+                  >
                     + Novo produto
                   </button>
                 </>
@@ -715,10 +721,34 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               </section>
             </>
           )}
-          {page === "produtos" && (
+          {page === "produtos" && editando && (
+            <ProdutoForm
+              key={`${editando.id ?? "novo"}-${editando.versao}`}
+              produto={editando.id ? (products.find((p) => p.id === editando.id) ?? null) : null}
+              abaInicial={editando.aba}
+              dados={{
+                produtos: products,
+                categorias: data.categorias,
+                embalagens: data.embalagens,
+                fornecedores: data.fornecedores,
+                anuncios: listings,
+                kitItens: data.kitItens,
+                produtoFornecedores: data.produtoFornecedores,
+                imagens: data.imagens,
+              }}
+              veCusto={data.financeiroPermitido}
+              podeAnunciar={can("DONO", "GESTOR", "MARKETING")}
+              executar={commandResult}
+              recarregar={refresh}
+              abrirModal={setModal}
+              voltar={() => setEditando(null)}
+              aoSalvar={(id, aba) => setEditando({ id, aba, versao: Date.now() })}
+            />
+          )}
+          {page === "produtos" && !editando && (
             <section className="rd-card">
               <div className="rd-card-head">
-                <h2>{products.length} produtos</h2>
+                <h2>{principais.length} produtos</h2>
                 <input
                   aria-label="Buscar produto"
                   className="rd-search"
@@ -728,55 +758,70 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                 />
               </div>
               <Table
-                headers={["Produto", "SKU", "Custo / preço", "Disponível", "Cadastro", "Ações"]}
-                rows={filtered(products).map((p) => [
-                  <div className="rd-product-name">
-                    <span className="rd-product-thumb">▥</span>
-                    <div>
-                      <strong>{str(p.nome)}</strong>
-                      <small>{str(p.marca) || "Sem marca"}</small>
-                    </div>
-                  </div>,
-                  str(p.sku),
-                  <>
-                    {data.financeiroPermitido && <small>{money(p.custo)} / </small>}
-                    {money(p.preco)}
-                  </>,
-                  Number(p.fisico) - Number(p.reservado),
-                  <Badge tone={p.ncm ? "green" : "amber"}>
-                    {p.ncm ? "NCM preenchido" : "Falta NCM"}
-                  </Badge>,
-                  <div className="rd-row-actions">
-                    {can("DONO", "GESTOR") && (
-                      <button onClick={() => editarProduto(p)}>Editar</button>
-                    )}
-                    <button
-                      onClick={() => {
-                        go("anuncios");
-                        setModal({
-                          title: "Preparar anúncio",
-                          op: "anuncio",
-                          extra: { produto_id: p.id },
-                          fields: [
-                            channelField,
-                            { key: "titulo", label: "Título no canal", value: str(p.nome) },
-                            amount("preco", "Preço", str(p.preco)),
-                          ],
-                        });
-                      }}
-                    >
-                      Criar anúncio →
-                    </button>
-                    {can("DONO", "GESTOR", "MARKETING") && (
+                headers={[
+                  "Produto",
+                  "SKU",
+                  "Tipo",
+                  "Custo / preço",
+                  "Disponível",
+                  "Cadastro",
+                  "Ações",
+                ]}
+                rows={filtered(principais).map((p) => {
+                  const capa = data.imagens.find((i) => i.produto_id === p.id);
+                  const variacoes = products.filter((f) => f.pai_id === p.id).length;
+                  return [
+                    <div className="rd-product-name">
+                      {capa ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- imagem servida pela API autenticada
+                        <img
+                          className="rd-product-thumb"
+                          src={`/api/radar/imagens/${str(capa.id)}`}
+                          alt=""
+                        />
+                      ) : (
+                        <span className="rd-product-thumb">▥</span>
+                      )}
+                      <div>
+                        <strong>{str(p.nome)}</strong>
+                        <small>{str(p.marca) || "Sem marca"}</small>
+                      </div>
+                    </div>,
+                    str(p.sku),
+                    p.tipo === "KIT" ? (
+                      <Badge tone="purple">Kit</Badge>
+                    ) : p.tipo === "VARIACAO" ? (
+                      <Badge tone="blue">{variacoes} variações</Badge>
+                    ) : (
+                      <Badge>Simples</Badge>
+                    ),
+                    <>
+                      {data.financeiroPermitido && <small>{money(p.custo)} / </small>}
+                      {money(p.preco)}
+                    </>,
+                    p.controla_estoque === false ? "Sem controle" : disponivel(p),
+                    <Badge tone={p.ncm ? "green" : "amber"}>
+                      {p.ncm ? "NCM preenchido" : "Falta NCM"}
+                    </Badge>,
+                    <div className="rd-row-actions">
                       <button
-                        disabled={busy}
-                        onClick={() => command({ op: "anuncios_lote", produto_id: p.id })}
+                        onClick={() =>
+                          setEditando({ id: str(p.id), aba: "geral", versao: Date.now() })
+                        }
                       >
-                        Preparar 4 canais
+                        {can("DONO", "GESTOR") ? "Editar" : "Ver"}
                       </button>
-                    )}
-                  </div>,
-                ])}
+                      {can("DONO", "GESTOR", "MARKETING") && (
+                        <button
+                          disabled={busy}
+                          onClick={() => command({ op: "anuncios_lote", produto_id: p.id })}
+                        >
+                          Preparar 4 canais
+                        </button>
+                      )}
+                    </div>,
+                  ];
+                })}
               />
             </section>
           )}
@@ -960,9 +1005,9 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             <>
               <div className="rd-kpis">
                 {[
-                  ["SKUs", products.length],
-                  ["Unidades físicas", products.reduce((s, p) => s + Number(p.fisico), 0)],
-                  ["Reservadas", products.reduce((s, p) => s + Number(p.reservado), 0)],
+                  ["SKUs", estocaveis.length],
+                  ["Unidades físicas", estocaveis.reduce((s, p) => s + Number(p.fisico), 0)],
+                  ["Reservadas", estocaveis.reduce((s, p) => s + Number(p.reservado), 0)],
                   ["No estoque mínimo", baixos.length],
                 ].map(([l, v]) => (
                   <div className="rd-kpi" key={l}>
@@ -974,7 +1019,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               <section className="rd-card">
                 <Table
                   headers={["Produto", "Físico", "Reservado", "Disponível", "Ajustar"]}
-                  rows={products.map((p) => [
+                  rows={estocaveis.map((p) => [
                     <>
                       <strong>{str(p.nome)}</strong>
                       <small>{str(p.sku)}</small>
@@ -1065,7 +1110,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                                 {
                                   key: "produto_id",
                                   label: "Produto",
-                                  options: prodOptions,
+                                  options: estoqueOptions,
                                   value: str(p.id),
                                 },
                                 amount("custo_unitario", "Custo unitário", str(p.custo)),
@@ -1187,7 +1232,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               <section className="rd-card">
                 <div className="rd-card-head">
                   <h2>Produtos que precisam de NCM</h2>
-                  <Badge tone="amber">{products.filter((p) => !p.ncm).length}</Badge>
+                  <Badge tone="amber">{principais.filter((p) => !p.ncm).length}</Badge>
                 </div>
                 <Table
                   headers={["SKU", "Produto", "Pendência"]}
@@ -1412,7 +1457,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           )}
           {page === "precos" && data.financeiroPermitido && (
             <Pricing
-              products={products}
+              products={vendaveis}
               listings={listings}
               onPropose={(id, preco) =>
                 setModal({
@@ -1598,7 +1643,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                     salvar.
                   </p>
                   <div className="rd-stack">
-                    {products.slice(0, 5).map((p) => (
+                    {principais.slice(0, 5).map((p) => (
                       <button
                         key={str(p.id)}
                         onClick={() =>

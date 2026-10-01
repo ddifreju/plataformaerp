@@ -39,6 +39,12 @@ spring:
     # processamento, com ou sem open-in-view, sai com o GUC correto.
     open-in-view: false
 
+  servlet:
+    multipart:
+      # Imagens de produto: até 2 MB cada (validado também em RadarProdutos).
+      max-file-size: 3MB
+      max-request-size: 3MB
+
   flyway:
     # Desabilitado DE PROPOSITO na aplicacao. Migration roda por fora,
     # via "make migrate" (flyway-maven-plugin, ver pom.xml), com um

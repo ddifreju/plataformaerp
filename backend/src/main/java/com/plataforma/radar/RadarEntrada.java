@@ -91,4 +91,38 @@ final class RadarEntrada {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Medida inválida: " + campo);
         }
     }
+
+    /** Decimal opcional não negativo com no máximo {@code escala} casas. */
+    static BigDecimal decimalOpcional(JsonNode n, String campo, int escala) {
+        String s = n.path(campo).asText("").trim().replace(",", ".");
+        if (s.isBlank()) return null;
+        try {
+            BigDecimal v = new BigDecimal(s);
+            if (v.signum() < 0
+                    || v.scale() > escala
+                    || v.compareTo(new BigDecimal("999999999")) > 0)
+                erro("Valor inválido: " + campo);
+            return v;
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido: " + campo);
+        }
+    }
+
+    /** Dinheiro opcional: vazio vira null; preenchido segue as regras de {@link #valor}. */
+    static BigDecimal valorOpcional(JsonNode n, String campo) {
+        return n.path(campo).asText("").isBlank() ? null : valor(n, campo);
+    }
+
+    /**
+     * GTIN-8, 12, 13 ou 14 com dígito verificador válido (módulo 10, pesos 3 e 1 a partir da
+     * direita). Marketplaces recusam GTIN com dígito errado.
+     */
+    static boolean gtinValido(String gtin) {
+        if (gtin == null || !gtin.matches("[0-9]{8}|[0-9]{12,14}")) return false;
+        int soma = 0;
+        for (int i = gtin.length() - 2, peso = 3; i >= 0; i--, peso = 4 - peso)
+            soma += (gtin.charAt(i) - '0') * peso;
+        int digito = (10 - soma % 10) % 10;
+        return digito == gtin.charAt(gtin.length() - 1) - '0';
+    }
 }

@@ -27,6 +27,7 @@ public class RadarService {
     private final RadarCadastros cadastros;
     private final RadarPromocoes promocoes;
     private final RadarRelatorios relatorios;
+    private final RadarProdutos produtos;
     private static final Set<String> CANAIS =
             Set.of("Mercado Livre", "Shopee", "TikTok Shop", "SHEIN");
 
@@ -35,12 +36,45 @@ public class RadarService {
             ObjectMapper json,
             RadarCadastros cadastros,
             RadarPromocoes promocoes,
-            RadarRelatorios relatorios) {
+            RadarRelatorios relatorios,
+            RadarProdutos produtos) {
         this.db = db;
         this.json = json;
         this.cadastros = cadastros;
         this.promocoes = promocoes;
         this.relatorios = relatorios;
+        this.produtos = produtos;
+    }
+
+    /** Usuário da requisição atual, para registrar quem fez cada movimento. */
+    static UUID usuarioAtual() {
+        return ((UsuarioAutenticado)
+                        SecurityContextHolder.getContext().getAuthentication().getPrincipal())
+                .usuarioId();
+    }
+
+    @Transactional
+    public UUID adicionarImagem(UUID produtoId, byte[] dados, String tipoConteudo) {
+        UUID id = produtos.adicionarImagem(papel(), produtoId, dados, tipoConteudo);
+        auditar("imagem_adicionar", produtoId.toString(), Map.of("imagem", id));
+        return id;
+    }
+
+    @Transactional
+    public void removerImagem(UUID imagemId) {
+        produtos.removerImagem(papel(), imagemId);
+        auditar("imagem_remover", imagemId.toString(), Map.of());
+    }
+
+    @Transactional
+    public void tornarImagemPrincipal(UUID imagemId) {
+        produtos.tornarPrincipal(papel(), imagemId);
+        auditar("imagem_principal", imagemId.toString(), Map.of());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> imagem(UUID imagemId) {
+        return produtos.imagem(imagemId);
     }
 
     @Transactional(readOnly = true)
@@ -307,6 +341,7 @@ public class RadarService {
         out.put("agentes", agentes());
         out.putAll(cadastros.dados(p, f));
         out.putAll(promocoes.dados());
+        out.putAll(this.produtos.dados());
         normalizarDinheiro(out);
         return out;
     }
@@ -565,6 +600,7 @@ public class RadarService {
                 permitir("DONO", "GESTOR", "ESTOQUE");
                 UUID pid = id(n, "produto_id");
                 var p = um("radar_produto", pid);
+                exigirEstoqueProprio(p);
                 int delta = inteiro(n, "quantidade", -100000, 100000);
                 if (delta == 0) erro("Informe uma quantidade diferente de zero.");
                 if (((Number) p.get("fisico")).intValue() + delta
@@ -783,7 +819,7 @@ public class RadarService {
                     if (!d.path("preco").asText("").isBlank()) valor(d, "preco");
                 }
                 if (tipo.equals("COMPRA")) {
-                    um("radar_produto", id(d, "produto_id"));
+                    exigirEstoqueProprio(um("radar_produto", id(d, "produto_id")));
                     inteiro(d, "quantidade", 1, 100000);
                     valor(d, "custo_unitario");
                 }
@@ -798,6 +834,7 @@ public class RadarService {
                 if (d.containsKey("recebida_em")) erro("Compra já recebida.");
                 UUID pid = UUID.fromString(d.get("produto_id").toString());
                 var p = um("radar_produto", pid);
+                exigirEstoqueProprio(p);
                 int q = ((Number) d.get("quantidade")).intValue();
                 BigDecimal custo = bd(d.get("custo_unitario"));
                 int fisico = ((Number) p.get("fisico")).intValue();
@@ -837,6 +874,8 @@ public class RadarService {
             default -> {
                 if (RadarCadastros.OPERACOES.contains(op))
                     result.putAll(cadastros.executar(op, n, papel()));
+                else if (RadarProdutos.OPERACOES.contains(op))
+                    result.putAll(produtos.salvar(n, papel()));
                 else if (RadarPromocoes.OPERACOES.contains(op))
                     result.putAll(promocoes.executar(op, n, papel()));
                 else erro("Operação não reconhecida.");
@@ -892,9 +931,11 @@ public class RadarService {
     private UUID pedido(JsonNode n) {
         UUID pid = id(n, "produto_id");
         var p = um("radar_produto", pid);
+        if ("VARIACAO".equals(p.get("tipo"))) erro("Escolha a variação vendida (cor, tamanho…).");
+        if (Boolean.FALSE.equals(p.get("permite_venda"))) erro("Este produto está fora de venda.");
         int q = inteiro(n, "quantidade", 1, 100000);
-        if (((Number) p.get("fisico")).intValue() - ((Number) p.get("reservado")).intValue() < q)
-            erro("Estoque disponível insuficiente.");
+        // Kit reserva os componentes; produto simples reserva a si mesmo.
+        var reservas = itensParaReservar(pid, p, q);
         BigDecimal preco = valor(n, "preco");
         if (preco.signum() == 0) erro("Preço deve ser positivo.");
         BigDecimal bruto = preco.multiply(BigDecimal.valueOf(q));
@@ -935,12 +976,14 @@ public class RadarService {
                 desconto,
                 clienteId,
                 promocaoId);
-        db.update(
-                "update radar_produto set reservado=reservado+? where tenant_id=? and id=?",
-                q,
-                tenant(),
-                pid);
-        movimento(pid, id, "RESERVA", 0, q, "Pedido " + num);
+        for (var r : reservas) {
+            db.update(
+                    "update radar_produto set reservado=reservado+? where tenant_id=? and id=?",
+                    r.quantidade(),
+                    tenant(),
+                    r.produtoId());
+            movimento(r.produtoId(), id, "RESERVA", 0, r.quantidade(), "Pedido " + num);
+        }
         lancar(id, "RECEITA", bruto, "Pedido local " + num);
         lancar(
                 id,
@@ -961,46 +1004,59 @@ public class RadarService {
         UUID id = id(n, "id");
         var p = um("radar_pedido", id);
         String old = p.get("estado").toString(), next = texto(n, "estado", 30);
-        int q = ((Number) p.get("quantidade")).intValue();
-        UUID pid = (UUID) p.get("produto_id");
-        um("radar_produto", pid);
+        // O que foi reservado (o produto ou os componentes do kit) está nos movimentos de
+        // reserva do pedido; as transições devolvem ou baixam exatamente isso.
+        var reservas = reservasDoPedido(id);
+        for (var r : reservas) um("radar_produto", r.produtoId());
         if (next.equals("SEPARADO") && old.equals("RESERVADO")) {
         } else if (next.equals("EXPEDIDO") && old.equals("SEPARADO")) {
             if (!n.path("confirmar_simulacao").asBoolean())
                 erro("Expedição local exige confirmação de simulação; não há NF-e emitida.");
-            db.update(
-                    "update radar_produto set fisico=fisico-?,reservado=reservado-? where"
-                            + " tenant_id=? and id=?",
-                    q,
-                    q,
-                    tenant(),
-                    pid);
-            movimento(pid, id, "EXPEDICAO", -q, -q, "Expedição simulada; sem documento fiscal");
+            for (var r : reservas) {
+                db.update(
+                        "update radar_produto set fisico=fisico-?,reservado=reservado-? where"
+                                + " tenant_id=? and id=?",
+                        r.quantidade(),
+                        r.quantidade(),
+                        tenant(),
+                        r.produtoId());
+                movimento(
+                        r.produtoId(),
+                        id,
+                        "EXPEDICAO",
+                        -r.quantidade(),
+                        -r.quantidade(),
+                        "Expedição simulada; sem documento fiscal");
+            }
         } else if (next.equals("CANCELADO") && Set.of("RESERVADO", "SEPARADO").contains(old)) {
             permitir("DONO", "GESTOR");
-            db.update(
-                    "update radar_produto set reservado=reservado-? where tenant_id=? and id=?",
-                    q,
-                    tenant(),
-                    pid);
-            movimento(pid, id, "LIBERACAO", 0, -q, "Cancelamento local");
+            for (var r : reservas) {
+                db.update(
+                        "update radar_produto set reservado=reservado-? where tenant_id=? and id=?",
+                        r.quantidade(),
+                        tenant(),
+                        r.produtoId());
+                movimento(r.produtoId(), id, "LIBERACAO", 0, -r.quantidade(), "Cancelamento local");
+            }
             estornar(id);
         } else if (next.equals("DEVOLVIDO") && old.equals("EXPEDIDO")) {
             permitir("DONO", "GESTOR");
             boolean revenda = n.path("retornar_estoque").asBoolean(false);
             if (revenda) {
-                db.update(
-                        "update radar_produto set fisico=fisico+? where tenant_id=? and id=?",
-                        q,
-                        tenant(),
-                        pid);
-                movimento(
-                        pid,
-                        id,
-                        "DEVOLUCAO",
-                        q,
-                        0,
-                        "Devolução inspecionada e disponível para revenda");
+                for (var r : reservas) {
+                    db.update(
+                            "update radar_produto set fisico=fisico+? where tenant_id=? and id=?",
+                            r.quantidade(),
+                            tenant(),
+                            r.produtoId());
+                    movimento(
+                            r.produtoId(),
+                            id,
+                            "DEVOLUCAO",
+                            r.quantidade(),
+                            0,
+                            "Devolução inspecionada e disponível para revenda");
+                }
             }
             for (var x :
                     db.queryForList(
@@ -1021,6 +1077,70 @@ public class RadarService {
                 next,
                 tenant(),
                 id);
+    }
+
+    record Reserva(UUID produtoId, int quantidade) {}
+
+    /**
+     * Itens a reservar para vender {@code q} unidades: os componentes do kit (× quantidade no kit)
+     * ou o próprio produto. Produto que não controla estoque não reserva nada.
+     */
+    private List<Reserva> itensParaReservar(UUID pid, Map<String, Object> p, int q) {
+        List<Reserva> itens = new ArrayList<>();
+        if ("KIT".equals(p.get("tipo"))) {
+            for (var c :
+                    db.queryForList(
+                            "select componente_id, quantidade from radar_kit_item"
+                                    + " where tenant_id=? and kit_id=? order by componente_id",
+                            tenant(),
+                            pid))
+                itens.add(
+                        new Reserva(
+                                (UUID) c.get("componente_id"),
+                                ((Number) c.get("quantidade")).intValue() * q));
+            if (itens.isEmpty()) erro("Este kit não tem componentes cadastrados.");
+        } else itens.add(new Reserva(pid, q));
+        List<Reserva> controladas = new ArrayList<>();
+        for (var r : itens) {
+            var produto = um("radar_produto", r.produtoId());
+            if (Boolean.FALSE.equals(produto.get("controla_estoque"))) continue;
+            int disponivel =
+                    ((Number) produto.get("fisico")).intValue()
+                            - ((Number) produto.get("reservado")).intValue();
+            if (disponivel < r.quantidade())
+                erro(
+                        "Estoque disponível insuficiente"
+                                + (r.produtoId().equals(pid)
+                                        ? "."
+                                        : " em " + produto.get("sku") + "."));
+            controladas.add(r);
+        }
+        return controladas;
+    }
+
+    private List<Reserva> reservasDoPedido(UUID pedidoId) {
+        return db
+                .queryForList(
+                        "select produto_id, sum(reserva_delta) quantidade from radar_movimento"
+                                + " where tenant_id=? and pedido_id=? and tipo='RESERVA'"
+                                + " group by produto_id order by produto_id",
+                        tenant(),
+                        pedidoId)
+                .stream()
+                .map(
+                        r ->
+                                new Reserva(
+                                        (UUID) r.get("produto_id"),
+                                        ((Number) r.get("quantidade")).intValue()))
+                .toList();
+    }
+
+    /** Kit e produto com variações não têm saldo próprio. */
+    private void exigirEstoqueProprio(Map<String, Object> p) {
+        if ("KIT".equals(p.get("tipo")))
+            erro("O estoque do kit vem dos componentes. Ajuste os produtos que o compõem.");
+        if ("VARIACAO".equals(p.get("tipo")))
+            erro("O estoque fica em cada variação. Ajuste a variação desejada.");
     }
 
     private void estornar(UUID id) {
