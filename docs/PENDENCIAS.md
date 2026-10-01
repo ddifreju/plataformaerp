@@ -8,6 +8,15 @@ Revise este arquivo uma vez por dia.
 
 ---
 
+## CNPJ e conexões com marketplaces — EM ABERTO (01/10/2026)
+
+- [ ] **CNPJ da empresa (Simples Nacional)** — previsão: até 09/10/2026.
+      Sem ele não dá para pedir acesso às APIs dos marketplaces, registrar
+      domínio em nome da empresa nem emitir nota fiscal.
+- [ ] **Domínio** — depende do CNPJ.
+- Plano completo e papelada provável: `docs/integracoes/plano-conexoes.md`.
+
+
 ## Ferramentas da máquina — RESOLVIDO em 12/08/2026
 
 - [x] **JDK 21** — Temurin 21.0.12 instalado
