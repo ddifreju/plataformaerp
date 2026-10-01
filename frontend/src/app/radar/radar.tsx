@@ -1,10 +1,23 @@
 "use client";
 /* eslint-disable react/jsx-key -- Table wraps each supplied cell in a keyed td; these arrays are table data, not rendered sibling lists. */
 
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import "./radar.css";
+import {
+  Badge,
+  Empty,
+  Table,
+  cents,
+  centMoney,
+  date,
+  money,
+  str,
+  type Field,
+  type ModalSpec,
+  type Row,
+} from "./ui";
+import Mercado from "./mercado";
 
-type Row = Record<string, string | number | boolean | Record<string, unknown>>;
 type Data = {
   usuario: { nome: string; papel: string };
   financeiroPermitido: boolean;
@@ -23,17 +36,9 @@ type Data = {
   agentes: { nome: string; estado: string; descricao: string }[];
   resumo: Record<string, string>;
 };
-type Field = {
-  key: string;
-  label: string;
-  type?: string;
-  value?: string;
-  options?: { value: string; label: string }[];
-  required?: boolean;
-};
 const canais = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 const nav = [
-  ["visao", "Visão geral", "⌂"],
+  ["visao", "Painel", "⌂"],
   ["missao", "Central de ações", "◎"],
   ["produtos", "Produtos", "▣"],
   ["importar", "Importar catálogo", "↥"],
@@ -46,12 +51,25 @@ const nav = [
   ["precos", "Precificação", "↗"],
   ["inbox", "Atendimento", "☏"],
   ["studio", "Brand Studio", "✧"],
-  ["mercado", "Concorrência", "◉"],
+  ["mercado", "Mercado", "◉"],
   ["ia", "Radar AI", "✳"],
   ["integracoes", "Integrações", "⇄"],
   ["auditoria", "Auditoria", "≡"],
   ["guia", "Como usar", "?"],
 ];
+// Menu lateral em grupos. Páginas fora daqui (Central de ações, Importar
+// catálogo) continuam acessíveis pelos botões dentro de Painel e Produtos.
+const grupos: { id: string; rotulo: string; icone: string; itens: string[] }[] = [
+  { id: "painel", rotulo: "Painel", icone: "⌂", itens: ["visao"] },
+  { id: "cadastros", rotulo: "Cadastros", icone: "▣", itens: ["produtos", "anuncios"] },
+  { id: "vendas", rotulo: "Vendas", icone: "▢", itens: ["pedidos", "inbox"] },
+  { id: "suprimentos", rotulo: "Suprimentos", icone: "▦", itens: ["estoque", "compras", "fiscal"] },
+  { id: "financas", rotulo: "Finanças", icone: "◈", itens: ["financeiro", "precos"] },
+  { id: "marketing", rotulo: "Marketing", icone: "✧", itens: ["studio"] },
+  { id: "mercado", rotulo: "Mercado", icone: "◉", itens: ["mercado"] },
+  { id: "ia", rotulo: "Radar AI", icone: "✳", itens: ["ia"] },
+];
+const rodape = ["integracoes", "auditoria", "guia"];
 const titles: Record<string, [string, string]> = {
   visao: ["Sua operação, em um só lugar", "Acompanhe o que importa e encontre seu próximo passo."],
   missao: ["O que precisa de você", "Prioridades com contexto, responsáveis e ações."],
@@ -79,8 +97,8 @@ const titles: Record<string, [string, string]> = {
   inbox: ["Conversas com contexto", "Prepare respostas e consulte a operação no mesmo lugar."],
   studio: ["Sua marca, consistente", "Identidade e rascunhos de conteúdo para seus produtos."],
   mercado: [
-    "Olhe para o mercado",
-    "Organize referências e compare sem perder sua margem de vista.",
+    "Inteligência de Mercado",
+    "Acompanhe preços, ofertas, posicionamento, avaliações, tendências e sinais do mercado para tomar decisões melhores sobre seus produtos.",
   ],
   ia: [
     "Pergunte. Entenda. Decida.",
@@ -93,68 +111,6 @@ const titles: Record<string, [string, string]> = {
   auditoria: ["Histórico que dá confiança", "Quem fez, o que mudou e quando aconteceu."],
   guia: ["Conheça seu Radar", "Um passeio simples pelo trabalho do dia a dia."],
 };
-function cents(v: unknown) {
-  const s = String(v ?? "0");
-  const [i, f = ""] = s.split(".");
-  return Number(i) * 100 + (i.startsWith("-") ? -1 : 1) * Number(f.padEnd(2, "0").slice(0, 2));
-}
-function money(v: unknown) {
-  return (cents(v) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-function centMoney(v: number) {
-  return (v / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-function date(v: unknown) {
-  return new Date(String(v)).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-}
-function str(v: unknown) {
-  return String(v ?? "");
-}
-function Badge({ children, tone = "gray" }: { children: ReactNode; tone?: string }) {
-  return <span className={`rd-badge ${tone}`}>{children}</span>;
-}
-function Empty({
-  text = "Ainda não há registros.",
-  action,
-}: {
-  text?: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="rd-empty">
-      <span>◇</span>
-      <h3>{text}</h3>
-      <p>Comece com um cadastro ou explore o guia do Radar.</p>
-      {action}
-    </div>
-  );
-}
-function Table({ headers, rows }: { headers: string[]; rows: ReactNode[][] }) {
-  return rows.length ? (
-    <div className="rd-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            {headers.map((h) => (
-              <th key={h}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
-              {r.map((c, j) => (
-                <td key={j}>{c}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  ) : (
-    <Empty />
-  );
-}
 async function call(path: string, body?: unknown, key?: string) {
   const res = await fetch("/api/radar" + path, {
     method: body ? "POST" : "GET",
@@ -182,13 +138,9 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [notice, setNotice] = useState(""),
     [error, setError] = useState(""),
     [search, setSearch] = useState(""),
-    [modal, setModal] = useState<{
-      title: string;
-      fields: Field[];
-      op: string;
-      extra?: Record<string, unknown>;
-    } | null>(null),
+    [modal, setModal] = useState<ModalSpec | null>(null),
     [tour, setTour] = useState(0),
+    [abertos, setAbertos] = useState<string[]>([]),
     [menu, setMenu] = useState(false);
   const refresh = useCallback(async () => {
     const d = await call("");
@@ -364,9 +316,13 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   if (!data) return <Login onLogin={refresh} />;
   const filtered = (items: Row[]) =>
     items.filter((x) => JSON.stringify(x).toLowerCase().includes(search.toLowerCase()));
-  const available = nav
-    .filter(([p]) => !(p === "financeiro" || p === "precos") || data.financeiroPermitido)
-    .filter(([p]) => p !== "auditoria" || can("DONO"));
+  const liberadas = new Set(
+    nav
+      .map(([p]) => p)
+      .filter((p) => !(p === "financeiro" || p === "precos") || data.financeiroPermitido)
+      .filter((p) => p !== "auditoria" || can("DONO")),
+  );
+  const rotuloDe = (id: string) => nav.find((x) => x[0] === id)?.[1] ?? id;
   return (
     <div className="radar-app">
       <aside className={`rd-sidebar ${menu ? "open" : ""}`}>
@@ -382,20 +338,64 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
         </div>
         <p className="rd-nav-label">SEU COMMERCE OS</p>
         <nav>
-          {available.map(([id, label, icon]) => (
-            <button key={id} className={page === id ? "active" : ""} onClick={() => go(id)}>
-              <span className="rd-nav-icon">{icon}</span>
-              {label}
-              {id === "missao" && pendentes.length > 0 && <b>{pendentes.length}</b>}
-            </button>
-          ))}
+          {grupos.map((g) => {
+            const itens = g.itens.filter((id) => liberadas.has(id));
+            if (!itens.length) return null;
+            const ativo = itens.includes(page) || (g.id === "painel" && page === "missao");
+            if (itens.length === 1 && g.itens.length === 1)
+              return (
+                <button
+                  key={g.id}
+                  className={`${ativo ? "active" : ""} ${g.id === "ia" ? "rd-nav-ai" : ""}`}
+                  onClick={() => go(itens[0])}
+                >
+                  <span className="rd-nav-icon">{g.icone}</span>
+                  {g.rotulo}
+                  {g.id === "painel" && pendentes.length > 0 && <b>{pendentes.length}</b>}
+                </button>
+              );
+            const aberto = ativo || abertos.includes(g.id);
+            return (
+              <div key={g.id} className="rd-nav-group">
+                <button
+                  className={ativo ? "rd-nav-parent current" : "rd-nav-parent"}
+                  aria-expanded={aberto}
+                  onClick={() =>
+                    setAbertos(
+                      abertos.includes(g.id)
+                        ? abertos.filter((x) => x !== g.id)
+                        : [...abertos, g.id],
+                    )
+                  }
+                >
+                  <span className="rd-nav-icon">{g.icone}</span>
+                  {g.rotulo}
+                  <i>{aberto ? "⌃" : "⌄"}</i>
+                </button>
+                {aberto &&
+                  itens.map((id) => (
+                    <button
+                      key={id}
+                      className={`rd-nav-child ${page === id ? "active" : ""}`}
+                      onClick={() => go(id)}
+                    >
+                      {rotuloDe(id)}
+                    </button>
+                  ))}
+              </div>
+            );
+          })}
         </nav>
-        <div className="rd-side-help">
-          <span>✧</span>
-          <strong>Seu próximo passo, mais claro.</strong>
-          <p>Conheça o fluxo em poucos minutos.</p>
-          <button onClick={() => go("guia")}>Abrir guia visual →</button>
-        </div>
+        <nav className="rd-nav-footer">
+          {rodape
+            .filter((id) => liberadas.has(id))
+            .map((id) => (
+              <button key={id} className={page === id ? "active" : ""} onClick={() => go(id)}>
+                <span className="rd-nav-icon">{nav.find((x) => x[0] === id)?.[2]}</span>
+                {rotuloDe(id)}
+              </button>
+            ))}
+        </nav>
         <div className="rd-user">
           <div className="rd-avatar">{data.usuario.nome.slice(0, 1)}</div>
           <span>
@@ -1558,42 +1558,15 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             </>
           )}
           {page === "mercado" && (
-            <>
-              <div className="rd-toolbar">
-                <Badge>Referências manuais · sem coleta automática</Badge>
-                <button
-                  className="primary"
-                  onClick={() =>
-                    setModal({
-                      title: "Acompanhar referência",
-                      op: "registro",
-                      extra: { tipo: "CONCORRENTE" },
-                      fields: [
-                        { key: "nome", label: "Concorrente / anúncio" },
-                        { key: "url", label: "Link HTTPS", type: "url" },
-                        { key: "produto", label: "Produto comparável" },
-                        { key: "preco", label: "Preço observado", type: "number" },
-                        {
-                          key: "observacao",
-                          label: "Frete / condições / data da observação",
-                          type: "textarea",
-                        },
-                      ],
-                    })
-                  }
-                >
-                  + Adicionar concorrente
-                </button>
-              </div>
-              <RecordCards title="Radar de concorrência" records={records("CONCORRENTE")} />
-              <section className="rd-card rd-start">
-                <div>
-                  <h2>Preço baixo só faz sentido com margem.</h2>
-                  <p>Confira o impacto dos custos antes de acompanhar uma oferta concorrente.</p>
-                </div>
-                <button onClick={() => go("precos")}>Simular preço →</button>
-              </section>
-            </>
+            <Mercado
+              registros={data.registros}
+              produtos={products}
+              anuncios={listings}
+              podeEditar={can("DONO", "GESTOR", "MARKETING")}
+              veCusto={data.financeiroPermitido}
+              abrirModal={setModal}
+              go={go}
+            />
           )}
           {page === "ia" && (
             <>

@@ -232,11 +232,12 @@ public class RadarService {
                                     "MENSAGEM",
                                     "MARCA",
                                     "CONCORRENTE",
+                                    "PRECO_REFERENCIA",
                                     "POLITICA",
                                     "FORNECEDOR",
                                     "COMPRA");
                     case "ATENDIMENTO", "ANALISTA" -> Set.of("MENSAGEM");
-                    case "MARKETING" -> Set.of("MARCA", "CONCORRENTE");
+                    case "MARKETING" -> Set.of("MARCA", "CONCORRENTE", "PRECO_REFERENCIA");
                     case "ESTOQUE" -> Set.of("FORNECEDOR", "COMPRA");
                     default -> Set.of("FORNECEDOR", "COMPRA");
                 };
@@ -738,15 +739,26 @@ public class RadarService {
                 String tipo = texto(n, "tipo", 40);
                 switch (tipo) {
                     case "MENSAGEM" -> permitir("DONO", "GESTOR", "ATENDIMENTO", "ANALISTA");
-                    case "MARCA", "CONCORRENTE" -> permitir("DONO", "GESTOR", "MARKETING");
+                    case "MARCA", "CONCORRENTE", "PRECO_REFERENCIA" ->
+                            permitir("DONO", "GESTOR", "MARKETING");
                     case "FORNECEDOR", "COMPRA" -> permitir("DONO", "GESTOR", "ESTOQUE");
                     default -> erro("Tipo de registro não permitido.");
                 }
                 JsonNode d = n.path("dados");
                 if (!d.isObject() || enc(d).length() > 10000) erro("Conteúdo inválido.");
+                if (tipo.equals("PRECO_REFERENCIA")) {
+                    // Observação de preço de uma referência monitorada (área Mercado).
+                    var ref = um("radar_registro", id(d, "referencia_id"));
+                    if (!ref.get("tipo").equals("CONCORRENTE"))
+                        erro("Referência monitorada não encontrada.");
+                    if (valor(d, "preco").signum() == 0) erro("Informe o preço observado.");
+                }
                 if (tipo.equals("CONCORRENTE")) {
                     String url = d.path("url").asText();
                     if (!url.startsWith("https://")) erro("Use uma URL HTTPS.");
+                    if (!d.path("produto_id").asText("").isBlank())
+                        um("radar_produto", id(d, "produto_id"));
+                    if (!d.path("preco").asText("").isBlank()) valor(d, "preco");
                 }
                 if (tipo.equals("COMPRA")) {
                     um("radar_produto", id(d, "produto_id"));
