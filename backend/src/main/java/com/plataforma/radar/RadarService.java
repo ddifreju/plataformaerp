@@ -22,12 +22,14 @@ import org.springframework.web.server.ResponseStatusException;
 public class RadarService {
     private final JdbcTemplate db;
     private final ObjectMapper json;
+    private final RadarCadastros cadastros;
     private static final Set<String> CANAIS =
             Set.of("Mercado Livre", "Shopee", "TikTok Shop", "SHEIN");
 
-    public RadarService(JdbcTemplate db, ObjectMapper json) {
+    public RadarService(JdbcTemplate db, ObjectMapper json, RadarCadastros cadastros) {
         this.db = db;
         this.json = json;
+        this.cadastros = cadastros;
     }
 
     private UUID tenant() {
@@ -287,6 +289,7 @@ public class RadarService {
                         : List.of());
         out.put("resumo", f ? resumo() : Map.of());
         out.put("agentes", agentes());
+        out.putAll(cadastros.dados(p, f));
         normalizarDinheiro(out);
         return out;
     }
@@ -456,14 +459,16 @@ public class RadarService {
                 String ncm = n.path("ncm").asText("");
                 if (!ncm.isBlank() && !ncm.matches("[0-9]{8}")) erro("NCM deve ter 8 dígitos.");
                 db.update(
-                        "update radar_produto set nome=?,marca=?,ncm=?,descricao=?,custo=?,preco=?"
-                            + " where tenant_id=? and id=?",
+                        "update radar_produto set nome=?,marca=?,ncm=?,descricao=?,custo=?,preco=?,"
+                            + "categoria_id=?,embalagem_id=? where tenant_id=? and id=?",
                         texto(n, "nome", 250),
                         n.path("marca").asText(""),
                         ncm,
                         n.path("descricao").asText(""),
                         valor(n, "custo"),
                         valor(n, "preco"),
+                        cadastros.vinculoOpcional(n, "categoria_id", "radar_categoria"),
+                        cadastros.vinculoOpcional(n, "embalagem_id", "radar_embalagem"),
                         tenant(),
                         pid);
                 result.put("id", pid);
@@ -812,7 +817,10 @@ public class RadarService {
                         "Compra recebida uma vez; estoque, custo médio e conta a pagar"
                             + " atualizados.");
             }
-            default -> erro("Operação não reconhecida.");
+            default -> {
+                if (!RadarCadastros.OPERACOES.contains(op)) erro("Operação não reconhecida.");
+                result.putAll(cadastros.executar(op, n, papel()));
+            }
         }
         auditar(
                 op,
@@ -843,8 +851,8 @@ public class RadarService {
         UUID id = UUID.randomUUID();
         db.update(
                 "insert into"
-                    + " radar_produto(id,tenant_id,sku,nome,marca,ncm,descricao,custo,preco,fisico)"
-                    + " values(?,?,?,?,?,?,?,?,?,?)",
+                    + " radar_produto(id,tenant_id,sku,nome,marca,ncm,descricao,custo,preco,fisico,"
+                    + "categoria_id,embalagem_id) values(?,?,?,?,?,?,?,?,?,?,?,?)",
                 id,
                 tenant(),
                 sku,
@@ -854,7 +862,9 @@ public class RadarService {
                 n.path("descricao").asText(""),
                 valor(n, "custo"),
                 valor(n, "preco"),
-                saldo);
+                saldo,
+                cadastros.vinculoOpcional(n, "categoria_id", "radar_categoria"),
+                cadastros.vinculoOpcional(n, "embalagem_id", "radar_embalagem"));
         if (saldo > 0) movimento(id, null, "ABERTURA", saldo, 0, "Saldo inicial informado");
         return id;
     }
@@ -869,18 +879,22 @@ public class RadarService {
         if (preco.signum() == 0) erro("Preço deve ser positivo.");
         BigDecimal bruto = preco.multiply(BigDecimal.valueOf(q));
         if (valor(n, "desconto").compareTo(bruto) > 0) erro("Desconto maior que a venda.");
+        // Cliente cadastrado é opcional; sem ele, vale o nome digitado no pedido.
+        UUID clienteId = cadastros.vinculoOpcional(n, "cliente_id", "radar_cliente");
+        String cliente =
+                clienteId != null ? cadastros.nomeDoCliente(clienteId) : texto(n, "cliente", 160);
         UUID id = UUID.randomUUID();
         String num = "R-" + id.toString().substring(0, 8).toUpperCase();
         db.update(
                 "insert into"
-                    + " radar_pedido(id,tenant_id,produto_id,numero,canal,cliente,quantidade,preco,custo_unitario,comissao,frete,imposto,ads,embalagem,desconto)"
-                    + " values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    + " radar_pedido(id,tenant_id,produto_id,numero,canal,cliente,quantidade,preco,custo_unitario,comissao,frete,imposto,ads,embalagem,desconto,cliente_id)"
+                    + " values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 id,
                 tenant(),
                 pid,
                 num,
                 canal(n),
-                texto(n, "cliente", 160),
+                cliente,
                 q,
                 preco,
                 p.get("custo"),
@@ -889,7 +903,8 @@ public class RadarService {
                 valor(n, "imposto"),
                 valor(n, "ads"),
                 valor(n, "embalagem"),
-                valor(n, "desconto"));
+                valor(n, "desconto"),
+                clienteId);
         db.update(
                 "update radar_produto set reservado=reservado+? where tenant_id=? and id=?",
                 q,

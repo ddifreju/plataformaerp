@@ -17,6 +17,7 @@ import {
   type Row,
 } from "./ui";
 import Mercado from "./mercado";
+import Cadastro from "./cadastros";
 
 type Data = {
   usuario: { nome: string; papel: string };
@@ -35,6 +36,10 @@ type Data = {
   auditoria: Row[];
   agentes: { nome: string; estado: string; descricao: string }[];
   resumo: Record<string, string>;
+  clientes: Row[];
+  fornecedores: Row[];
+  categorias: Row[];
+  embalagens: Row[];
 };
 const canais = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 const nav = [
@@ -43,6 +48,10 @@ const nav = [
   ["produtos", "Produtos", "▣"],
   ["importar", "Importar catálogo", "↥"],
   ["anuncios", "Anúncios", "▤"],
+  ["clientes", "Clientes", "☺"],
+  ["fornecedores", "Fornecedores", "⇲"],
+  ["categorias", "Categorias", "#"],
+  ["embalagens", "Embalagens", "▢"],
   ["pedidos", "Pedidos", "▢"],
   ["estoque", "Estoque", "▦"],
   ["compras", "Compras", "↙"],
@@ -61,7 +70,12 @@ const nav = [
 // catálogo) continuam acessíveis pelos botões dentro de Painel e Produtos.
 const grupos: { id: string; rotulo: string; icone: string; itens: string[] }[] = [
   { id: "painel", rotulo: "Painel", icone: "⌂", itens: ["visao"] },
-  { id: "cadastros", rotulo: "Cadastros", icone: "▣", itens: ["produtos", "anuncios"] },
+  {
+    id: "cadastros",
+    rotulo: "Cadastros",
+    icone: "▣",
+    itens: ["produtos", "anuncios", "clientes", "fornecedores", "categorias", "embalagens"],
+  },
   { id: "vendas", rotulo: "Vendas", icone: "▢", itens: ["pedidos", "inbox"] },
   { id: "suprimentos", rotulo: "Suprimentos", icone: "▦", itens: ["estoque", "compras", "fiscal"] },
   { id: "financas", rotulo: "Finanças", icone: "◈", itens: ["financeiro", "precos"] },
@@ -110,6 +124,10 @@ const titles: Record<string, [string, string]> = {
   ],
   auditoria: ["Histórico que dá confiança", "Quem fez, o que mudou e quando aconteceu."],
   guia: ["Conheça seu Radar", "Um passeio simples pelo trabalho do dia a dia."],
+  clientes: ["Seus clientes", "Quem compra de você, com contato e histórico em um só lugar."],
+  fornecedores: ["Seus fornecedores", "Contatos e prazos de quem abastece sua operação."],
+  categorias: ["Categorias", "Organize o catálogo do jeito que seu cliente procura."],
+  embalagens: ["Embalagens", "Custos e medidas das embalagens que você usa nos envios."],
 };
 async function call(path: string, body?: unknown, key?: string) {
   const res = await fetch("/api/radar" + path, {
@@ -215,6 +233,20 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   const baixos = products.filter((p) => Number(p.fisico) - Number(p.reservado) <= Number(p.minimo));
   const pendentes = data?.acoes.filter((a) => a.estado === "PENDENTE") ?? [];
   const records = (t: string) => data?.registros.filter((r) => r.tipo === t) ?? [];
+  const vinculo = (key: string, label: string, linhas: Row[], value = ""): Field => ({
+    key,
+    label,
+    required: false,
+    value,
+    options: [
+      { value: "", label: "Nenhuma" },
+      ...linhas.map((l) => ({ value: str(l.id), label: str(l.nome) })),
+    ],
+  });
+  const categoriaField = (value = "") =>
+    vinculo("categoria_id", "Categoria", data?.categorias ?? [], value);
+  const embalagemField = (value = "") =>
+    vinculo("embalagem_id", "Embalagem", data?.embalagens ?? [], value);
   function produtoModal() {
     setModal({
       title: "Cadastrar produto",
@@ -228,6 +260,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
         amount("custo", "Custo unitário"),
         amount("preco", "Preço base"),
         { key: "saldo", label: "Saldo inicial", type: "integer", value: "0" },
+        categoriaField(),
+        embalagemField(),
       ],
     });
   }
@@ -249,6 +283,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
         },
         amount("custo", "Custo atual", str(p.custo)),
         amount("preco", "Preço base", str(p.preco)),
+        categoriaField(str(p.categoria_id)),
+        embalagemField(str(p.embalagem_id)),
       ],
     });
   }
@@ -259,7 +295,16 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       fields: [
         productField,
         channelField,
-        { key: "cliente", label: "Nome do cliente (use dados fictícios)" },
+        {
+          key: "cliente_id",
+          label: "Cliente cadastrado",
+          required: false,
+          options: [
+            { value: "", label: "Não cadastrado (digite o nome ao lado)" },
+            ...(data?.clientes ?? []).map((c) => ({ value: str(c.id), label: str(c.nome) })),
+          ],
+        },
+        { key: "cliente", label: "Nome do cliente", required: false },
         { key: "quantidade", label: "Quantidade", type: "integer", value: "1" },
         amount("preco", "Preço unitário"),
         amount("comissao", "Comissão total"),
@@ -320,7 +365,11 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     nav
       .map(([p]) => p)
       .filter((p) => !(p === "financeiro" || p === "precos") || data.financeiroPermitido)
-      .filter((p) => p !== "auditoria" || can("DONO")),
+      .filter((p) => p !== "auditoria" || can("DONO"))
+      .filter(
+        (p) => p !== "clientes" || can("DONO", "GESTOR", "ATENDIMENTO", "FINANCEIRO", "ANALISTA"),
+      )
+      .filter((p) => p !== "fornecedores" || can("DONO", "GESTOR", "ESTOQUE", "FINANCEIRO")),
   );
   const rotuloDe = (id: string) => nav.find((x) => x[0] === id)?.[1] ?? id;
   return (
@@ -1003,7 +1052,16 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                                   type: "integer",
                                   value: "10",
                                 },
-                                { key: "fornecedor", label: "Fornecedor" },
+                                data.fornecedores.length
+                                  ? {
+                                      key: "fornecedor",
+                                      label: "Fornecedor",
+                                      options: data.fornecedores.map((f) => ({
+                                        value: str(f.nome),
+                                        label: str(f.nome),
+                                      })),
+                                    }
+                                  : { key: "fornecedor", label: "Fornecedor" },
                                 { key: "observacao", label: "Prazo / observação", required: false },
                               ],
                             })
@@ -1020,32 +1078,25 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                 <section className="rd-card">
                   <div className="rd-card-head">
                     <h2>Fornecedores</h2>
-                    <button
-                      onClick={() =>
-                        setModal({
-                          title: "Cadastrar fornecedor",
-                          op: "registro",
-                          extra: { tipo: "FORNECEDOR" },
-                          fields: [
-                            { key: "nome", label: "Nome" },
-                            { key: "contato", label: "Contato", required: false },
-                            { key: "prazo", label: "Prazo de entrega", required: false },
-                          ],
-                        })
-                      }
-                    >
-                      + Adicionar
-                    </button>
+                    <button onClick={() => go("fornecedores")}>Gerenciar →</button>
                   </div>
-                  {records("FORNECEDOR").map((r) => (
-                    <div className="rd-task" key={str(r.id)}>
-                      <i>↙</i>
-                      <div>
-                        <strong>{str((r.dados as Record<string, unknown>).nome)}</strong>
-                        <small>{str((r.dados as Record<string, unknown>).prazo)}</small>
+                  {data.fornecedores.length ? (
+                    data.fornecedores.slice(0, 6).map((f) => (
+                      <div className="rd-task" key={str(f.id)}>
+                        <i>⇲</i>
+                        <div>
+                          <strong>{str(f.nome)}</strong>
+                          <small>
+                            {f.prazo_entrega_dias == null
+                              ? "Prazo não informado"
+                              : `Entrega em ${str(f.prazo_entrega_dias)} dias`}
+                          </small>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <Empty text="Nenhum fornecedor cadastrado." />
+                  )}
                 </section>
               </div>
               <section className="rd-card">
@@ -1557,6 +1608,38 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               <RecordCards title="Perfis salvos" records={records("MARCA")} />
             </>
           )}
+          {page === "clientes" && (
+            <Cadastro
+              tipo="clientes"
+              linhas={data.clientes}
+              podeEditar={can("DONO", "GESTOR", "ATENDIMENTO")}
+              abrirModal={setModal}
+            />
+          )}
+          {page === "fornecedores" && (
+            <Cadastro
+              tipo="fornecedores"
+              linhas={data.fornecedores}
+              podeEditar={can("DONO", "GESTOR", "ESTOQUE")}
+              abrirModal={setModal}
+            />
+          )}
+          {page === "categorias" && (
+            <Cadastro
+              tipo="categorias"
+              linhas={data.categorias}
+              podeEditar={can("DONO", "GESTOR", "MARKETING")}
+              abrirModal={setModal}
+            />
+          )}
+          {page === "embalagens" && (
+            <Cadastro
+              tipo="embalagens"
+              linhas={data.embalagens}
+              podeEditar={can("DONO", "GESTOR", "ESTOQUE")}
+              abrirModal={setModal}
+            />
+          )}
           {page === "mercado" && (
             <Mercado
               registros={data.registros}
@@ -1690,7 +1773,9 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   const v = String(form.get(f.key) ?? "");
                   values[f.key] =
                     f.type === "integer"
-                      ? Number(v)
+                      ? v === "" && f.required === false
+                        ? ""
+                        : Number(v)
                       : f.key === "retornar_estoque"
                         ? v === "true"
                         : v;
