@@ -1877,9 +1877,14 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   );
 }
 
+// Espera até ~3 minutos pelo servidor acordar (18 × 10 s).
+const ESPERA_MAX_TENTATIVAS = 18;
+const ESPERA_ENTRE_TENTATIVAS_MS = 10_000;
+
 function Login({ onLogin }: { onLogin: () => Promise<void> }) {
   const [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [acordando, setAcordando] = useState(0);
   return (
     <div className="radar-app rd-login">
       <div className="rd-login-story">
@@ -1914,21 +1919,39 @@ function Login({ onLogin }: { onLogin: () => Promise<void> }) {
             onSubmit={async (e) => {
               e.preventDefault();
               setBusy(true);
+              setError("");
               const f = new FormData(e.currentTarget);
+              const corpo = JSON.stringify({ email: f.get("email"), senha: f.get("senha") });
               try {
-                const r = await fetch("/api/login", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ email: f.get("email"), senha: f.get("senha") }),
-                });
-                if (!r.ok)
-                  throw new Error(
-                    "Não foi possível entrar. Confira o acesso ou aguarde o servidor local.",
-                  );
+                // No plano gratuito o servidor dorme sem uso e leva alguns minutos para
+                // acordar. Enquanto responde 5xx (ou nem responde), esperamos e tentamos de novo.
+                for (let tentativa = 1; ; tentativa++) {
+                  let status = 0;
+                  try {
+                    const r = await fetch("/api/login", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: corpo,
+                    });
+                    status = r.status;
+                  } catch {
+                    status = 0;
+                  }
+                  if (status >= 200 && status < 300) break;
+                  if (status === 401 || status === 400)
+                    throw new Error("E-mail ou senha incorretos.");
+                  if (tentativa >= ESPERA_MAX_TENTATIVAS)
+                    throw new Error(
+                      "O servidor não respondeu. Aguarde um pouco e tente entrar de novo.",
+                    );
+                  setAcordando(tentativa);
+                  await new Promise((pronto) => setTimeout(pronto, ESPERA_ENTRE_TENTATIVAS_MS));
+                }
                 await onLogin();
               } catch (e) {
                 setError((e as Error).message);
               } finally {
+                setAcordando(0);
                 setBusy(false);
               }
             }}
@@ -1953,13 +1976,19 @@ function Login({ onLogin }: { onLogin: () => Promise<void> }) {
                 autoComplete="current-password"
               />
             </label>
+            {acordando > 0 && (
+              <div className="rd-note" role="status">
+                Acordando o servidor… isso leva de 1 a 3 minutos depois de um tempo sem uso. Não
+                precisa clicar de novo.
+              </div>
+            )}
             {error && (
               <div className="rd-error" role="alert">
                 {error}
               </div>
             )}
             <button className="primary" disabled={busy}>
-              {busy ? "Entrando…" : "Entrar no Radar →"}
+              {acordando > 0 ? "Aguardando o servidor…" : busy ? "Entrando…" : "Entrar no Radar →"}
             </button>
           </form>
           <div className="rd-note">
