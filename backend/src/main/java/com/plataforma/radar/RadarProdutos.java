@@ -156,7 +156,7 @@ public class RadarProdutos {
         Integer existentes =
                 db.queryForObject(
                         "select count(*) from radar_produto_imagem where tenant_id=? and"
-                            + " produto_id=?",
+                                + " produto_id=?",
                         Integer.class,
                         tenant(),
                         produtoId);
@@ -165,8 +165,8 @@ public class RadarProdutos {
         UUID id = UUID.randomUUID();
         db.update(
                 "insert into"
-                    + " radar_produto_imagem(id,tenant_id,produto_id,ordem,tipo_conteudo,dados)"
-                    + " values(?,?,?,?,?,?)",
+                        + " radar_produto_imagem(id,tenant_id,produto_id,ordem,tipo_conteudo,dados)"
+                        + " values(?,?,?,?,?,?)",
                 id,
                 tenant(),
                 produtoId,
@@ -575,7 +575,9 @@ public class RadarProdutos {
         db.update(
                 "update radar_produto set "
                         + sets
-                        + ",atualizado_em=now() where tenant_id=? and id=?",
+                        // Salvo pela tela, o produto criado por anúncio importado deixa de
+                        // ser incompleto.
+                        + ",incompleto=false,atualizado_em=now() where tenant_id=? and id=?",
                 valores.toArray());
     }
 
