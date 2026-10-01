@@ -10,13 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.plataforma.comum.tenant.ContextoTenant;
 import com.plataforma.comum.tenant.DataSourceComTenant;
 import com.plataforma.suporte.PostgresDeTeste;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -25,12 +19,20 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.AbstractDataSource;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
 /**
  * Isolamento entre empresas nos cadastros do Radar (V018).
  *
  * <p>Usa a mesma pilha de produção: conexão como app_aplicacao, passando pelo DataSourceComTenant
- * (que seta o GUC a cada conexão), com RLS forçado. A conexão de dono serve só para preparar
- * dados e provar que as linhas existem.
+ * (que seta o GUC a cada conexão), com RLS forçado. A conexão de dono serve só para preparar dados
+ * e provar que as linhas existem.
  */
 class RadarCadastrosIsolamentoTest {
 
@@ -46,7 +48,8 @@ class RadarCadastrosIsolamentoTest {
         try (Connection dono = PostgresDeTeste.novaConexaoDono()) {
             for (UUID t : List.of(EMPRESA_A, EMPRESA_B)) {
                 try (PreparedStatement ps =
-                        dono.prepareStatement("INSERT INTO tenant (id, nome, slug) VALUES (?, ?, ?)")) {
+                        dono.prepareStatement(
+                                "INSERT INTO tenant (id, nome, slug) VALUES (?, ?, ?)")) {
                     ps.setObject(1, t);
                     ps.setString(2, "Empresa de teste " + t);
                     ps.setString(3, "radar-teste-" + t.toString().substring(0, 8));
@@ -134,7 +137,9 @@ class RadarCadastrosIsolamentoTest {
         criar(EMPRESA_A, "embalagem", "{\"nome\":\"Caixa P\",\"custo\":\"1.80\"}");
 
         try (Connection crua = PostgresDeTeste.novaConexaoAppAplicacao();
-                ResultSet rs = crua.createStatement().executeQuery("select count(*) from radar_embalagem")) {
+                ResultSet rs =
+                        crua.createStatement()
+                                .executeQuery("select count(*) from radar_embalagem")) {
             rs.next();
             assertEquals(0, rs.getInt(1));
         }
@@ -192,7 +197,9 @@ class RadarCadastrosIsolamentoTest {
                 ResponseStatusException.class,
                 () ->
                         cadastros.executar(
-                                "embalagem", json("{\"nome\":\"Caixa G\",\"custo\":\"1.805\"}"), "DONO"));
+                                "embalagem",
+                                json("{\"nome\":\"Caixa G\",\"custo\":\"1.805\"}"),
+                                "DONO"));
     }
 
     // ---- apoio -----------------------------------------------------------------------------

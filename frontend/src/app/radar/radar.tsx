@@ -18,6 +18,8 @@ import {
 } from "./ui";
 import Mercado from "./mercado";
 import Cadastro from "./cadastros";
+import Promocoes, { situacao } from "./promocoes";
+import Relatorios from "./relatorios";
 
 type Data = {
   usuario: { nome: string; papel: string };
@@ -40,6 +42,7 @@ type Data = {
   fornecedores: Row[];
   categorias: Row[];
   embalagens: Row[];
+  promocoes: Row[];
 };
 const canais = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 const nav = [
@@ -53,11 +56,13 @@ const nav = [
   ["categorias", "Categorias", "#"],
   ["embalagens", "Embalagens", "▢"],
   ["pedidos", "Pedidos", "▢"],
+  ["promocoes", "Promoções", "%"],
   ["estoque", "Estoque", "▦"],
   ["compras", "Compras", "↙"],
   ["fiscal", "Notas fiscais", "▧"],
   ["financeiro", "Financeiro", "◈"],
   ["precos", "Precificação", "↗"],
+  ["relatorios", "Relatórios", "▥"],
   ["inbox", "Atendimento", "☏"],
   ["studio", "Brand Studio", "✧"],
   ["mercado", "Mercado", "◉"],
@@ -76,9 +81,9 @@ const grupos: { id: string; rotulo: string; icone: string; itens: string[] }[] =
     icone: "▣",
     itens: ["produtos", "anuncios", "clientes", "fornecedores", "categorias", "embalagens"],
   },
-  { id: "vendas", rotulo: "Vendas", icone: "▢", itens: ["pedidos", "inbox"] },
+  { id: "vendas", rotulo: "Vendas", icone: "▢", itens: ["pedidos", "inbox", "promocoes"] },
   { id: "suprimentos", rotulo: "Suprimentos", icone: "▦", itens: ["estoque", "compras", "fiscal"] },
-  { id: "financas", rotulo: "Finanças", icone: "◈", itens: ["financeiro", "precos"] },
+  { id: "financas", rotulo: "Finanças", icone: "◈", itens: ["financeiro", "precos", "relatorios"] },
   { id: "marketing", rotulo: "Marketing", icone: "✧", itens: ["studio"] },
   { id: "mercado", rotulo: "Mercado", icone: "◉", itens: ["mercado"] },
   { id: "ia", rotulo: "Radar AI", icone: "✳", itens: ["ia"] },
@@ -128,6 +133,11 @@ const titles: Record<string, [string, string]> = {
   fornecedores: ["Seus fornecedores", "Contatos e prazos de quem abastece sua operação."],
   categorias: ["Categorias", "Organize o catálogo do jeito que seu cliente procura."],
   embalagens: ["Embalagens", "Custos e medidas das embalagens que você usa nos envios."],
+  promocoes: ["Promoções", "Planeje descontos por produto, canal e período, vendo a margem antes."],
+  relatorios: [
+    "Relatórios",
+    "Vendas, resultado, curva ABC e estoque do período, prontos para exportar.",
+  ],
 };
 async function call(path: string, body?: unknown, key?: string) {
   const res = await fetch("/api/radar" + path, {
@@ -312,7 +322,18 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
         amount("imposto", "Imposto total informado"),
         amount("ads", "Ads atribuídos"),
         amount("embalagem", "Embalagem"),
-        amount("desconto", "Desconto total"),
+        amount("desconto", "Desconto total (sem promoção)"),
+        {
+          key: "promocao_id",
+          label: "Promoção",
+          required: false,
+          options: [
+            { value: "", label: "Nenhuma" },
+            ...(data?.promocoes ?? [])
+              .filter((p) => situacao(p).vale)
+              .map((p) => ({ value: str(p.id), label: str(p.nome) })),
+          ],
+        },
       ],
     });
   }
@@ -364,7 +385,9 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   const liberadas = new Set(
     nav
       .map(([p]) => p)
-      .filter((p) => !(p === "financeiro" || p === "precos") || data.financeiroPermitido)
+      .filter(
+        (p) => !["financeiro", "precos", "relatorios"].includes(p) || data.financeiroPermitido,
+      )
       .filter((p) => p !== "auditoria" || can("DONO"))
       .filter(
         (p) => p !== "clientes" || can("DONO", "GESTOR", "ATENDIMENTO", "FINANCEIRO", "ANALISTA"),
@@ -1640,6 +1663,16 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               abrirModal={setModal}
             />
           )}
+          {page === "promocoes" && (
+            <Promocoes
+              promocoes={data.promocoes}
+              produtos={products}
+              podeEditar={can("DONO", "GESTOR", "MARKETING")}
+              veCusto={data.financeiroPermitido}
+              abrirModal={setModal}
+            />
+          )}
+          {page === "relatorios" && data.financeiroPermitido && <Relatorios />}
           {page === "mercado" && (
             <Mercado
               registros={data.registros}
@@ -1738,7 +1771,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             </section>
           )}
           {page === "guia" && <Guide step={tour} onStep={setTour} go={go} />}
-          {!data.financeiroPermitido && ["financeiro", "precos"].includes(page) && (
+          {!data.financeiroPermitido && ["financeiro", "precos", "relatorios"].includes(page) && (
             <Empty text="Seu cargo não tem acesso a dados financeiros." />
           )}
           <footer className="rd-footer">

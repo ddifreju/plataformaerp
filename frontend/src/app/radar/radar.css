@@ -1811,3 +1811,23 @@
   gap: 8px;
   margin-top: 14px;
 }
+
+/* Relatórios */
+.rd-relatorio-periodo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 14px;
+}
+.rd-relatorio-periodo label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.rd-relatorio-periodo input {
+  padding: 8px 10px;
+  border: 1px solid var(--rd-line);
+  border-radius: 8px;
+}

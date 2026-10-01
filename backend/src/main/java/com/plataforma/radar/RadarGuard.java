@@ -1,16 +1,19 @@
 package com.plataforma.radar;
 
-import java.io.IOException;
-import java.util.Set;
+import com.plataforma.autenticacao.UsuarioAutenticado;
+
+import jakarta.servlet.*;
+import jakarta.servlet.http.*;
+
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
-import com.plataforma.autenticacao.UsuarioAutenticado;
-import jakarta.servlet.*;
-import jakarta.servlet.http.*;
+
+import java.io.IOException;
+import java.util.Set;
 
 @Configuration
 public class RadarGuard {
@@ -30,7 +33,7 @@ public class RadarGuard {
                             String role =
                                     db.queryForObject(
                                             "select papel from usuario where tenant_id=? and id=?"
-                                                + " and ativo",
+                                                    + " and ativo",
                                             String.class,
                                             u.tenantId(),
                                             u.usuarioId());
@@ -58,7 +61,7 @@ public class RadarGuard {
                                 res.getWriter()
                                         .write(
                                                 "{\"mensagem\":\"Operação não permitida para esta"
-                                                    + " sessão.\"}");
+                                                        + " sessão.\"}");
                                 return;
                             }
                         }

@@ -1,10 +1,11 @@
 package com.plataforma.radar;
 
-import java.util.Map;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Map;
 
 @RestControllerAdvice(assignableTypes = RadarController.class)
 public class RadarErrors {
@@ -24,6 +25,6 @@ public class RadarErrors {
                         Map.of(
                                 "mensagem",
                                 "Registro duplicado ou vínculo inválido. Revise os dados e tente"
-                                    + " novamente."));
+                                        + " novamente."));
     }
 }

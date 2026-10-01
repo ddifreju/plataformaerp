@@ -1,17 +1,27 @@
 package com.plataforma.radar;
 
+import static com.plataforma.radar.RadarEntrada.confirmar;
+import static com.plataforma.radar.RadarEntrada.email;
+import static com.plataforma.radar.RadarEntrada.erro;
+import static com.plataforma.radar.RadarEntrada.id;
+import static com.plataforma.radar.RadarEntrada.inteiroOpcional;
+import static com.plataforma.radar.RadarEntrada.medidaOpcional;
+import static com.plataforma.radar.RadarEntrada.opcional;
+import static com.plataforma.radar.RadarEntrada.permitir;
+import static com.plataforma.radar.RadarEntrada.texto;
+import static com.plataforma.radar.RadarEntrada.valor;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.plataforma.comum.tenant.ContextoTenant;
-import java.math.BigDecimal;
+
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Cadastros do Radar (V018): clientes, fornecedores, categorias e embalagens.
@@ -125,8 +135,9 @@ public class RadarCadastros {
         };
         if (novo)
             db.update(
-                    "insert into radar_cliente(nome,email,telefone,cidade,uf,observacao,id,tenant_id)"
-                            + " values(?,?,?,?,?,?,?,?)",
+                    "insert into"
+                        + " radar_cliente(nome,email,telefone,cidade,uf,observacao,id,tenant_id)"
+                        + " values(?,?,?,?,?,?,?,?)",
                     concat(valores, id, tenant()));
         else
             confirmar(
@@ -192,98 +203,20 @@ public class RadarCadastros {
         else
             confirmar(
                     db.update(
-                            "update radar_embalagem set nome=?,custo=?,comprimento_cm=?,"
-                                    + "largura_cm=?,altura_cm=?,peso_g=? where id=? and tenant_id=?",
+                            "update radar_embalagem set"
+                                + " nome=?,custo=?,comprimento_cm=?,largura_cm=?,altura_cm=?,peso_g=?"
+                                + " where id=? and tenant_id=?",
                             concat(valores, id, tenant())));
     }
-
-    private List<Map<String, Object>> linhas(String tabela) {
-        return db.queryForList(
-                "select * from " + tabela + " where tenant_id=? order by nome limit 1000", tenant());
-    }
-
-    // ---- validação de entrada -------------------------------------------------------------
 
     private static UUID tenant() {
         return ContextoTenant.atual();
     }
 
-    private static void permitir(String papel, String... papeis) {
-        if (!Set.of(papeis).contains(papel))
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "Seu cargo não permite esta ação.");
-    }
-
-    private static void erro(String mensagem) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, mensagem);
-    }
-
-    private static void confirmar(int linhasAlteradas) {
-        if (linhasAlteradas == 0)
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Registro não encontrado.");
-    }
-
-    private static UUID id(JsonNode n, String campo) {
-        try {
-            return UUID.fromString(n.path(campo).asText());
-        } catch (IllegalArgumentException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Identificador inválido.");
-        }
-    }
-
-    private static String texto(JsonNode n, String campo, int max) {
-        String s = n.path(campo).asText("").trim();
-        if (s.isBlank() || s.length() > max) erro("Confira o campo " + campo + ".");
-        return s;
-    }
-
-    private static String opcional(JsonNode n, String campo, int max) {
-        String s = n.path(campo).asText("").trim();
-        if (s.length() > max) erro("Confira o campo " + campo + ".");
-        return s.isBlank() ? null : s;
-    }
-
-    private static String email(JsonNode n) {
-        String s = opcional(n, "email", 320);
-        if (s != null && !s.matches("[^\\s@]+@[^\\s@]+")) erro("E-mail inválido.");
-        return s == null ? null : s.toLowerCase();
-    }
-
-    private static Integer inteiroOpcional(JsonNode n, String campo, int min, int max) {
-        String s = n.path(campo).asText("").trim();
-        if (s.isBlank()) return null;
-        try {
-            int v = Integer.parseInt(s);
-            if (v < min || v > max) erro("Valor fora do limite: " + campo);
-            return v;
-        } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Número inválido: " + campo);
-        }
-    }
-
-    // Dinheiro: BigDecimal com escala 2, sem arredondamento silencioso (regra 2).
-    private static BigDecimal valor(JsonNode n, String campo) {
-        try {
-            BigDecimal v = new BigDecimal(n.path(campo).asText("0").trim());
-            if (v.signum() < 0 || v.scale() > 2 || v.compareTo(new BigDecimal("999999999")) > 0)
-                erro("Valor inválido: " + campo);
-            return v.setScale(2);
-        } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido: " + campo);
-        }
-    }
-
-    private static BigDecimal medidaOpcional(JsonNode n, String campo) {
-        String s = n.path(campo).asText("").trim();
-        if (s.isBlank()) return null;
-        try {
-            BigDecimal v = new BigDecimal(s);
-            if (v.signum() <= 0 || v.scale() > 1 || v.compareTo(new BigDecimal("9999999")) > 0)
-                erro("Medida inválida: " + campo);
-            return v;
-        } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Medida inválida: " + campo);
-        }
+    private List<Map<String, Object>> linhas(String tabela) {
+        return db.queryForList(
+                "select * from " + tabela + " where tenant_id=? order by nome limit 1000",
+                tenant());
     }
 
     private static Object[] concat(Object[] valores, Object... extras) {

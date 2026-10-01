@@ -1,9 +1,11 @@
 package com.plataforma.radar;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
+import org.springframework.web.bind.annotation.*;
+
 import java.util.Map;
 import java.util.UUID;
-import org.springframework.web.bind.annotation.*;
-import com.fasterxml.jackson.databind.JsonNode;
 
 @RestController
 @RequestMapping("/api/radar")
@@ -23,6 +25,12 @@ public class RadarController {
     public Map<String, Object> comando(
             @RequestHeader("Idempotency-Key") UUID chave, @RequestBody JsonNode body) {
         return service.comando(chave, body);
+    }
+
+    @GetMapping("/relatorios")
+    public Map<String, Object> relatorios(
+            @RequestParam(required = false) String de, @RequestParam(required = false) String ate) {
+        return service.relatorios(de, ate);
     }
 
     @PostMapping(value = "/perguntar", consumes = "application/json")
