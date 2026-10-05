@@ -974,6 +974,7 @@ public class RadarService {
                 else if (op.equals("clientes_lote")) result.putAll(clientes.lote(n, papel()));
                 else if (RadarClientes.OPERACOES.contains(op))
                     result.putAll(clientes.salvar(n, papel()));
+                else if (op.equals("produtos_lote")) result.putAll(produtos.lote(n, papel()));
                 else if (RadarProdutos.OPERACOES.contains(op))
                     result.putAll(produtos.salvar(n, papel()));
                 else if (RadarPromocoes.OPERACOES.contains(op))

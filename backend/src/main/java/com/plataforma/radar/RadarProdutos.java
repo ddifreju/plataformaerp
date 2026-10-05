@@ -43,6 +43,35 @@ public class RadarProdutos {
 
     static final Set<String> OPERACOES = Set.of("produto_salvar");
 
+    private static final int MAX_LOTE = 500;
+
+    /** Campos que "editar dados em massa" pode mudar, com o tipo de valor de cada um. */
+    private static final Map<String, String> CAMPOS_LOTE =
+            Map.ofEntries(
+                    Map.entry("preco", "DINHEIRO"),
+                    Map.entry("custo", "DINHEIRO"),
+                    Map.entry("preco_promocional", "DINHEIRO"),
+                    Map.entry("marca", "TEXTO"),
+                    Map.entry("categoria_id", "CATEGORIA"),
+                    Map.entry("embalagem_id", "EMBALAGEM"),
+                    Map.entry("ncm", "NCM"),
+                    Map.entry("cest", "CEST"),
+                    Map.entry("origem", "ORIGEM"),
+                    Map.entry("unidade", "UNIDADE"),
+                    Map.entry("condicao", "CONDICAO"),
+                    Map.entry("minimo", "INTEIRO"),
+                    Map.entry("maximo", "INTEIRO"),
+                    Map.entry("dias_preparacao", "INTEIRO"),
+                    Map.entry("garantia_meses", "INTEIRO"),
+                    Map.entry("garantia_tipo", "GARANTIA"),
+                    Map.entry("peso_bruto_kg", "PESO"),
+                    Map.entry("peso_liquido_kg", "PESO"),
+                    Map.entry("largura_cm", "MEDIDA"),
+                    Map.entry("altura_cm", "MEDIDA"),
+                    Map.entry("comprimento_cm", "MEDIDA"),
+                    Map.entry("controla_estoque", "SIM_NAO"),
+                    Map.entry("permite_venda", "SIM_NAO"));
+
     static final int MAX_TIPOS_VARIACAO = 3;
     static final int MAX_IMAGENS = 12;
     static final int MAX_BYTES_IMAGEM = 2 * 1024 * 1024;
@@ -631,6 +660,375 @@ public class RadarProdutos {
                         // ser incompleto.
                         + ",incompleto=false,atualizado_em=now() where tenant_id=? and id=?",
                 valores.toArray());
+    }
+
+    // ---- lote --------------------------------------------------------------------------------
+
+    /**
+     * Ações em lote sobre os produtos marcados. Valem também para as variações dos produtos
+     * marcados (é a variação que é vendida e estocada).
+     */
+    Map<String, Object> lote(JsonNode n, String papel) {
+        permitir(papel, "DONO", "GESTOR");
+        List<UUID> marcados = new ArrayList<>();
+        JsonNode lista = n.path("ids");
+        if (!lista.isArray() || lista.isEmpty() || lista.size() > MAX_LOTE)
+            erro("Escolha entre 1 e " + MAX_LOTE + " produtos.");
+        for (JsonNode i : lista) {
+            try {
+                UUID u = UUID.fromString(i.asText());
+                if (!marcados.contains(u)) marcados.add(u);
+            } catch (IllegalArgumentException e) {
+                erro("Identificador inválido.");
+            }
+        }
+        UUID[] arr = marcados.toArray(UUID[]::new);
+        Integer existentes =
+                db.queryForObject(
+                        "select count(*) from radar_produto where tenant_id=? and id = any(?)",
+                        Integer.class,
+                        tenant(),
+                        arr);
+        if (existentes == null || existentes != marcados.size())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Produto não encontrado.");
+        List<UUID> alvo =
+                db.queryForList(
+                        "select id from radar_produto where tenant_id=? and (id = any(?) or pai_id"
+                                + " = any(?))",
+                        UUID.class,
+                        tenant(),
+                        arr,
+                        arr);
+        String acao = n.path("acao").asText("");
+        return switch (acao) {
+            case "EDITAR" -> editarEmMassa(n, alvo);
+            case "PREENCHER" -> {
+                if (marcados.size() != 1) erro("Preencha um produto por vez.");
+                yield preencher(n, marcados.getFirst(), alvo);
+            }
+            case "TAGS" -> alterarTags(n, alvo);
+            case "INATIVAR", "ATIVAR" -> {
+                int k =
+                        db.update(
+                                "update radar_produto set permite_venda=?,atualizado_em=now()"
+                                        + " where tenant_id=? and id = any(?)",
+                                acao.equals("ATIVAR"),
+                                tenant(),
+                                alvo.toArray(UUID[]::new));
+                yield Map.of(
+                        "mensagem",
+                        k
+                                + (acao.equals("ATIVAR")
+                                        ? " produto(s) liberados para venda."
+                                        : " produto(s) inativados: saem da venda, o histórico"
+                                                + " continua."));
+            }
+            case "EXCLUIR_ANEXOS" -> {
+                int k =
+                        db.update(
+                                "delete from radar_produto_imagem where tenant_id=? and produto_id"
+                                        + " = any(?)",
+                                tenant(),
+                                alvo.toArray(UUID[]::new));
+                yield Map.of("mensagem", k + " imagem(ns) removida(s) dos produtos.");
+            }
+            case "EXCLUIR" -> excluirProdutos(alvo);
+            default -> {
+                erro("Ação em lote não reconhecida.");
+                yield Map.of();
+            }
+        };
+    }
+
+    /**
+     * Preenchimento rápido de pendência (um produto por vez): além dos campos de "editar em massa",
+     * aceita o que é único de cada produto (código de barras, descrição) e o fornecedor.
+     */
+    private Map<String, Object> preencher(JsonNode n, UUID produto, List<UUID> alvo) {
+        String campo = n.path("campo").asText("");
+        switch (campo) {
+            case "gtin" -> {
+                String gtin = opcional(n, "valor", 14);
+                if (gtin == null || !gtinValido(gtin))
+                    erro("Código de barras (GTIN) inválido: confira os dígitos.");
+                db.update(
+                        "update radar_produto set gtin=?, motivo_sem_gtin=null, atualizado_em=now()"
+                                + " where tenant_id=? and id=?",
+                        gtin,
+                        tenant(),
+                        produto);
+            }
+            case "motivo_sem_gtin" -> {
+                String motivo = opcional(n, "valor", 30);
+                if (motivo == null || !MOTIVOS_SEM_GTIN.contains(motivo))
+                    erro("Escolha o motivo de não ter código de barras.");
+                db.update(
+                        "update radar_produto set motivo_sem_gtin=?, atualizado_em=now() where"
+                                + " tenant_id=? and (id=? or pai_id=?) and gtin is null",
+                        motivo,
+                        tenant(),
+                        produto,
+                        produto);
+            }
+            case "descricao" -> {
+                String descricao = textoOuVazio(n, "valor", 20000);
+                if (descricao.isBlank()) erro("A descrição é obrigatória.");
+                db.update(
+                        "update radar_produto set descricao=?, atualizado_em=now() where"
+                                + " tenant_id=? and id=?",
+                        descricao,
+                        tenant(),
+                        produto);
+            }
+            case "fornecedor_id" -> {
+                UUID fornecedor = id(n, "valor");
+                Integer eh =
+                        db.queryForObject(
+                                "select count(*) from radar_cliente where tenant_id=? and id=?"
+                                        + " and tipos_contato @> '[\"FORNECEDOR\"]'",
+                                Integer.class,
+                                tenant(),
+                                fornecedor);
+                if (eh == null || eh == 0) erro("Fornecedor não encontrado.");
+                db.update(
+                        "insert into radar_produto_fornecedor(tenant_id,produto_id,fornecedor_id)"
+                                + " select ?,?,? where not exists (select 1 from"
+                                + " radar_produto_fornecedor where tenant_id=? and produto_id=?"
+                                + " and fornecedor_id=?)",
+                        tenant(),
+                        produto,
+                        fornecedor,
+                        tenant(),
+                        produto,
+                        fornecedor);
+            }
+            default -> {
+                return editarEmMassa(n, alvo);
+            }
+        }
+        return Map.of("mensagem", "Produto atualizado.");
+    }
+
+    private Map<String, Object> editarEmMassa(JsonNode n, List<UUID> alvo) {
+        String campo = n.path("campo").asText("");
+        String tipo = CAMPOS_LOTE.get(campo);
+        if (tipo == null) erro("Campo não pode ser editado em massa.");
+        UUID[] ids = alvo.toArray(UUID[]::new);
+        String modo = n.path("modo").asText("DEFINIR");
+        int k;
+        if (tipo.equals("DINHEIRO") && !modo.equals("DEFINIR")) {
+            // Reajuste: percentual com até duas casas, ou valor somado; resultado com 2 casas,
+            // arredondado meio para cima (regra 2).
+            BigDecimal fator = decimalOpcional(n, "valor", 2);
+            if (fator == null) erro("Informe o percentual ou o valor do reajuste.");
+            String expressao =
+                    switch (modo) {
+                        case "AUMENTAR_PCT" -> campo + " * (1 + ?/100)";
+                        case "REDUZIR_PCT" -> campo + " * (1 - ?/100)";
+                        case "SOMAR" -> campo + " + ?";
+                        case "SUBTRAIR" -> campo + " - ?";
+                        default -> {
+                            erro("Modo de reajuste inválido.");
+                            yield "";
+                        }
+                    };
+            if (modo.equals("REDUZIR_PCT") && fator.compareTo(new BigDecimal("100")) >= 0)
+                erro("A redução precisa ser menor que 100%.");
+            String filtroKit = campo.equals("custo") ? " and tipo<>'KIT'" : "";
+            // Preço e custo novos não podem ficar negativos nem zerar o preço.
+            Integer invalidos =
+                    db.queryForObject(
+                            "select count(*) from radar_produto where tenant_id=? and id = any(?)"
+                                    + " and "
+                                    + campo
+                                    + " is not null and round("
+                                    + expressao
+                                    + ", 2) "
+                                    + (campo.equals("preco") ? "<= 0" : "< 0")
+                                    + filtroKit,
+                            Integer.class,
+                            tenant(),
+                            ids,
+                            fator);
+            if (invalidos != null && invalidos > 0)
+                erro("O reajuste deixaria " + invalidos + " produto(s) com valor inválido.");
+            k =
+                    db.update(
+                            "update radar_produto set "
+                                    + campo
+                                    + " = round("
+                                    + expressao
+                                    + ", 2), atualizado_em=now() where tenant_id=? and id = any(?)"
+                                    + " and "
+                                    + campo
+                                    + " is not null"
+                                    + filtroKit,
+                            fator,
+                            tenant(),
+                            ids);
+        } else {
+            Object valor = valorDoLote(n, campo, tipo);
+            String filtroKit = campo.equals("custo") ? " and tipo<>'KIT'" : "";
+            // campo vem só de CAMPOS_LOTE (chaves fixas), nunca do texto da requisição.
+            k =
+                    db.update(
+                            "update radar_produto set "
+                                    + campo
+                                    + " = ?, atualizado_em=now() where tenant_id=? and id = any(?)"
+                                    + filtroKit,
+                            valor,
+                            tenant(),
+                            ids);
+        }
+        return Map.of(
+                "mensagem",
+                k
+                        + " produto(s) atualizado(s)."
+                        + (campo.equals("custo")
+                                ? " O custo de kit vem dos componentes e não muda."
+                                : ""));
+    }
+
+    /** Valor validado do campo; vazio limpa o campo quando ele é opcional. */
+    private Object valorDoLote(JsonNode n, String campo, String tipo) {
+        String texto = n.path("valor").asText("").trim();
+        boolean vazio = texto.isEmpty();
+        Set<String> obrigatorios =
+                Set.of(
+                        "preco",
+                        "custo",
+                        "marca",
+                        "categoria_id",
+                        "ncm",
+                        "origem",
+                        "unidade",
+                        "condicao",
+                        "peso_bruto_kg",
+                        "controla_estoque",
+                        "permite_venda");
+        if (vazio && obrigatorios.contains(campo))
+            erro("Esse campo é obrigatório no produto: informe um valor.");
+        return switch (tipo) {
+            case "DINHEIRO" -> {
+                if (vazio) yield null;
+                BigDecimal v = valor(n, "valor");
+                if (campo.equals("preco") && v.signum() == 0)
+                    erro("Preço deve ser maior que zero.");
+                yield v;
+            }
+            case "TEXTO" -> textoOuVazio(n, "valor", 120);
+            case "CATEGORIA" -> {
+                if (vazio) yield null;
+                UUID id = id(n, "valor");
+                existe("radar_categoria", id, "Categoria não encontrada.");
+                yield id;
+            }
+            case "EMBALAGEM" -> {
+                if (vazio) yield null;
+                UUID id = id(n, "valor");
+                existe("radar_embalagem", id, "Embalagem não encontrada.");
+                yield id;
+            }
+            case "NCM" -> digitos(n, "valor", 8, "NCM deve ter 8 dígitos.");
+            case "CEST" -> digitos(n, "valor", 7, "CEST deve ter 7 dígitos.");
+            case "ORIGEM" -> inteiroOpcional(n, "valor", 0, 8);
+            case "UNIDADE" -> {
+                String u = texto.toUpperCase();
+                if (!UNIDADES.contains(u)) erro("Unidade inválida.");
+                yield u;
+            }
+            case "CONDICAO" ->
+                    escolha(n, "valor", Set.of("NOVO", "USADO", "RECONDICIONADO"), "NOVO");
+            case "GARANTIA" ->
+                    escolhaOpcional(n, "valor", Set.of("VENDEDOR", "FABRICANTE", "SEM_GARANTIA"));
+            case "INTEIRO" -> {
+                Integer v = inteiroOpcional(n, "valor", 0, 1_000_000);
+                if (v == null && (campo.equals("minimo"))) yield 0;
+                yield v;
+            }
+            case "PESO" -> decimalOpcional(n, "valor", 3);
+            case "MEDIDA" -> medidaOpcional(n, "valor");
+            case "SIM_NAO" -> {
+                if (!Set.of("true", "false").contains(texto)) erro("Escolha Sim ou Não.");
+                yield Boolean.parseBoolean(texto);
+            }
+            default -> {
+                erro("Campo não pode ser editado em massa.");
+                yield null;
+            }
+        };
+    }
+
+    private Map<String, Object> alterarTags(JsonNode n, List<UUID> alvo) {
+        String modo = n.path("modo").asText("ADICIONAR");
+        String tags = listaDeTextos(n, "tags", 30, 60);
+        UUID[] ids = alvo.toArray(UUID[]::new);
+        String sql =
+                switch (modo) {
+                    case "ADICIONAR" ->
+                            "update radar_produto set tags = (select coalesce(jsonb_agg(distinct"
+                                    + " t), '[]'::jsonb) from jsonb_array_elements_text(tags ||"
+                                    + " ?::jsonb) t), atualizado_em=now() where tenant_id=? and id"
+                                    + " = any(?)";
+                    case "REMOVER" ->
+                            "update radar_produto set tags = (select coalesce(jsonb_agg(t),"
+                                    + " '[]'::jsonb) from jsonb_array_elements_text(tags) t where"
+                                    + " not (to_jsonb(t) <@ ?::jsonb)), atualizado_em=now() where"
+                                    + " tenant_id=? and id = any(?)";
+                    case "SUBSTITUIR" ->
+                            "update radar_produto set tags = ?::jsonb, atualizado_em=now() where"
+                                    + " tenant_id=? and id = any(?)";
+                    default -> {
+                        erro("Modo de tags inválido.");
+                        yield "";
+                    }
+                };
+        int k = db.update(sql, tags, tenant(), ids);
+        return Map.of("mensagem", "Tags alteradas em " + k + " produto(s).");
+    }
+
+    /**
+     * Exclui só produto sem histórico: pedido, anúncio, movimento de estoque ou uso como componente
+     * de kit mantêm o produto (o número precisa continuar rastreável). Para esses, a saída é
+     * inativar.
+     */
+    private Map<String, Object> excluirProdutos(List<UUID> alvo) {
+        UUID[] ids = alvo.toArray(UUID[]::new);
+        List<String> presos =
+                db.queryForList(
+                        "select p.sku from radar_produto p where p.tenant_id=? and p.id = any(?)"
+                                + " and (exists(select 1 from radar_pedido x where"
+                                + " x.tenant_id=p.tenant_id and x.produto_id=p.id) or exists(select"
+                                + " 1 from radar_anuncio x where x.tenant_id=p.tenant_id and"
+                                + " x.produto_id=p.id) or exists(select 1 from radar_movimento x"
+                                + " where x.tenant_id=p.tenant_id and x.produto_id=p.id) or"
+                                + " exists(select 1 from radar_kit_item x where"
+                                + " x.tenant_id=p.tenant_id and x.componente_id=p.id and not"
+                                + " (x.kit_id = any(?)))) order by p.sku",
+                        String.class,
+                        tenant(),
+                        ids,
+                        ids);
+        if (!presos.isEmpty())
+            erro(
+                    "Não dá para excluir produto com histórico (pedido, anúncio, estoque ou kit): "
+                            + String.join(", ", presos)
+                            + ". Inative esses produtos em vez de excluir.");
+        for (String tabela : List.of("radar_produto_imagem", "radar_produto_fornecedor"))
+            db.update(
+                    "delete from " + tabela + " where tenant_id=? and produto_id = any(?)",
+                    tenant(),
+                    ids);
+        db.update(
+                "delete from radar_kit_item where tenant_id=? and kit_id = any(?)", tenant(), ids);
+        // Variações antes do produto principal (pai_id aponta para ele).
+        db.update(
+                "delete from radar_produto where tenant_id=? and id = any(?) and pai_id is not"
+                        + " null",
+                tenant(),
+                ids);
+        db.update("delete from radar_produto where tenant_id=? and id = any(?)", tenant(), ids);
+        return Map.of("mensagem", alvo.size() + " produto(s) excluído(s).");
     }
 
     private Map<String, Object> linhaParaAtualizar(UUID id) {

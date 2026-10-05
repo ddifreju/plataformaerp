@@ -2435,3 +2435,107 @@ img.rd-product-thumb {
     right: 0;
   }
 }
+.rd-mais-acoes ul.rd-menu-longo {
+  max-height: 70vh;
+  overflow-y: auto;
+  min-width: 330px;
+}
+.rd-mais-acoes li.rd-menu-sep:empty {
+  margin: 4px 0;
+  padding: 0;
+}
+
+/* Pendências e preenchimento rápido */
+.rd-pendencias {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+.rd-pendencias-ok {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+}
+.rd-pendencias-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rd-pendencias-chips button {
+  border: 1px solid #fcd34d;
+  background: white;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: #92400e;
+}
+.rd-pendencias-chips b {
+  color: #b45309;
+}
+.rd-preencher-lista {
+  display: grid;
+  gap: 6px;
+}
+.rd-preencher-linha {
+  display: grid;
+  grid-template-columns: 44px minmax(160px, 1fr) minmax(220px, 1.4fr) 110px;
+  gap: 12px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--rd-line);
+  border-radius: 10px;
+}
+.rd-preencher-linha.ok {
+  border-color: #a7f3d0;
+  background: #f0fdf4;
+}
+.rd-preencher-linha.erro {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+.rd-preencher-nome {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.rd-preencher-nome small {
+  color: var(--rd-muted);
+}
+.rd-preencher-campo input,
+.rd-preencher-campo select,
+.rd-preencher-campo textarea {
+  width: 100%;
+}
+.rd-preencher-medidas {
+  display: flex;
+  gap: 6px;
+}
+.rd-preencher-estado {
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+}
+.rd-preencher-estado small {
+  font-weight: 400;
+  color: #b91c1c;
+}
+@media (max-width: 720px) {
+  .rd-preencher-linha {
+    grid-template-columns: 44px 1fr;
+  }
+  .rd-preencher-campo,
+  .rd-preencher-estado {
+    grid-column: 1 / -1;
+  }
+  .rd-preencher-medidas {
+    flex-wrap: wrap;
+  }
+}
