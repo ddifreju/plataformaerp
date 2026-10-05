@@ -23,6 +23,7 @@ import ProdutoForm, { type Aba as AbaProduto } from "./produto";
 import Clientes from "./cliente";
 import Vendedores from "./vendedor";
 import ProdutosLote from "./produtos-lote";
+import PedidosLote from "./pedidos-lote";
 import Pendencias from "./pendencias";
 import Anuncios from "./anuncios";
 import Categorias from "./categorias";
@@ -203,7 +204,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     } | null>(null),
     [menu, setMenu] = useState(false),
     // Produtos marcados na lista para as ações em lote.
-    [marcadosProdutos, setMarcadosProdutos] = useState<string[]>([]);
+    [marcadosProdutos, setMarcadosProdutos] = useState<string[]>([]),
+    [marcadosPedidos, setMarcadosPedidos] = useState<string[]>([]);
   const refresh = useCallback(async () => {
     const d = await call("");
     setData(d);
@@ -917,89 +919,111 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           )}
           {page === "pedidos" && (
             <section className="rd-card">
-              <Table
-                headers={[
-                  "Pedido / cliente",
-                  "Produto",
-                  "Canal",
-                  "Valor bruto",
-                  "Estado",
-                  "Próxima etapa",
-                ]}
-                rows={orders.map((o) => [
-                  <>
-                    <strong>{str(o.numero)}</strong>
-                    <small>{str(o.cliente)}</small>
-                  </>,
-                  `${o.quantidade} × ${prod(o.produto_id)?.nome}`,
-                  str(o.canal),
-                  centMoney(cents(o.preco) * Number(o.quantidade)),
-                  <Badge tone={o.estado === "EXPEDIDO" ? "green" : "blue"}>{str(o.estado)}</Badge>,
-                  <div className="rd-row-actions">
-                    {can("DONO", "GESTOR", "ESTOQUE") &&
-                      ["RESERVADO", "SEPARADO"].includes(str(o.estado)) && (
-                        <button
-                          disabled={busy}
-                          onClick={() =>
-                            o.estado === "RESERVADO"
-                              ? command({ op: "pedido_estado", id: o.id, estado: "SEPARADO" })
-                              : setModal({
-                                  title: "Simular expedição local",
-                                  op: "pedido_estado",
-                                  extra: {
-                                    id: o.id,
-                                    estado: "EXPEDIDO",
-                                    confirmar_simulacao: true,
+              <PedidosLote
+                ativo={can("DONO", "GESTOR")}
+                pedidos={orders}
+                linhas={orders}
+                produtos={products}
+                marcados={marcadosPedidos}
+                setMarcados={setMarcadosPedidos}
+                veFinanceiro={data.financeiroPermitido}
+                executar={command}
+              >
+                {(lote) => (
+                  <Table
+                    headers={[
+                      lote.cabecalho,
+                      "Pedido / cliente",
+                      "Produto",
+                      "Canal",
+                      "Valor bruto",
+                      "Estado",
+                      "Próxima etapa",
+                    ]}
+                    rows={orders.map((o) => [
+                      lote.celula(o),
+                      <>
+                        <strong>{str(o.numero)}</strong>
+                        <small>{str(o.cliente)}</small>
+                        {Array.isArray(o.marcadores) && o.marcadores.length > 0 && (
+                          <span className="rd-marcadores">
+                            {(o.marcadores as string[]).map((m) => (
+                              <span key={m}>{m}</span>
+                            ))}
+                          </span>
+                        )}
+                      </>,
+                      `${o.quantidade} × ${prod(o.produto_id)?.nome}`,
+                      str(o.canal),
+                      centMoney(cents(o.preco) * Number(o.quantidade)),
+                      <Badge tone={o.estado === "EXPEDIDO" ? "green" : "blue"}>{str(o.estado)}</Badge>,
+                      <div className="rd-row-actions">
+                        {can("DONO", "GESTOR", "ESTOQUE") &&
+                          ["RESERVADO", "SEPARADO"].includes(str(o.estado)) && (
+                            <button
+                              disabled={busy}
+                              onClick={() =>
+                                o.estado === "RESERVADO"
+                                  ? command({ op: "pedido_estado", id: o.id, estado: "SEPARADO" })
+                                  : setModal({
+                                      title: "Simular expedição local",
+                                      op: "pedido_estado",
+                                      extra: {
+                                        id: o.id,
+                                        estado: "EXPEDIDO",
+                                        confirmar_simulacao: true,
+                                      },
+                                      fields: [
+                                        {
+                                          key: "confirmacao",
+                                          label:
+                                            "Esta simulação baixa o estoque. Não emite NF-e nem contrata frete.",
+                                          value: "Confirmar somente no ambiente local",
+                                        },
+                                      ],
+                                    })
+                              }
+                            >
+                              {o.estado === "RESERVADO" ? "Separar" : "Simular expedição"}
+                            </button>
+                          )}
+                        {can("DONO", "GESTOR") && ["RESERVADO", "SEPARADO"].includes(str(o.estado)) && (
+                          <button
+                            onClick={() =>
+                              command({ op: "pedido_estado", id: o.id, estado: "CANCELADO" })
+                            }
+                          >
+                            Cancelar
+                          </button>
+                        )}
+                        {can("DONO", "GESTOR") && o.estado === "EXPEDIDO" && (
+                          <button
+                            onClick={() =>
+                              setModal({
+                                title: "Registrar devolução completa local",
+                                op: "pedido_estado",
+                                extra: { id: o.id, estado: "DEVOLVIDO" },
+                                fields: [
+                                  {
+                                    key: "retornar_estoque",
+                                    label: "Produto inspecionado e apto para revenda?",
+                                    options: [
+                                      { value: "false", label: "Não — registrar perda" },
+                                      { value: "true", label: "Sim — devolver ao disponível" },
+                                    ],
                                   },
-                                  fields: [
-                                    {
-                                      key: "confirmacao",
-                                      label:
-                                        "Esta simulação baixa o estoque. Não emite NF-e nem contrata frete.",
-                                      value: "Confirmar somente no ambiente local",
-                                    },
-                                  ],
-                                })
-                          }
-                        >
-                          {o.estado === "RESERVADO" ? "Separar" : "Simular expedição"}
-                        </button>
-                      )}
-                    {can("DONO", "GESTOR") && ["RESERVADO", "SEPARADO"].includes(str(o.estado)) && (
-                      <button
-                        onClick={() =>
-                          command({ op: "pedido_estado", id: o.id, estado: "CANCELADO" })
-                        }
-                      >
-                        Cancelar
-                      </button>
-                    )}
-                    {can("DONO", "GESTOR") && o.estado === "EXPEDIDO" && (
-                      <button
-                        onClick={() =>
-                          setModal({
-                            title: "Registrar devolução completa local",
-                            op: "pedido_estado",
-                            extra: { id: o.id, estado: "DEVOLVIDO" },
-                            fields: [
-                              {
-                                key: "retornar_estoque",
-                                label: "Produto inspecionado e apto para revenda?",
-                                options: [
-                                  { value: "false", label: "Não — registrar perda" },
-                                  { value: "true", label: "Sim — devolver ao disponível" },
                                 ],
-                              },
-                            ],
-                          })
-                        }
-                      >
-                        Devolver
-                      </button>
-                    )}
-                  </div>,
-                ])}
-              />
+                              })
+                            }
+                          >
+                            Devolver
+                          </button>
+                        )}
+                      </div>,
+                    ])}
+                  />
+                )}
+              </PedidosLote>
             </section>
           )}
           {page === "estoque" && (

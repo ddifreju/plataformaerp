@@ -2671,3 +2671,52 @@ ul.rd-menu-linha li button:disabled {
   color: #047857;
   font-weight: 600;
 }
+.rd-barra-destaque strong {
+  color: var(--rd-blue);
+}
+.rd-barra-totais {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-left: auto;
+}
+.rd-barra-totais .rd-barra-total {
+  margin-left: 0;
+}
+.rd-barra-lote > button,
+.rd-barra-lote .rd-mais-acoes > button {
+  font-size: 13px;
+  padding: 7px 11px;
+}
+.rd-marcadores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.rd-marcadores span {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+}
+/* Barra com muitos botões e totais (pedidos): cabe numa linha em telas de notebook */
+.rd-barra-lote.rd-barra-compacta {
+  gap: 6px;
+  padding: 8px 10px;
+}
+.rd-barra-compacta > button,
+.rd-barra-compacta .rd-mais-acoes > button {
+  font-size: 12.5px;
+  padding: 6px 9px;
+}
+.rd-barra-compacta .rd-barra-totais {
+  gap: 10px;
+}
+.rd-barra-compacta .rd-barra-qtd {
+  margin-right: 0;
+}
+.rd-barra-compacta .rd-barra-total small {
+  font-size: 11px;
+}

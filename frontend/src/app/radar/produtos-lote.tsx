@@ -116,13 +116,13 @@ const MODOS: [string, string][] = [
   ["SUBTRAIR", "Subtrair R$"],
 ];
 
-const esc = (t: unknown) =>
+export const esc = (t: unknown) =>
   str(t).replace(
     /[&<>"]/g,
     (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!,
   );
 
-function imprimir(titulo: string, corpo: string, estilo: string) {
+export function imprimir(titulo: string, corpo: string, estilo: string) {
   const janela = window.open("", "_blank");
   if (!janela) return false;
   janela.document
