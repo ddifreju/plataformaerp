@@ -1,7 +1,6 @@
 package com.plataforma.radar;
 
 import static com.plataforma.radar.RadarEntrada.confirmar;
-import static com.plataforma.radar.RadarEntrada.email;
 import static com.plataforma.radar.RadarEntrada.erro;
 import static com.plataforma.radar.RadarEntrada.id;
 import static com.plataforma.radar.RadarEntrada.inteiroOpcional;
@@ -27,8 +26,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Cadastros do Radar (V018): fornecedores, categorias e embalagens. Clientes ficam em {@link
- * RadarClientes}.
+ * Cadastros do Radar (V018): categorias e embalagens. Clientes, fornecedores e transportadores
+ * ficam em {@link RadarClientes}; vendedores em {@link RadarVendedores}.
  *
  * <p>Chamado pelo {@link RadarService}, que cuida de trava por tenant, idempotência e auditoria.
  * Toda query leva {@code tenant_id} explícito; o RLS da V018 é a segunda camada.
@@ -38,8 +37,6 @@ public class RadarCadastros {
 
     static final Set<String> OPERACOES =
             Set.of(
-                    "fornecedor",
-                    "fornecedor_atualizar",
                     "categoria",
                     "categoria_atualizar",
                     "embalagem",
@@ -193,9 +190,6 @@ public class RadarCadastros {
                             "0.5",
                             List.of("papelão", "chapa", "proteção")));
 
-    private static final Set<String> VEEM_FORNECEDORES =
-            Set.of("DONO", "GESTOR", "ESTOQUE", "FINANCEIRO");
-
     private final JdbcTemplate db;
     private final ObjectMapper json;
 
@@ -207,9 +201,6 @@ public class RadarCadastros {
     /** Listas que entram na resposta de GET /api/radar, filtradas pelo cargo. */
     Map<String, Object> dados(String papel, boolean financeiro) {
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put(
-                "fornecedores",
-                VEEM_FORNECEDORES.contains(papel) ? linhas("radar_fornecedor") : List.of());
         out.put("categorias", linhas("radar_categoria"));
         out.put(
                 "categoriaCanais",
@@ -231,11 +222,6 @@ public class RadarCadastros {
         boolean novo = !op.endsWith("_atualizar");
         UUID id = novo ? UUID.randomUUID() : id(n, "id");
         switch (op) {
-            case "fornecedor", "fornecedor_atualizar" -> {
-                permitir(papel, "DONO", "GESTOR", "ESTOQUE");
-                salvarFornecedor(id, n, novo);
-                r.put("mensagem", novo ? "Fornecedor cadastrado." : "Fornecedor atualizado.");
-            }
             case "categoria", "categoria_atualizar" -> {
                 permitir(papel, "DONO", "GESTOR", "MARKETING");
                 salvarCategoria(id, n, novo);
@@ -272,31 +258,6 @@ public class RadarCadastros {
                 String.class,
                 tenant(),
                 clienteId);
-    }
-
-    private void salvarFornecedor(UUID id, JsonNode n, boolean novo) {
-        Object[] valores = {
-            texto(n, "nome", 200),
-            opcional(n, "documento", 18),
-            opcional(n, "contato", 160),
-            email(n),
-            opcional(n, "telefone", 40),
-            inteiroOpcional(n, "prazo_entrega_dias", 0, 365),
-            opcional(n, "observacao", 1000)
-        };
-        if (novo)
-            db.update(
-                    "insert into radar_fornecedor(nome,documento,contato,email,telefone,"
-                            + "prazo_entrega_dias,observacao,id,tenant_id)"
-                            + " values(?,?,?,?,?,?,?,?,?)",
-                    concat(valores, id, tenant()));
-        else
-            confirmar(
-                    db.update(
-                            "update radar_fornecedor set nome=?,documento=?,contato=?,email=?,"
-                                    + "telefone=?,prazo_entrega_dias=?,observacao=?"
-                                    + " where id=? and tenant_id=?",
-                            concat(valores, id, tenant())));
     }
 
     private void salvarCategoria(UUID id, JsonNode n, boolean novo) {

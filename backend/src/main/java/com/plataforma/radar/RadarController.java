@@ -70,6 +70,11 @@ public class RadarController {
         return service.cliente(id);
     }
 
+    @GetMapping("/vendedores/{id}")
+    public Map<String, Object> vendedor(@PathVariable UUID id) {
+        return service.vendedor(id);
+    }
+
     @PostMapping(value = "/clientes/{id}/anexos", consumes = "multipart/form-data")
     public Map<String, Object> enviarAnexo(
             @PathVariable UUID id, @RequestParam("arquivo") MultipartFile arquivo)

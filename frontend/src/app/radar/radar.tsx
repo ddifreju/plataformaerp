@@ -17,11 +17,11 @@ import {
   type Row,
 } from "./ui";
 import Mercado from "./mercado";
-import Cadastro from "./cadastros";
 import Promocoes, { situacao } from "./promocoes";
 import Relatorios from "./relatorios";
 import ProdutoForm, { type Aba as AbaProduto } from "./produto";
 import Clientes from "./cliente";
+import Vendedores from "./vendedor";
 import Anuncios from "./anuncios";
 import Categorias from "./categorias";
 import Embalagens from "./embalagens";
@@ -47,6 +47,7 @@ type Data = {
   vendedores: Row[];
   categoriaCanais: Row[];
   fornecedores: Row[];
+  usuariosSistema: Row[];
   categorias: Row[];
   embalagens: Row[];
   promocoes: Row[];
@@ -63,6 +64,7 @@ const nav = [
   ["anuncios", "Anúncios", "▤"],
   ["clientes", "Clientes", "☺"],
   ["fornecedores", "Fornecedores", "⇲"],
+  ["vendedores", "Vendedores", "◍"],
   ["categorias", "Categorias", "#"],
   ["embalagens", "Embalagens", "▢"],
   ["pedidos", "Pedidos", "▢"],
@@ -89,7 +91,15 @@ const grupos: { id: string; rotulo: string; icone: string; itens: string[] }[] =
     id: "cadastros",
     rotulo: "Cadastros",
     icone: "▣",
-    itens: ["produtos", "anuncios", "clientes", "fornecedores", "categorias", "embalagens"],
+    itens: [
+      "produtos",
+      "anuncios",
+      "clientes",
+      "fornecedores",
+      "vendedores",
+      "categorias",
+      "embalagens",
+    ],
   },
   { id: "vendas", rotulo: "Vendas", icone: "▢", itens: ["pedidos", "inbox", "promocoes"] },
   { id: "suprimentos", rotulo: "Suprimentos", icone: "▦", itens: ["estoque", "compras", "fiscal"] },
@@ -140,7 +150,11 @@ const titles: Record<string, [string, string]> = {
   auditoria: ["Histórico que dá confiança", "Quem fez, o que mudou e quando aconteceu."],
   guia: ["Conheça seu Radar", "Um passeio simples pelo trabalho do dia a dia."],
   clientes: ["Seus clientes", "Quem compra de você, com contato e histórico em um só lugar."],
-  fornecedores: ["Seus fornecedores", "Contatos e prazos de quem abastece sua operação."],
+  fornecedores: [
+    "Fornecedores e transportadores",
+    "O mesmo cadastro do cliente, para quem abastece e para quem entrega.",
+  ],
+  vendedores: ["Seus vendedores", "Dados, acesso ao sistema e comissão de quem vende por você."],
   categorias: ["Categorias", "Organize o catálogo do jeito que seu cliente procura."],
   embalagens: ["Embalagens", "Custos e medidas das embalagens que você usa nos envios."],
   promocoes: ["Promoções", "Planeje descontos por produto, canal e período, vendo a margem antes."],
@@ -409,7 +423,15 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       .filter(
         (p) => p !== "clientes" || can("DONO", "GESTOR", "ATENDIMENTO", "FINANCEIRO", "ANALISTA"),
       )
-      .filter((p) => p !== "fornecedores" || can("DONO", "GESTOR", "ESTOQUE", "FINANCEIRO")),
+      .filter(
+        (p) =>
+          p !== "fornecedores" ||
+          can("DONO", "GESTOR", "ESTOQUE", "FINANCEIRO", "ATENDIMENTO", "ANALISTA"),
+      )
+      .filter(
+        (p) =>
+          p !== "vendedores" || can("DONO", "GESTOR", "ATENDIMENTO", "FINANCEIRO", "ANALISTA"),
+      ),
   );
   const rotuloDe = (id: string) => nav.find((x) => x[0] === id)?.[1] ?? id;
   return (
@@ -1630,11 +1652,23 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             />
           )}
           {page === "fornecedores" && (
-            <Cadastro
-              tipo="fornecedores"
-              linhas={data.fornecedores}
-              podeEditar={can("DONO", "GESTOR", "ESTOQUE")}
-              abrirModal={setModal}
+            <Clientes
+              modo="fornecedores"
+              clientes={data.clientes}
+              vendedores={data.vendedores ?? []}
+              produtoFornecedores={data.produtoFornecedores}
+              podeEditar={can("DONO", "GESTOR", "ATENDIMENTO", "ESTOQUE")}
+              executar={commandResult}
+              recarregar={refresh}
+            />
+          )}
+          {page === "vendedores" && (
+            <Vendedores
+              vendedores={data.vendedores ?? []}
+              usuariosSistema={data.usuariosSistema ?? []}
+              podeEditar={can("DONO", "GESTOR")}
+              podeVerDetalhe={can("DONO", "GESTOR", "FINANCEIRO")}
+              executar={commandResult}
             />
           )}
           {page === "categorias" && (
