@@ -809,103 +809,90 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <Table
-                headers={[
-                  can("DONO", "GESTOR") ? "✓" : "",
-                  "Produto",
-                  "SKU",
-                  "Tipo",
-                  "Custo / preço",
-                  "Disponível",
-                  "Cadastro",
-                  "Ações",
-                ]}
-                rows={filtered(principais).map((p) => {
-                  const capa = data.imagens.find((i) => i.produto_id === p.id);
-                  const variacoes = products.filter((f) => f.pai_id === p.id).length;
-                  return [
-                    can("DONO", "GESTOR") ? (
-                      <input
-                        type="checkbox"
-                        aria-label={`Selecionar ${str(p.nome)}`}
-                        checked={marcadosProdutos.includes(str(p.id))}
-                        onChange={(e) =>
-                          setMarcadosProdutos((m) =>
-                            e.target.checked
-                              ? [...m, str(p.id)]
-                              : m.filter((x) => x !== str(p.id)),
-                          )
-                        }
-                      />
-                    ) : (
-                      ""
-                    ),
-                    <div className="rd-product-name">
-                      {capa ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- imagem servida pela API autenticada
-                        <img
-                          className="rd-product-thumb"
-                          src={`/api/radar/imagens/${str(capa.id)}`}
-                          alt=""
-                        />
-                      ) : (
-                        <span className="rd-product-thumb">▥</span>
-                      )}
-                      <div>
-                        <strong>{str(p.nome)}</strong>
-                        <small>{str(p.marca) || "Sem marca"}</small>
-                      </div>
-                    </div>,
-                    str(p.sku),
-                    p.tipo === "KIT" ? (
-                      <Badge tone="purple">Kit</Badge>
-                    ) : p.tipo === "VARIACAO" ? (
-                      <Badge tone="blue">{variacoes} variações</Badge>
-                    ) : (
-                      <Badge>Simples</Badge>
-                    ),
-                    <>
-                      {data.financeiroPermitido && <small>{money(p.custo)} / </small>}
-                      {money(p.preco)}
-                    </>,
-                    p.controla_estoque === false ? "Sem controle" : disponivel(p),
-                    <Badge tone={p.ncm ? "green" : "amber"}>
-                      {p.ncm ? "NCM preenchido" : "Falta NCM"}
-                    </Badge>,
-                    <div className="rd-row-actions">
-                      <button
-                        onClick={() =>
-                          setEditando({ id: str(p.id), aba: "geral", versao: Date.now() })
-                        }
-                      >
-                        {can("DONO", "GESTOR") ? "Editar" : "Ver"}
-                      </button>
-                      {can("DONO", "GESTOR", "MARKETING") && (
-                        <button
-                          disabled={busy}
-                          onClick={() => command({ op: "anuncios_lote", produto_id: p.id })}
-                        >
-                          Preparar 4 canais
-                        </button>
-                      )}
-                    </div>,
-                  ];
-                })}
-              />
-              {can("DONO", "GESTOR") && (
-                <ProdutosLote
-                  produtos={products}
-                  linhas={filtered(principais)}
-                  marcados={marcadosProdutos}
-                  setMarcados={setMarcadosProdutos}
-                  categorias={data.categorias}
-                  embalagens={data.embalagens}
-                  kitItens={data.kitItens}
-                  veCusto={data.financeiroPermitido}
-                  disponivel={disponivel}
-                  executar={command}
-                />
-              )}
+              <ProdutosLote
+                ativo={can("DONO", "GESTOR")}
+                produtos={products}
+                linhas={filtered(principais)}
+                marcados={marcadosProdutos}
+                setMarcados={setMarcadosProdutos}
+                categorias={data.categorias}
+                embalagens={data.embalagens}
+                kitItens={data.kitItens}
+                veCusto={data.financeiroPermitido}
+                disponivel={disponivel}
+                executar={command}
+              >
+                {(lote) => (
+                  <Table
+                    headers={[
+                      lote.cabecalho,
+                      "Produto",
+                      "SKU",
+                      "Tipo",
+                      "Custo / preço",
+                      "Disponível",
+                      "Cadastro",
+                      "Ações",
+                    ]}
+                    rows={filtered(principais).map((p) => {
+                      const capa = data.imagens.find((i) => i.produto_id === p.id);
+                      const variacoes = products.filter((f) => f.pai_id === p.id).length;
+                      return [
+                        lote.celula(p),
+                        <div className="rd-product-name">
+                          {capa ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- imagem servida pela API autenticada
+                            <img
+                              className="rd-product-thumb"
+                              src={`/api/radar/imagens/${str(capa.id)}`}
+                              alt=""
+                            />
+                          ) : (
+                            <span className="rd-product-thumb">▥</span>
+                          )}
+                          <div>
+                            <strong>{str(p.nome)}</strong>
+                            <small>{str(p.marca) || "Sem marca"}</small>
+                          </div>
+                        </div>,
+                        str(p.sku),
+                        p.tipo === "KIT" ? (
+                          <Badge tone="purple">Kit</Badge>
+                        ) : p.tipo === "VARIACAO" ? (
+                          <Badge tone="blue">{variacoes} variações</Badge>
+                        ) : (
+                          <Badge>Simples</Badge>
+                        ),
+                        <>
+                          {data.financeiroPermitido && <small>{money(p.custo)} / </small>}
+                          {money(p.preco)}
+                        </>,
+                        p.controla_estoque === false ? "Sem controle" : disponivel(p),
+                        <Badge tone={p.ncm ? "green" : "amber"}>
+                          {p.ncm ? "NCM preenchido" : "Falta NCM"}
+                        </Badge>,
+                        <div className="rd-row-actions">
+                          <button
+                            onClick={() =>
+                              setEditando({ id: str(p.id), aba: "geral", versao: Date.now() })
+                            }
+                          >
+                            {can("DONO", "GESTOR") ? "Editar" : "Ver"}
+                          </button>
+                          {can("DONO", "GESTOR", "MARKETING") && (
+                            <button
+                              disabled={busy}
+                              onClick={() => command({ op: "anuncios_lote", produto_id: p.id })}
+                            >
+                              Preparar 4 canais
+                            </button>
+                          )}
+                        </div>,
+                      ];
+                    })}
+                  />
+                )}
+              </ProdutosLote>
             </section>
           )}
           {page === "importar" && (

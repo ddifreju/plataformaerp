@@ -2445,6 +2445,86 @@ img.rd-product-thumb {
   padding: 0;
 }
 
+/* Caixa de seleção com "⋯" por linha e menu da linha */
+.rd-celula-lote {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.radar-app button.rd-linha-mais {
+  border: 0;
+  background: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--rd-muted);
+}
+.radar-app button.rd-linha-mais:hover,
+.radar-app button.rd-linha-mais[aria-expanded="true"] {
+  background: #e2e8f0;
+  color: inherit;
+}
+.rd-menu-fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 29;
+}
+ul.rd-menu-linha {
+  position: fixed;
+  z-index: 30;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  min-width: 250px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid var(--rd-line);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+}
+ul.rd-menu-linha li button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 8px 10px;
+  border-radius: 7px;
+}
+ul.rd-menu-linha li button:hover {
+  background: #f1f5f9;
+}
+ul.rd-menu-linha li.rd-menu-sep {
+  border-top: 1px solid var(--rd-line);
+  margin: 4px 0;
+}
+/* Contador em pílula: "↥ 03 de 100 itens ✕" */
+.rd-barra-qtd.rd-pilula {
+  gap: 6px;
+  padding: 5px 6px 5px 12px;
+  border: 1px solid var(--rd-line);
+  border-radius: 999px;
+  background: #f8fafc;
+  font-size: 14px;
+}
+.rd-pilula button {
+  border-radius: 999px;
+}
+.rd-circulo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+}
+
 /* Pendências e preenchimento rápido */
 .rd-pendencias {
   display: flex;

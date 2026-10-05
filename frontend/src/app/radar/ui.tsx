@@ -52,14 +52,14 @@ export function Empty({
     </div>
   );
 }
-export function Table({ headers, rows }: { headers: string[]; rows: ReactNode[][] }) {
+export function Table({ headers, rows }: { headers: ReactNode[]; rows: ReactNode[][] }) {
   return rows.length ? (
     <div className="rd-table-wrap">
       <table>
         <thead>
           <tr>
-            {headers.map((h) => (
-              <th key={h}>{h}</th>
+            {headers.map((h, j) => (
+              <th key={j}>{h}</th>
             ))}
           </tr>
         </thead>
