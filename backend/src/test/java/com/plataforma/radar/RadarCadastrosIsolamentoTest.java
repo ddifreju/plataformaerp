@@ -79,11 +79,11 @@ class RadarCadastrosIsolamentoTest {
     }
 
     @Test
-    void fornecedorDeUmaEmpresaNaoApareceParaOutra() {
-        UUID id = criar(EMPRESA_A, "fornecedor", "{\"nome\":\"Malhas Sul\"}");
+    void categoriaDeUmaEmpresaNaoApareceParaOutra() {
+        UUID id = criar(EMPRESA_A, "categoria", "{\"nome\":\"Malhas Sul\"}");
 
-        assertTrue(idsDe(EMPRESA_B, "fornecedores").isEmpty());
-        assertTrue(idsDe(EMPRESA_A, "fornecedores").contains(id.toString()));
+        assertTrue(!idsDe(EMPRESA_B, "categorias").contains(id.toString()));
+        assertTrue(idsDe(EMPRESA_A, "categorias").contains(id.toString()));
     }
 
     @Test
@@ -121,13 +121,13 @@ class RadarCadastrosIsolamentoTest {
 
     @Test
     void rlsEscondeLinhasMesmoSemPredicadoNaQuery() {
-        criar(EMPRESA_A, "fornecedor", "{\"nome\":\"Tecidos Norte\"}");
+        criar(EMPRESA_A, "categoria", "{\"nome\":\"Tecidos Norte\"}");
 
         // Query sem filtro de tenant: só o RLS separa as empresas aqui.
         ContextoTenant.definir(EMPRESA_B);
         Integer visiveis =
                 db.queryForObject(
-                        "select count(*) from radar_fornecedor where nome='Tecidos Norte'",
+                        "select count(*) from radar_categoria where nome='Tecidos Norte'",
                         Integer.class);
         assertEquals(0, visiveis);
     }
@@ -181,14 +181,16 @@ class RadarCadastrosIsolamentoTest {
     }
 
     @Test
-    void cargoSemPermissaoNaoCadastraFornecedor() {
+    void cargoSemPermissaoNaoCadastraEmbalagem() {
         ContextoTenant.definir(EMPRESA_A);
         var erro =
                 assertThrows(
                         ResponseStatusException.class,
                         () ->
                                 cadastros.executar(
-                                        "fornecedor", json("{\"nome\":\"X\"}"), "MARKETING"));
+                                        "embalagem",
+                                        json("{\"nome\":\"X\",\"custo\":\"1\"}"),
+                                        "MARKETING"));
         assertEquals(HttpStatus.FORBIDDEN, erro.getStatusCode());
     }
 

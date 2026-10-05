@@ -522,7 +522,14 @@ public class RadarProdutos {
         for (JsonNode f : lista) {
             UUID fornecedor = id(f, "fornecedor_id");
             if (!vistos.add(fornecedor)) erro("Fornecedor repetido no produto.");
-            existe("radar_fornecedor", fornecedor, "Fornecedor não encontrado.");
+            Integer ehFornecedor =
+                    db.queryForObject(
+                            "select count(*) from radar_cliente where tenant_id=? and id=?"
+                                    + " and tipos_contato @> '[\"FORNECEDOR\"]'",
+                            Integer.class,
+                            tenant(),
+                            fornecedor);
+            if (ehFornecedor == null || ehFornecedor == 0) erro("Fornecedor não encontrado.");
             db.update(
                     "insert into radar_produto_fornecedor(tenant_id,produto_id,fornecedor_id,"
                             + "codigo_no_fornecedor) values(?,?,?,?)",

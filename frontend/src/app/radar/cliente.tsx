@@ -16,9 +16,15 @@ type Pessoa = {
   ramal: string;
 };
 
+type Modo = "clientes" | "fornecedores";
+
 type Props = {
   clientes: Row[];
   vendedores: Row[];
+  // A mesma tela serve a Fornecedores: lista quem tem o tipo FORNECEDOR ou
+  // TRANSPORTADOR e cria o cadastro já com o tipo FORNECEDOR.
+  modo?: Modo;
+  produtoFornecedores?: Row[];
   podeEditar: boolean;
   executar: (
     corpo: Record<string, unknown>,
@@ -26,7 +32,7 @@ type Props = {
   recarregar: () => Promise<void>;
 };
 
-const TIPOS_PESSOA: [string, string, string][] = [
+export const TIPOS_PESSOA: [string, string, string][] = [
   ["F", "Física", "CPF"],
   ["J", "Jurídica", "CNPJ"],
   ["E", "Estrangeira", "Documento do país de origem"],
@@ -37,7 +43,7 @@ const TIPOS_CONTATO: [string, string][] = [
   ["FORNECEDOR", "Fornecedor"],
   ["TRANSPORTADOR", "Transportador"],
 ];
-const CONTRIBUINTE: [string, string][] = [
+export const CONTRIBUINTE: [string, string][] = [
   ["", "Não informado"],
   ["1", "1 - Contribuinte de ICMS"],
   ["2", "2 - Contribuinte isento de inscrição"],
@@ -59,7 +65,7 @@ const STATUS_CRM: [string, string][] = [
   ["INATIVO", "Inativo"],
   ["PERDIDO", "Perdido"],
 ];
-const UFS = [
+export const UFS = [
   "AC",
   "AL",
   "AP",
@@ -151,8 +157,26 @@ const CAMPOS = [
   "condicao_pagamento",
   "lista_preco",
   "limite_credito",
+  "prazo_entrega_dias",
   "observacao",
 ];
+
+const ROTULOS: Record<Modo, { um: string; varios: string; Um: string }> = {
+  clientes: { um: "cliente", varios: "clientes", Um: "Cliente" },
+  fornecedores: { um: "fornecedor", varios: "fornecedores", Um: "Fornecedor" },
+};
+const FILTROS_FORNECEDOR: [string, string][] = [
+  ["TODOS", "Todos"],
+  ["FORNECEDOR", "Fornecedores"],
+  ["TRANSPORTADOR", "Transportadores"],
+  ["INCOMPLETO", "Cadastro incompleto"],
+];
+
+function tiposDe(c: Row): string[] {
+  return Array.isArray(c.tipos_contato)
+    ? (c.tipos_contato as unknown as string[])
+    : [];
+}
 
 /** "52998224725" → "529.982.247-25"; CNPJ (inclusive alfanumérico) → "12.ABC.345/01DE-35". */
 export function formatarDocumento(d: string) {
@@ -164,14 +188,14 @@ export function formatarDocumento(d: string) {
   return d;
 }
 
-function valoresIniciais(c: Row | null): Valores {
+function valoresIniciais(c: Row | null, modo: Modo = "clientes"): Valores {
   const v: Valores = {
     cobranca_diferente: c?.cobranca_diferente === true,
     ativo: c?.ativo !== false,
   };
   for (const k of CAMPOS) v[k] = c?.[k] == null ? "" : str(c[k]);
   if (!c) {
-    v.tipo_pessoa = "F";
+    v.tipo_pessoa = modo === "fornecedores" ? "J" : "F";
     v.status_crm = "NOVO";
   }
   if (c?.documento) v.documento = formatarDocumento(str(c.documento));
@@ -190,7 +214,7 @@ function lista<T>(v: unknown): T[] {
   return Array.isArray(v) ? (v as T[]) : [];
 }
 
-function Campo({
+export function Campo({
   rotulo,
   obrigatorio,
   dica,
@@ -216,6 +240,12 @@ function Campo({
 }
 
 export default function Clientes(props: Props) {
+  if ((props.modo ?? "clientes") === "fornecedores")
+    return <Fornecedores {...props} />;
+  return <ListaClientes {...props} />;
+}
+
+function ListaClientes(props: Props) {
   const [aberto, setAberto] = useState<{
     id: string | null;
     versao: number;
@@ -234,14 +264,19 @@ export default function Clientes(props: Props) {
       />
     );
 
+  // Contato só fornecedor/transportador fica na tela de Fornecedores.
+  const clientes = props.clientes.filter((c) => {
+    const t = tiposDe(c);
+    return t.length === 0 || t.includes("CLIENTE");
+  });
   const contagem = (f: string) =>
     f === "TODOS"
-      ? props.clientes.length
+      ? clientes.length
       : f === "INCOMPLETO"
-        ? props.clientes.filter((c) => c.incompleto === true).length
-        : props.clientes.filter((c) => c.classificacao === f).length;
+        ? clientes.filter((c) => c.incompleto === true).length
+        : clientes.filter((c) => c.classificacao === f).length;
   const termo = busca.trim().toLowerCase();
-  const linhas = props.clientes.filter(
+  const linhas = clientes.filter(
     (c) =>
       (filtro === "TODOS" ||
         (filtro === "INCOMPLETO"
@@ -276,7 +311,7 @@ export default function Clientes(props: Props) {
       </div>
       <section className="rd-card">
         <div className="rd-card-head">
-          <h2>{props.clientes.length} clientes</h2>
+          <h2>{clientes.length} clientes</h2>
           <input
             aria-label="Buscar cliente"
             className="rd-search"
@@ -311,7 +346,7 @@ export default function Clientes(props: Props) {
             </button>
           ))}
         </div>
-        {props.clientes.length === 0 ? (
+        {clientes.length === 0 ? (
           <Empty text="Nenhum cliente ainda. Cada pedido novo cadastra o cliente sozinho." />
         ) : (
           <Table
@@ -383,8 +418,159 @@ export default function Clientes(props: Props) {
   );
 }
 
+function Fornecedores(props: Props) {
+  const [aberto, setAberto] = useState<{
+    id: string | null;
+    versao: number;
+  } | null>(null);
+  const [filtro, setFiltro] = useState("TODOS");
+  const [busca, setBusca] = useState("");
+
+  if (aberto)
+    return (
+      <ClienteForm
+        key={`${aberto.id ?? "novo"}-${aberto.versao}`}
+        id={aberto.id}
+        {...props}
+        voltar={() => setAberto(null)}
+        aoSalvar={(id) => setAberto({ id, versao: Date.now() })}
+      />
+    );
+
+  const contatos = props.clientes.filter((c) =>
+    tiposDe(c).some((t) => t === "FORNECEDOR" || t === "TRANSPORTADOR"),
+  );
+  const noFiltro = (c: Row, f: string) =>
+    f === "TODOS" ||
+    (f === "INCOMPLETO" ? c.incompleto === true : tiposDe(c).includes(f));
+  const produtosDe = (id: unknown) =>
+    (props.produtoFornecedores ?? []).filter((pf) => pf.fornecedor_id === id)
+      .length;
+  const termo = busca.trim().toLowerCase();
+  const linhas = contatos.filter(
+    (c) =>
+      noFiltro(c, filtro) &&
+      (!termo ||
+        [
+          c.nome,
+          c.fantasia,
+          c.codigo,
+          c.email,
+          c.cidade,
+          c.telefone,
+          c.celular,
+        ].some((x) => str(x).toLowerCase().includes(termo))),
+  );
+
+  return (
+    <section className="rd-card">
+      <div className="rd-card-head">
+        <h2>{contatos.length} fornecedores e transportadores</h2>
+        <input
+          aria-label="Buscar fornecedor"
+          className="rd-search"
+          placeholder="Buscar por nome, código, e-mail, cidade…"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+        />
+        {props.podeEditar && (
+          <button
+            type="button"
+            className="primary"
+            onClick={() => setAberto({ id: null, versao: Date.now() })}
+          >
+            + Novo fornecedor
+          </button>
+        )}
+      </div>
+      <div
+        className="rd-tabs rd-filtros"
+        role="tablist"
+        aria-label="Filtrar fornecedores"
+      >
+        {FILTROS_FORNECEDOR.map(([chave, rotulo]) => (
+          <button
+            key={chave}
+            role="tab"
+            aria-selected={filtro === chave}
+            className={filtro === chave ? "active" : ""}
+            onClick={() => setFiltro(chave)}
+          >
+            {rotulo} ({contatos.filter((c) => noFiltro(c, chave)).length})
+          </button>
+        ))}
+      </div>
+      {contatos.length === 0 ? (
+        <Empty text="Nenhum fornecedor ainda." />
+      ) : (
+        <Table
+          headers={[
+            "Código",
+            "Fornecedor",
+            "CPF/CNPJ",
+            "Cidade",
+            "Tipo",
+            "Prazo",
+            "Produtos",
+            "",
+          ]}
+          rows={linhas.map((c) => [
+            str(c.codigo),
+            <div key="n">
+              <strong>{str(c.nome)}</strong>
+              {c.fantasia && <small> · {str(c.fantasia)}</small>}
+              <br />
+              <small>{str(c.email) || str(c.celular) || str(c.telefone)}</small>
+            </div>,
+            str(c.documento) || "—",
+            [str(c.cidade), str(c.uf)].filter(Boolean).join(" / ") || "—",
+            <div key="t" className="rd-badges">
+              {tiposDe(c).map((t) => (
+                <Badge
+                  key={t}
+                  tone={
+                    t === "FORNECEDOR"
+                      ? "blue"
+                      : t === "CLIENTE"
+                        ? "green"
+                        : "gray"
+                  }
+                >
+                  {TIPOS_CONTATO.find(([v]) => v === t)?.[1] ?? t}
+                </Badge>
+              ))}
+              {c.incompleto === true && <Badge tone="amber">Incompleto</Badge>}
+            </div>,
+            c.prazo_entrega_dias == null
+              ? "—"
+              : `${str(c.prazo_entrega_dias)} dias`,
+            String(produtosDe(c.id)),
+            <button
+              key="a"
+              type="button"
+              onClick={() => setAberto({ id: str(c.id), versao: Date.now() })}
+            >
+              {props.podeEditar
+                ? c.incompleto === true
+                  ? "Completar"
+                  : "Editar"
+                : "Ver"}
+            </button>,
+          ])}
+        />
+      )}
+      <p className="rd-note">
+        Fornecedor e transportador usam o mesmo cadastro do cliente. Um contato
+        pode ser mais de um tipo ao mesmo tempo (por exemplo, fornecedor e
+        cliente).
+      </p>
+    </section>
+  );
+}
+
 function ClienteForm({
   id,
+  modo = "clientes",
   vendedores,
   podeEditar,
   executar,
@@ -399,8 +585,11 @@ function ClienteForm({
   const [carregado, setCarregado] = useState<Row | null>(null);
   const [carregando, setCarregando] = useState(!novo);
   const [aba, setAba] = useState<Aba>("dados");
-  const [v, setV] = useState<Valores>(() => valoresIniciais(null));
-  const [tipos, setTipos] = useState<string[]>(["CLIENTE"]);
+  const R = ROTULOS[modo];
+  const [v, setV] = useState<Valores>(() => valoresIniciais(null, modo));
+  const [tipos, setTipos] = useState<string[]>([
+    modo === "fornecedores" ? "FORNECEDOR" : "CLIENTE",
+  ]);
   const [pessoas, setPessoas] = useState<Pessoa[]>([]);
   const [erro, setErro] = useState("");
   const [aviso, setAviso] = useState("");
@@ -597,7 +786,9 @@ function ClienteForm({
   const anexos = lista<Row>(carregado?.anexos);
   const [classe, tom] = CLASSES[str(carregado?.classificacao)] ?? CLASSES.LEAD;
   const abas = ABAS.filter(
-    ([chave]) => !novo || (chave !== "historico" && chave !== "anexos"),
+    ([chave]) =>
+      (!novo || (chave !== "historico" && chave !== "anexos")) &&
+      (chave !== "historico" || tipos.includes("CLIENTE")),
   );
 
   const conteudo: Record<Aba, ReactNode> = {
@@ -916,12 +1107,22 @@ function ClienteForm({
         <Campo rotulo="Vendedor padrão">
           {escolha("vendedor_id", [
             ["", "Nenhum"],
-            ...vendedores.map((u): [string, string] => [
-              str(u.id),
-              str(u.nome),
-            ]),
+            ...vendedores
+              .filter((u) => u.situacao !== "INATIVO" || u.id === v.vendedor_id)
+              .map((u): [string, string] => [
+                str(u.id),
+                `${str(u.codigo)} · ${str(u.nome)}`,
+              ]),
           ])}
         </Campo>
+        {tipos.includes("FORNECEDOR") && (
+          <Campo rotulo="Prazo de entrega do fornecedor (dias)">
+            {entrada("prazo_entrega_dias", {
+              inputMode: "numeric",
+              maxLength: 3,
+            })}
+          </Campo>
+        )}
         <Campo rotulo="Condição de pagamento" dica="Ex.: 30 60, 3x, 15 +2x">
           {entrada("condicao_pagamento", { maxLength: 60 })}
         </Campo>
@@ -1043,10 +1244,10 @@ function ClienteForm({
     <div className="rd-produto-form">
       <div className="rd-toolbar">
         <button type="button" onClick={voltar}>
-          ← Voltar para clientes
+          ← Voltar para {R.varios}
         </button>
         <span className="rd-produto-titulo">
-          {str(v.nome) || (novo ? "Novo cliente" : "Cliente")}
+          {str(v.nome) || (novo ? `Novo ${R.um}` : R.Um)}
           {str(v.codigo) && <small> · {str(v.codigo)}</small>}
           {carregado?.incompleto === true && (
             <Badge tone="amber">Cadastro incompleto</Badge>
@@ -1059,7 +1260,7 @@ function ClienteForm({
             disabled={salvando}
             onClick={salvar}
           >
-            {salvando ? "Salvando…" : "Salvar cliente"}
+            {salvando ? "Salvando…" : `Salvar ${R.um}`}
           </button>
         )}
       </div>
@@ -1081,7 +1282,7 @@ function ClienteForm({
       <div
         className="rd-tabs"
         role="tablist"
-        aria-label="Seções do cadastro do cliente"
+        aria-label={`Seções do cadastro do ${R.um}`}
       >
         {abas.map(([chave, rotulo]) => (
           <button
@@ -1112,7 +1313,7 @@ function ClienteForm({
             disabled={salvando}
             onClick={salvar}
           >
-            {salvando ? "Salvando…" : "Salvar cliente"}
+            {salvando ? "Salvando…" : `Salvar ${R.um}`}
           </button>
         )}
       </div>

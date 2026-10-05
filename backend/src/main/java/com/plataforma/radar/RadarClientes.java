@@ -51,6 +51,15 @@ public class RadarClientes {
     static final Set<String> EDITAM = Set.of("DONO", "GESTOR", "ATENDIMENTO");
     static final Set<String> VEEM_DOCUMENTO = Set.of("DONO", "GESTOR", "ATENDIMENTO", "FINANCEIRO");
 
+    /**
+     * Estoque cuida de compras: vê, abre e edita contatos que são fornecedor ou transportador e não
+     * são cliente. Dado de cliente (CPF, endereço) continua fora do alcance dele.
+     */
+    static final String ESTOQUE = "ESTOQUE";
+
+    /** Quem escolhe fornecedor no produto (lista curta: id, código, nome). */
+    static final Set<String> VEEM_FORNECEDORES = Set.of("DONO", "GESTOR", "ESTOQUE", "FINANCEIRO");
+
     /** F física, J jurídica, E estrangeira (mora fora), B estrangeira residente no Brasil. */
     private static final Set<String> TIPOS_PESSOA = Set.of("F", "J", "E", "B");
 
@@ -103,9 +112,18 @@ public class RadarClientes {
      */
     Map<String, Object> dados(String papel) {
         Map<String, Object> out = new LinkedHashMap<>();
-        if (!VEEM.contains(papel)) {
+        out.put(
+                "fornecedores",
+                VEEM_FORNECEDORES.contains(papel)
+                        ? db.queryForList(
+                                "select id, codigo, nome, prazo_entrega_dias from radar_cliente"
+                                    + " where tenant_id=? and tipos_contato @> '[\"FORNECEDOR\"]'"
+                                    + " order by nome",
+                                tenant())
+                        : List.of());
+        boolean estoque = ESTOQUE.equals(papel);
+        if (!VEEM.contains(papel) && !estoque) {
             out.put("clientes", List.of());
-            out.put("vendedores", List.of());
             return out;
         }
         var clientes =
@@ -113,14 +131,16 @@ public class RadarClientes {
                         "select c.id, c.codigo, c.nome, c.fantasia, c.tipo_pessoa, c.documento,"
                             + " c.email, c.telefone, c.celular, c.cidade, c.uf, c.status_crm,"
                             + " c.origem, c.incompleto, c.ativo, c.tipos_contato::text"
-                            + " tipos_contato, c.vendedor_id, c.criado_em, coalesce(h.pedidos,0)"
-                            + " pedidos, h.primeira_compra, h.ultima_compra, coalesce(h.total,0)"
-                            + " total from radar_cliente c left join (select cliente_id, count(*)"
-                            + " pedidos, min(criado_em) primeira_compra, max(criado_em)"
-                            + " ultima_compra, sum(preco*quantidade-desconto) total from"
-                            + " radar_pedido where tenant_id=? and cliente_id is not null and"
+                            + " tipos_contato, c.vendedor_id, c.prazo_entrega_dias, c.criado_em,"
+                            + " coalesce(h.pedidos,0) pedidos, h.primeira_compra, h.ultima_compra,"
+                            + " coalesce(h.total,0) total from radar_cliente c left join (select"
+                            + " cliente_id, count(*) pedidos, min(criado_em) primeira_compra,"
+                            + " max(criado_em) ultima_compra, sum(preco*quantidade-desconto) total"
+                            + " from radar_pedido where tenant_id=? and cliente_id is not null and"
                             + " estado<>'CANCELADO' group by cliente_id) h on h.cliente_id=c.id"
-                            + " where c.tenant_id=? order by c.nome limit 2000",
+                            + " where c.tenant_id=?"
+                                + (estoque ? " and not c.tipos_contato @> '[\"CLIENTE\"]'" : "")
+                                + " order by c.nome limit 2000",
                         tenant(),
                         tenant());
         for (var c : clientes) {
@@ -129,17 +149,13 @@ public class RadarClientes {
             c.put("classificacao", classificacao(((Number) c.get("pedidos")).longValue()));
         }
         out.put("clientes", clientes);
-        out.put(
-                "vendedores",
-                db.queryForList(
-                        "select id, nome from usuario where tenant_id=? and ativo order by nome",
-                        tenant()));
         return out;
     }
 
     /** Cliente completo, com anexos (sem o conteúdo) e os últimos pedidos. */
     Map<String, Object> detalhe(String papel, UUID clienteId) {
-        permitir(papel, VEEM.toArray(String[]::new));
+        if (ESTOQUE.equals(papel)) exigirSemCliente(clienteId);
+        else permitir(papel, VEEM.toArray(String[]::new));
         var linhas =
                 db.queryForList(
                         "select * from radar_cliente where tenant_id=? and id=?",
@@ -149,7 +165,7 @@ public class RadarClientes {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Cliente não encontrado.");
         Map<String, Object> c = new LinkedHashMap<>(linhas.getFirst());
         c.remove("tenant_id");
-        if (!VEEM_DOCUMENTO.contains(papel))
+        if (!VEEM_DOCUMENTO.contains(papel) && !ESTOQUE.equals(papel))
             c.put("documento", mascarar((String) c.get("documento")));
         c.put("tipos_contato", lista(c.get("tipos_contato")));
         c.put("pessoas_contato", lista(c.get("pessoas_contato")));
@@ -188,10 +204,15 @@ public class RadarClientes {
 
     /** Cria (sem id) ou atualiza (com id) um cliente, exigindo os dados da nota fiscal. */
     Map<String, Object> salvar(JsonNode n, String papel) {
-        permitir(papel, EDITAM.toArray(String[]::new));
         boolean novo = n.path("id").asText("").isBlank();
         UUID id = novo ? UUID.randomUUID() : id(n, "id");
         Map<String, Object> c = colunas(n, id);
+        if (ESTOQUE.equals(papel)) {
+            if (c.get("tipos_contato").toString().contains("CLIENTE"))
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN, "Seu cargo cadastra só fornecedor e transportador.");
+            if (!novo) exigirSemCliente(id);
+        } else permitir(papel, EDITAM.toArray(String[]::new));
 
         // CPF/CNPJ é o que identifica o cliente (nome repete entre pessoas). Se outro cadastro
         // já tem este documento: um cadastro incompleto (criado por pedido) é juntado a ele;
@@ -246,7 +267,12 @@ public class RadarClientes {
         }
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("id", id);
-        r.put("mensagem", novo ? "Cliente cadastrado." : "Cliente atualizado.");
+        String tipos = c.getOrDefault("tipos_contato", "").toString();
+        String quem =
+                tipos.contains("CLIENTE")
+                        ? "Cliente"
+                        : tipos.contains("FORNECEDOR") ? "Fornecedor" : "Transportador";
+        r.put("mensagem", quem + (novo ? " cadastrado." : " atualizado."));
         return r;
     }
 
@@ -518,6 +544,7 @@ public class RadarClientes {
         String status = n.path("status_crm").asText("NOVO").trim().toUpperCase();
         if (!STATUS_CRM.contains(status)) erro("Status no CRM inválido.");
         c.put("status_crm", status);
+        c.put("prazo_entrega_dias", inteiroOpcional(n, "prazo_entrega_dias", 0, 365));
         c.put("vendedor_id", vendedor(n));
         c.put("condicao_pagamento", campo(n, "condicao_pagamento", 60, "Condição de pagamento"));
         c.put("lista_preco", campo(n, "lista_preco", 60, "Lista de preço"));
@@ -574,12 +601,27 @@ public class RadarClientes {
         return escrever(pessoas);
     }
 
+    /** Estoque só alcança contato que não é cliente; cliente de outro cargo dá 403. */
+    private void exigirSemCliente(UUID id) {
+        var tipos =
+                db.queryForList(
+                        "select tipos_contato::text from radar_cliente where tenant_id=? and id=?",
+                        String.class,
+                        tenant(),
+                        id);
+        if (tipos.isEmpty())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contato não encontrado.");
+        if (tipos.getFirst().contains("CLIENTE"))
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "Seu cargo não permite abrir cadastro de cliente.");
+    }
+
     private UUID vendedor(JsonNode n) {
         if (n.path("vendedor_id").asText("").isBlank()) return null;
         UUID v = id(n, "vendedor_id");
         Integer existe =
                 db.queryForObject(
-                        "select count(*) from usuario where tenant_id=? and id=?",
+                        "select count(*) from radar_vendedor where tenant_id=? and id=?",
                         Integer.class,
                         tenant(),
                         v);
@@ -613,34 +655,34 @@ public class RadarClientes {
         return pedidos == 0 ? "LEAD" : pedidos == 1 ? "PRIMEIRA_COMPRA" : "RECORRENTE";
     }
 
-    private static String campo(JsonNode n, String campo, int max, String rotulo) {
+    static String campo(JsonNode n, String campo, int max, String rotulo) {
         String s = n.path(campo).asText("").trim();
         if (s.length() > max) erro("O campo " + rotulo + " passa de " + max + " caracteres.");
         return s.isBlank() ? null : s;
     }
 
-    private static String exigir(List<String> faltando, String valor, String rotulo) {
+    static String exigir(List<String> faltando, String valor, String rotulo) {
         if (valor == null) faltando.add(rotulo);
         return valor;
     }
 
-    private static String email(String s, String rotulo) {
+    static String email(String s, String rotulo) {
         if (s != null && !s.matches("[^\\s@]+@[^\\s@]+\\.[^\\s@]+")) erro(rotulo + " inválido.");
         return s == null ? null : s.toLowerCase();
     }
 
-    private static String digitos(String s) {
+    static String digitos(String s) {
         return s == null ? null : s.replaceAll("[^0-9]", "");
     }
 
-    private static String uf(String s) {
+    static String uf(String s) {
         if (s == null) return null;
         String v = s.toUpperCase();
         if (!UFS.contains(v)) erro("UF inválida: " + s);
         return v;
     }
 
-    private static LocalDate dataNascimento(String s) {
+    static LocalDate dataNascimento(String s) {
         if (s == null) return null;
         try {
             LocalDate d = LocalDate.parse(s);

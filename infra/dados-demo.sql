@@ -94,6 +94,7 @@ BEGIN
     -- Cadastros e produto completo (V018-V021).
     DELETE FROM radar_cliente_anexo      WHERE tenant_id = ANY(v_ids);
     DELETE FROM radar_cliente            WHERE tenant_id = ANY(v_ids);
+    DELETE FROM radar_vendedor           WHERE tenant_id = ANY(v_ids);
     DELETE FROM radar_promocao           WHERE tenant_id = ANY(v_ids);
     DELETE FROM radar_kit_item           WHERE tenant_id = ANY(v_ids);
     DELETE FROM radar_produto_fornecedor WHERE tenant_id = ANY(v_ids);

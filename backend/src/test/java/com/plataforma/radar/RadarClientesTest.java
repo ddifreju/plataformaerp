@@ -24,6 +24,7 @@ import java.util.UUID;
 /**
  * Cadastro completo de cliente (V021): obrigatórios da NF-e, documento, recorrência, isolamento.
  */
+@SuppressWarnings("unchecked")
 class RadarClientesTest {
 
     private static final String CPF = "52998224725";
@@ -293,6 +294,50 @@ class RadarClientesTest {
         assertThrows(
                 ResponseStatusException.class,
                 () -> naEmpresa(empresaB, () -> clientes.anexo("DONO", anexo)));
+    }
+
+    @Test
+    void estoqueVeEEditaSoFornecedorETransportador() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        String fornecedor =
+                completo("J", CNPJ, "Tecidos Norte")
+                        .replace("[\"CLIENTE\",\"TRANSPORTADOR\"]", "[\"FORNECEDOR\"]");
+        UUID idFornecedor =
+                (UUID)
+                        naEmpresa(empresa, () -> clientes.salvar(json(fornecedor), "ESTOQUE"))
+                                .get("id");
+        UUID idCliente = salvar(empresa, completo("F", CPF, "Cliente Comum"));
+
+        var lista =
+                (List<Map<String, Object>>)
+                        naEmpresa(empresa, () -> clientes.dados("ESTOQUE")).get("clientes");
+        assertEquals(List.of(idFornecedor), lista.stream().map(c -> c.get("id")).toList());
+        assertEquals(
+                CNPJ,
+                naEmpresa(empresa, () -> clientes.detalhe("ESTOQUE", idFornecedor))
+                        .get("documento"));
+        var abrirCliente =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> naEmpresa(empresa, () -> clientes.detalhe("ESTOQUE", idCliente)));
+        assertEquals(HttpStatus.FORBIDDEN, abrirCliente.getStatusCode());
+        var criarCliente =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresa,
+                                        () ->
+                                                clientes.salvar(
+                                                        json(completo("F", "39053344705", "X")),
+                                                        "ESTOQUE")));
+        assertEquals(HttpStatus.FORBIDDEN, criarCliente.getStatusCode());
+
+        var fornecedores =
+                (List<Map<String, Object>>)
+                        naEmpresa(empresa, () -> clientes.dados("ESTOQUE")).get("fornecedores");
+        assertEquals(
+                List.of("Tecidos Norte"), fornecedores.stream().map(f -> f.get("nome")).toList());
     }
 
     // ---- apoio -----------------------------------------------------------------------------

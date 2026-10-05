@@ -30,6 +30,7 @@ public class RadarService {
     private final RadarProdutos produtos;
     private final RadarClientes clientes;
     private final RadarAnuncios anuncios;
+    private final RadarVendedores vendedores;
     private static final Set<String> CANAIS =
             Set.of("Mercado Livre", "Shopee", "TikTok Shop", "SHEIN");
 
@@ -41,7 +42,8 @@ public class RadarService {
             RadarRelatorios relatorios,
             RadarProdutos produtos,
             RadarClientes clientes,
-            RadarAnuncios anuncios) {
+            RadarAnuncios anuncios,
+            RadarVendedores vendedores) {
         this.db = db;
         this.json = json;
         this.cadastros = cadastros;
@@ -50,6 +52,7 @@ public class RadarService {
         this.produtos = produtos;
         this.clientes = clientes;
         this.anuncios = anuncios;
+        this.vendedores = vendedores;
     }
 
     /** Usuário da requisição atual, para registrar quem fez cada movimento. */
@@ -89,6 +92,14 @@ public class RadarService {
         var c = clientes.detalhe(papel(), clienteId);
         auditar("cliente_ver", clienteId.toString(), Map.of());
         return c;
+    }
+
+    /** Vendedor completo. Abrir fica na auditoria: tem CPF/CNPJ e comissão. */
+    @Transactional
+    public Map<String, Object> vendedor(UUID vendedorId) {
+        var v = vendedores.detalhe(papel(), vendedorId);
+        auditar("vendedor_ver", vendedorId.toString(), Map.of());
+        return v;
     }
 
     @Transactional
@@ -388,6 +399,7 @@ public class RadarService {
         out.put("agentes", agentes());
         out.putAll(cadastros.dados(p, f));
         out.putAll(clientes.dados(p));
+        out.putAll(vendedores.dados(p));
         out.putAll(promocoes.dados());
         out.putAll(this.produtos.dados());
         normalizarDinheiro(out);
@@ -947,6 +959,8 @@ public class RadarService {
             default -> {
                 if (RadarCadastros.OPERACOES.contains(op))
                     result.putAll(cadastros.executar(op, n, papel()));
+                else if (RadarVendedores.OPERACOES.contains(op))
+                    result.putAll(vendedores.salvar(n, papel()));
                 else if (RadarAnuncios.OPERACOES.contains(op))
                     result.putAll(anuncios.executar(op, n, papel()));
                 else if (RadarClientes.OPERACOES.contains(op))
