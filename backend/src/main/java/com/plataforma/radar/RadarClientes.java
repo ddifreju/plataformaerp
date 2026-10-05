@@ -44,7 +44,9 @@ import java.util.UUID;
 @Service
 public class RadarClientes {
 
-    static final Set<String> OPERACOES = Set.of("cliente_salvar");
+    static final Set<String> OPERACOES = Set.of("cliente_salvar", "clientes_lote");
+
+    private static final int MAX_LOTE = 500;
 
     static final Set<String> VEEM =
             Set.of("DONO", "GESTOR", "ATENDIMENTO", "FINANCEIRO", "ANALISTA");
@@ -130,15 +132,15 @@ public class RadarClientes {
                 db.queryForList(
                         "select c.id, c.codigo, c.nome, c.fantasia, c.tipo_pessoa, c.documento,"
                             + " c.email, c.telefone, c.celular, c.cidade, c.uf, c.status_crm,"
-                            + " c.origem, c.incompleto, c.ativo, c.tipos_contato::text"
-                            + " tipos_contato, c.vendedor_id, c.prazo_entrega_dias, c.criado_em,"
-                            + " coalesce(h.pedidos,0) pedidos, h.primeira_compra, h.ultima_compra,"
-                            + " coalesce(h.total,0) total from radar_cliente c left join (select"
-                            + " cliente_id, count(*) pedidos, min(criado_em) primeira_compra,"
-                            + " max(criado_em) ultima_compra, sum(preco*quantidade-desconto) total"
-                            + " from radar_pedido where tenant_id=? and cliente_id is not null and"
-                            + " estado<>'CANCELADO' group by cliente_id) h on h.cliente_id=c.id"
-                            + " where c.tenant_id=?"
+                            + " c.origem, c.incompleto, c.ativo, c.lista_preco,"
+                            + " c.tipos_contato::text tipos_contato, c.vendedor_id,"
+                            + " c.prazo_entrega_dias, c.criado_em, coalesce(h.pedidos,0) pedidos,"
+                            + " h.primeira_compra, h.ultima_compra, coalesce(h.total,0) total from"
+                            + " radar_cliente c left join (select cliente_id, count(*) pedidos,"
+                            + " min(criado_em) primeira_compra, max(criado_em) ultima_compra,"
+                            + " sum(preco*quantidade-desconto) total from radar_pedido where"
+                            + " tenant_id=? and cliente_id is not null and estado<>'CANCELADO'"
+                            + " group by cliente_id) h on h.cliente_id=c.id where c.tenant_id=?"
                                 + (estoque ? " and not c.tipos_contato @> '[\"CLIENTE\"]'" : "")
                                 + " order by c.nome limit 2000",
                         tenant(),
@@ -354,6 +356,219 @@ public class RadarClientes {
                 documento != null && documento.length() == 14 ? "J" : "F",
                 documento);
         return id;
+    }
+
+    // ---- lote --------------------------------------------------------------------------------
+
+    /**
+     * Ações em lote sobre os contatos marcados na lista: vendedor, lista de preço, tipo de contato,
+     * excluir e unificar. Estoque só alcança lote sem cliente.
+     */
+    Map<String, Object> lote(JsonNode n, String papel) {
+        List<UUID> ids = ids(n.path("ids"));
+        if (ESTOQUE.equals(papel)) ids.forEach(this::exigirSemCliente);
+        else permitir(papel, EDITAM.toArray(String[]::new));
+        String acao = n.path("acao").asText("");
+        return switch (acao) {
+            case "VENDEDOR" -> {
+                UUID vendedor = vendedor(n);
+                int k = atualizarTodos("vendedor_id=?", vendedor, ids);
+                yield Map.of(
+                        "mensagem",
+                        vendedor == null
+                                ? k + " contato(s) ficaram sem vendedor padrão."
+                                : k + " contato(s) vinculados ao vendedor.");
+            }
+            case "LISTA_PRECO" -> {
+                String lista = campo(n, "lista_preco", 60, "Lista de preço");
+                int k = atualizarTodos("lista_preco=?", lista, ids);
+                yield Map.of(
+                        "mensagem",
+                        lista == null
+                                ? k + " contato(s) ficaram sem lista de preço."
+                                : k + " contato(s) na lista de preço " + lista + ".");
+            }
+            case "TIPO_CONTATO" -> {
+                String tipos = tiposContato(n);
+                if (ESTOQUE.equals(papel) && tipos.contains("CLIENTE"))
+                    throw new ResponseStatusException(
+                            HttpStatus.FORBIDDEN, "Seu cargo não define o tipo Cliente.");
+                int k = atualizarTodos("tipos_contato=?::jsonb", tipos, ids);
+                yield Map.of("mensagem", "Tipo de contato definido em " + k + " cadastro(s).");
+            }
+            case "EXCLUIR" -> excluir(ids);
+            case "UNIFICAR" -> unificar(id(n, "principal_id"), ids);
+            default -> {
+                erro("Ação em lote não reconhecida.");
+                yield Map.of();
+            }
+        };
+    }
+
+    private int atualizarTodos(String set, Object valor, List<UUID> ids) {
+        int total = 0;
+        for (UUID id : ids)
+            total +=
+                    db.update(
+                            "update radar_cliente set "
+                                    + set
+                                    + ",atualizado_em=now() where tenant_id=? and id=?",
+                            valor,
+                            tenant(),
+                            id);
+        if (total != ids.size())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contato não encontrado.");
+        return total;
+    }
+
+    /**
+     * Exclui só quem não tem histórico: contato com pedido ou ligado a produto como fornecedor não
+     * sai (o pedido precisa continuar rastreável). Para esses, a saída é inativar o cadastro.
+     */
+    private Map<String, Object> excluir(List<UUID> ids) {
+        List<String> presos = new ArrayList<>();
+        for (UUID id : ids) {
+            var linha =
+                    db.queryForList(
+                            "select c.codigo, c.nome, exists(select 1 from radar_pedido p where"
+                                + " p.tenant_id=c.tenant_id and p.cliente_id=c.id) tem_pedido,"
+                                + " exists(select 1 from radar_produto_fornecedor f where"
+                                + " f.tenant_id=c.tenant_id and f.fornecedor_id=c.id) fornece from"
+                                + " radar_cliente c where c.tenant_id=? and c.id=?",
+                            tenant(),
+                            id);
+            if (linha.isEmpty())
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contato não encontrado.");
+            var c = linha.getFirst();
+            if (Boolean.TRUE.equals(c.get("tem_pedido")) || Boolean.TRUE.equals(c.get("fornece")))
+                presos.add(c.get("codigo") + " " + c.get("nome"));
+        }
+        if (!presos.isEmpty())
+            erro(
+                    "Não dá para excluir quem tem pedidos ou fornece produtos: "
+                            + String.join(", ", presos)
+                            + ". Inative esses cadastros em vez de excluir.");
+        for (UUID id : ids) {
+            db.update(
+                    "delete from radar_cliente_anexo where tenant_id=? and cliente_id=?",
+                    tenant(),
+                    id);
+            db.update("delete from radar_cliente where tenant_id=? and id=?", tenant(), id);
+        }
+        return Map.of("mensagem", ids.size() + " cadastro(s) excluído(s).");
+    }
+
+    /**
+     * Junta os cadastros marcados no principal: pedidos, anexos e vínculos de fornecedor passam
+     * para ele, os tipos de contato somam e os demais são apagados. Documentos diferentes são
+     * pessoas diferentes (CPF/CNPJ é o que identifica) e não se juntam.
+     */
+    private Map<String, Object> unificar(UUID principal, List<UUID> ids) {
+        if (!ids.contains(principal)) erro("O cadastro principal precisa estar entre os marcados.");
+        if (ids.size() < 2) erro("Marque ao menos dois cadastros para unificar.");
+        var linhas =
+                db.queryForList(
+                        "select id, codigo, documento, tipos_contato::text tipos from radar_cliente"
+                                + " where tenant_id=? and id = any(?)",
+                        tenant(),
+                        ids.toArray(UUID[]::new));
+        if (linhas.size() != ids.size())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Contato não encontrado.");
+        var documentos =
+                linhas.stream()
+                        .map(l -> (String) l.get("documento"))
+                        .filter(d -> d != null)
+                        .distinct()
+                        .toList();
+        if (documentos.size() > 1)
+            erro(
+                    "Os cadastros têm CPF/CNPJ diferentes: são pessoas ou empresas diferentes e"
+                            + " não podem ser unificados.");
+        List<String> tipos = new ArrayList<>();
+        for (var l : linhas)
+            for (Object t : lista(l.get("tipos")))
+                if (!tipos.contains(t.toString())) tipos.add(t.toString());
+        int pedidos = 0;
+        for (UUID outro : ids) {
+            if (outro.equals(principal)) continue;
+            pedidos +=
+                    db.update(
+                            "update radar_pedido set cliente_id=? where tenant_id=? and"
+                                    + " cliente_id=?",
+                            principal,
+                            tenant(),
+                            outro);
+            db.update(
+                    "update radar_cliente_anexo set cliente_id=? where tenant_id=? and"
+                            + " cliente_id=?",
+                    principal,
+                    tenant(),
+                    outro);
+            // Vínculo de fornecedor: recria no principal o que ele ainda não tinha.
+            db.update(
+                    "insert into radar_produto_fornecedor(tenant_id,produto_id,fornecedor_id,"
+                            + "codigo_no_fornecedor) select tenant_id,produto_id,?,"
+                            + "codigo_no_fornecedor from radar_produto_fornecedor f"
+                            + " where tenant_id=? and fornecedor_id=? and not exists (select 1"
+                            + " from radar_produto_fornecedor x where x.tenant_id=f.tenant_id"
+                            + " and x.produto_id=f.produto_id and x.fornecedor_id=?)",
+                    principal,
+                    tenant(),
+                    outro,
+                    principal);
+            db.update(
+                    "delete from radar_produto_fornecedor where tenant_id=? and fornecedor_id=?",
+                    tenant(),
+                    outro);
+            db.update("delete from radar_cliente where tenant_id=? and id=?", tenant(), outro);
+        }
+        String documento = documentos.isEmpty() ? null : documentos.getFirst();
+        db.update(
+                "update radar_cliente set tipos_contato=?::jsonb,"
+                        + "documento=coalesce(documento,?),atualizado_em=now()"
+                        + " where tenant_id=? and id=?",
+                escrever(tipos),
+                documento,
+                tenant(),
+                principal);
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("id", principal);
+        r.put(
+                "mensagem",
+                (ids.size() - 1)
+                        + " cadastro(s) unificado(s) no principal; "
+                        + pedidos
+                        + " pedido(s) passaram para ele.");
+        return r;
+    }
+
+    /** Endereço de entrega dos marcados, para imprimir etiquetas. Sem CPF/CNPJ. */
+    List<Map<String, Object>> etiquetas(String papel, List<UUID> ids) {
+        if (ids.isEmpty() || ids.size() > MAX_LOTE)
+            erro("Escolha entre 1 e " + MAX_LOTE + " cadastros.");
+        if (ESTOQUE.equals(papel)) ids.forEach(this::exigirSemCliente);
+        else permitir(papel, VEEM_DOCUMENTO.toArray(String[]::new));
+        return db.queryForList(
+                "select codigo, nome, fantasia, endereco, numero, complemento, bairro, cidade, uf,"
+                        + " cep, pais from radar_cliente where tenant_id=? and id = any(?)"
+                        + " order by nome",
+                tenant(),
+                ids.toArray(UUID[]::new));
+    }
+
+    private static List<UUID> ids(JsonNode lista) {
+        if (!lista.isArray() || lista.isEmpty() || lista.size() > MAX_LOTE)
+            erro("Escolha entre 1 e " + MAX_LOTE + " cadastros.");
+        List<UUID> out = new ArrayList<>();
+        for (JsonNode i : lista) {
+            try {
+                UUID u = UUID.fromString(i.asText());
+                if (!out.contains(u)) out.add(u);
+            } catch (IllegalArgumentException e) {
+                erro("Identificador inválido.");
+            }
+        }
+        return out;
     }
 
     // ---- anexos ------------------------------------------------------------------------------

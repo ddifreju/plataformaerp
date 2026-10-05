@@ -94,6 +94,14 @@ public class RadarService {
         return c;
     }
 
+    /** Endereços para etiqueta. Fica na auditoria: sai endereço de cliente. */
+    @Transactional
+    public List<Map<String, Object>> etiquetas(List<UUID> ids) {
+        var e = clientes.etiquetas(papel(), ids);
+        auditar("etiquetas_imprimir", "clientes", Map.of("quantidade", ids.size()));
+        return e;
+    }
+
     /** Vendedor completo. Abrir fica na auditoria: tem CPF/CNPJ e comissão. */
     @Transactional
     public Map<String, Object> vendedor(UUID vendedorId) {
@@ -963,6 +971,7 @@ public class RadarService {
                     result.putAll(vendedores.salvar(n, papel()));
                 else if (RadarAnuncios.OPERACOES.contains(op))
                     result.putAll(anuncios.executar(op, n, papel()));
+                else if (op.equals("clientes_lote")) result.putAll(clientes.lote(n, papel()));
                 else if (RadarClientes.OPERACOES.contains(op))
                     result.putAll(clientes.salvar(n, papel()));
                 else if (RadarProdutos.OPERACOES.contains(op))

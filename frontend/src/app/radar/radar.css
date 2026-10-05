@@ -2370,3 +2370,68 @@ img.rd-product-thumb {
     grid-template-columns: 1fr;
   }
 }
+
+/* Ações em lote */
+.radar-app label.rd-marcar-todos {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.rd-barra-lote {
+  position: sticky;
+  bottom: 12px;
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 10px 14px;
+  background: white;
+  border: 1px solid var(--rd-line);
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+}
+.rd-barra-qtd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  margin-right: 6px;
+}
+.rd-barra-qtd button {
+  border: 0;
+  background: none;
+  padding: 4px 6px;
+}
+.rd-mais-acoes ul.rd-menu-cima {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+.rd-mais-acoes li.rd-menu-sep {
+  border-top: 1px solid var(--rd-line);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.rd-mais-acoes li button:disabled {
+  color: var(--rd-muted);
+  cursor: not-allowed;
+}
+.rd-campo-lote {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  margin: 8px 0 4px;
+}
+.radar-app button.perigo {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  color: white;
+}
+@media (max-width: 720px) {
+  .rd-mais-acoes ul.rd-menu-cima {
+    left: auto;
+    right: 0;
+  }
+}
