@@ -812,6 +812,10 @@ public class RadarService {
                 permitir("DONO", "GESTOR", "ESTOQUE");
                 transicao(n);
             }
+            case "pedidos_lote" -> {
+                permitir("DONO", "GESTOR");
+                result.putAll(pedidosLote(n));
+            }
             case "titulo" -> {
                 permitir("DONO", "GESTOR", "FINANCEIRO");
                 BigDecimal v = valor(n, "valor");
@@ -1111,6 +1115,199 @@ public class RadarService {
                 desconto.negate(),
                 promocaoId != null ? "Promoção " + promocaoId : "Valor informado no pedido local");
         return id;
+    }
+
+    private static final Map<String, Set<String>> ORIGENS =
+            Map.of(
+                    "SEPARADO", Set.of("RESERVADO"),
+                    "EXPEDIDO", Set.of("SEPARADO"),
+                    "CANCELADO", Set.of("RESERVADO", "SEPARADO"));
+
+    /**
+     * Ações em lote da lista de pedidos. ESTADO (e EXCLUIR, que cancela: pedido não se apaga, por
+     * rastreabilidade) usa a mesma transição de um pedido só, e pula os pedidos em que ela não
+     * cabe. MARCADORES e DATA_FATURAMENTO só organizam. LANCAR_CONTAS cria a conta a receber do
+     * valor do pedido (bruto menos desconto) para quem ainda não tem.
+     */
+    private Map<String, Object> pedidosLote(JsonNode n) {
+        String acao = texto(n, "acao", 30);
+        JsonNode lista = n.path("ids");
+        if (!lista.isArray() || lista.isEmpty() || lista.size() > 500)
+            erro("Escolha entre 1 e 500 pedidos.");
+        List<UUID> ids = new ArrayList<>();
+        for (JsonNode i : lista) {
+            try {
+                ids.add(UUID.fromString(i.asText()));
+            } catch (IllegalArgumentException e) {
+                erro("Identificador inválido.");
+            }
+        }
+        UUID[] arr = ids.toArray(UUID[]::new);
+        var pedidos =
+                db.queryForList(
+                        "select id, numero, estado, preco, quantidade, desconto from radar_pedido"
+                                + " where tenant_id=? and id = any(?) order by numero for update",
+                        tenant(),
+                        arr);
+        if (pedidos.size() != ids.size())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido não encontrado.");
+        Map<String, Object> r = new LinkedHashMap<>();
+        switch (acao) {
+            case "ESTADO", "EXCLUIR" -> {
+                String estado = acao.equals("EXCLUIR") ? "CANCELADO" : texto(n, "estado", 30);
+                if (!ORIGENS.containsKey(estado)) erro("Situação inválida.");
+                if (estado.equals("EXPEDIDO") && !n.path("confirmar_simulacao").asBoolean())
+                    erro("Expedição local exige confirmação de simulação; não há NF-e emitida.");
+                int feitos = 0;
+                List<String> pulados = new ArrayList<>();
+                for (var p : pedidos) {
+                    if (!ORIGENS.get(estado).contains(p.get("estado").toString())) {
+                        pulados.add(p.get("numero").toString());
+                        continue;
+                    }
+                    var uma = json.createObjectNode();
+                    uma.put("id", p.get("id").toString());
+                    uma.put("estado", estado);
+                    uma.put("confirmar_simulacao", true);
+                    transicao(uma);
+                    feitos++;
+                }
+                r.put("alterados", feitos);
+                r.put("pulados", pulados);
+                String verbo =
+                        switch (estado) {
+                            case "SEPARADO" -> "enviado(s) para separação";
+                            case "EXPEDIDO" -> "expedido(s) (simulação local, sem NF-e)";
+                            default -> "cancelado(s), com a reserva devolvida ao estoque";
+                        };
+                r.put(
+                        "mensagem",
+                        feitos
+                                + " pedido(s) "
+                                + verbo
+                                + "."
+                                + (pulados.isEmpty()
+                                        ? ""
+                                        : " Ficaram como estavam, pela situação atual: "
+                                                + String.join(", ", pulados)
+                                                + "."));
+            }
+            case "MARCADORES" -> {
+                String modo = n.path("modo").asText("ADICIONAR");
+                if (!Set.of("ADICIONAR", "REMOVER", "SUBSTITUIR").contains(modo))
+                    erro("Modo inválido.");
+                List<String> marcadores = new ArrayList<>();
+                for (JsonNode m : n.path("marcadores")) {
+                    String t = m.asText("").trim().toLowerCase();
+                    if (t.isEmpty()) continue;
+                    if (t.length() > 40) erro("Marcador muito longo: " + t);
+                    if (!marcadores.contains(t)) marcadores.add(t);
+                }
+                if (marcadores.size() > 20) erro("No máximo 20 marcadores.");
+                if (marcadores.isEmpty() && !modo.equals("SUBSTITUIR"))
+                    erro("Informe pelo menos um marcador.");
+                String js = enc(marcadores);
+                String sql =
+                        switch (modo) {
+                            case "ADICIONAR" ->
+                                    "update radar_pedido set marcadores=(select coalesce(jsonb_agg("
+                                            + "distinct x),'[]'::jsonb) from jsonb_array_elements("
+                                            + "marcadores || ?::jsonb) x)";
+                            case "REMOVER" ->
+                                    "update radar_pedido set marcadores=(select"
+                                        + " coalesce(jsonb_agg(x),'[]'::jsonb) from"
+                                        + " jsonb_array_elements(marcadores) x where not ?::jsonb"
+                                        + " @> jsonb_build_array(x))";
+                            default -> "update radar_pedido set marcadores=?::jsonb";
+                        };
+                int k = db.update(sql + " where tenant_id=? and id = any(?)", js, tenant(), arr);
+                r.put("alterados", k);
+                r.put("mensagem", "Marcadores alterados em " + k + " pedido(s).");
+            }
+            case "DATA_FATURAMENTO" -> {
+                LocalDate data = null;
+                String texto = n.path("data").asText("").trim();
+                if (!texto.isEmpty()) {
+                    try {
+                        data = LocalDate.parse(texto);
+                    } catch (Exception e) {
+                        erro("Data inválida.");
+                    }
+                }
+                int k =
+                        db.update(
+                                "update radar_pedido set data_faturamento=? where tenant_id=? and"
+                                        + " id = any(?)",
+                                data,
+                                tenant(),
+                                arr);
+                r.put("alterados", k);
+                r.put(
+                        "mensagem",
+                        (data == null ? "Data de faturamento limpa em " : "Data de faturamento ")
+                                + (data == null ? "" : "definida em ")
+                                + k
+                                + " pedido(s).");
+            }
+            case "LANCAR_CONTAS" -> {
+                if (!financeiro()) erro("Seu cargo não lança contas.");
+                LocalDate vencimento;
+                try {
+                    vencimento = LocalDate.parse(n.path("vencimento").asText());
+                } catch (Exception e) {
+                    erro("Vencimento inválido.");
+                    return r;
+                }
+                int lancadas = 0;
+                List<String> pulados = new ArrayList<>();
+                for (var p : pedidos) {
+                    String estado = p.get("estado").toString();
+                    Integer ja =
+                            db.queryForObject(
+                                    "select count(*) from radar_titulo where tenant_id=? and"
+                                            + " pedido_id=? and tipo='RECEBER'",
+                                    Integer.class,
+                                    tenant(),
+                                    p.get("id"));
+                    BigDecimal valor =
+                            bd(p.get("preco"))
+                                    .multiply(
+                                            BigDecimal.valueOf(
+                                                    ((Number) p.get("quantidade")).longValue()))
+                                    .subtract(bd(p.get("desconto")))
+                                    .setScale(2, RoundingMode.HALF_UP);
+                    if (Set.of("CANCELADO", "DEVOLVIDO").contains(estado)
+                            || (ja != null && ja > 0)
+                            || valor.signum() <= 0) {
+                        pulados.add(p.get("numero").toString());
+                        continue;
+                    }
+                    db.update(
+                            "insert into radar_titulo(id,tenant_id,descricao,tipo,valor,vencimento,"
+                                    + "pedido_id) values(?,?,?,'RECEBER',?,?,?)",
+                            UUID.randomUUID(),
+                            tenant(),
+                            "Pedido " + p.get("numero"),
+                            valor,
+                            vencimento,
+                            p.get("id"));
+                    lancadas++;
+                }
+                r.put("lancadas", lancadas);
+                r.put("pulados", pulados);
+                r.put(
+                        "mensagem",
+                        lancadas
+                                + " conta(s) a receber lançada(s)."
+                                + (pulados.isEmpty()
+                                        ? ""
+                                        : " Sem lançamento (já lançado, cancelado ou devolvido): "
+                                                + String.join(", ", pulados)
+                                                + "."));
+            }
+            default -> erro("Ação em lote não reconhecida.");
+        }
+        return r;
     }
 
     private void transicao(JsonNode n) {
