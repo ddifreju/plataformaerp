@@ -1870,14 +1870,38 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   );
 }
 
-// Espera até ~3 minutos pelo servidor acordar (18 × 10 s).
-const ESPERA_MAX_TENTATIVAS = 18;
+// Espera até ~7 minutos pelo servidor acordar (42 × 10 s). No plano gratuito
+// do Render ele já levou 3 min e meio para ligar depois de dias parado.
+const ESPERA_MAX_TENTATIVAS = 42;
 const ESPERA_ENTRE_TENTATIVAS_MS = 10_000;
 
 function Login({ onLogin }: { onLogin: () => Promise<void> }) {
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [acordando, setAcordando] = useState(0);
+    [acordando, setAcordando] = useState(0),
+    [servidor, setServidor] = useState<"acordando" | "pronto">("acordando");
+  // Começa a acordar o servidor assim que a tela abre, enquanto a pessoa digita.
+  // Qualquer resposta que não seja 5xx (até 401, sem sessão) quer dizer que ele ligou.
+  useEffect(() => {
+    let vivo = true;
+    (async () => {
+      for (let i = 0; vivo && i < ESPERA_MAX_TENTATIVAS; i++) {
+        try {
+          const r = await fetch("/api/sessao", { credentials: "include" });
+          if (r.status < 500) {
+            if (vivo) setServidor("pronto");
+            return;
+          }
+        } catch {
+          // rede ou servidor ainda subindo: tenta de novo
+        }
+        await new Promise((pronto) => setTimeout(pronto, ESPERA_ENTRE_TENTATIVAS_MS));
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, []);
   return (
     <div className="radar-app rd-login">
       <div className="rd-login-story">
@@ -1969,10 +1993,16 @@ function Login({ onLogin }: { onLogin: () => Promise<void> }) {
                 autoComplete="current-password"
               />
             </label>
-            {acordando > 0 && (
+            {acordando > 0 ? (
               <div className="rd-note" role="status">
-                Acordando o servidor… isso leva de 1 a 3 minutos depois de um tempo sem uso. Não
-                precisa clicar de novo.
+                Acordando o servidor… já se passaram {Math.round((acordando * ESPERA_ENTRE_TENTATIVAS_MS) / 1000)} s.
+                Depois de alguns dias sem uso pode levar até 5 minutos. Não precisa clicar de novo.
+              </div>
+            ) : (
+              <div className="rd-note" role="status">
+                {servidor === "pronto"
+                  ? "● Servidor pronto."
+                  : "○ Preparando o servidor… se ele estava parado, pode levar alguns minutos."}
               </div>
             )}
             {error && (
