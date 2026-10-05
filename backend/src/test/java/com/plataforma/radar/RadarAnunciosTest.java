@@ -145,9 +145,13 @@ class RadarAnunciosTest {
                                 json(
                                         "{\"id\":\""
                                                 + produto
-                                                + "\",\"tipo\":\"SIMPLES\",\"sku\":\"ML-S1\","
-                                                + "\"nome\":\"Persiana rolô\",\"preco\":\"80.00\","
-                                                + "\"custo\":\"30.00\"}"),
+                                                + "\",\"tipo\":\"SIMPLES\",\"sku\":\"ML-S1\",\"nome\":\"Persiana"
+                                                + " rolô\",\"preco\":\"80.00\","
+                                                + "\"custo\":\"30.00\",\"origem\":\"0\",\"ncm\":\"63031200\","
+                                                + "\"motivo_sem_gtin\":\"SEM_CODIGO_DO_FABRICANTE\",\"marca\":\"X\","
+                                                + "\"categoria_nome\":\"Persianas\",\"descricao\":\"d\","
+                                                + "\"peso_bruto_kg\":\"1\",\"largura_cm\":\"1\","
+                                                + "\"altura_cm\":\"1\",\"comprimento_cm\":\"1\"}"),
                                 "DONO"));
         assertEquals(
                 false,

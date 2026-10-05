@@ -874,6 +874,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               abrirModal={setModal}
               categorias={data.categorias}
               categoriaCanais={data.categoriaCanais ?? []}
+              imagens={data.imagens}
               abrirProduto={(id) => {
                 setPage("produtos");
                 setEditando({ id, aba: "geral", versao: Date.now() });
