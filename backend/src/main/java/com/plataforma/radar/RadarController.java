@@ -75,6 +75,13 @@ public class RadarController {
         return service.etiquetas(ids);
     }
 
+    @PostMapping(value = "/vendedores/{id}/senha", consumes = "application/json")
+    public Map<String, Object> senhaVendedor(@PathVariable UUID id, @RequestBody JsonNode body) {
+        service.alterarSenhaVendedor(
+                id, body.path("senha").asText(null), body.path("confirmacao").asText(null));
+        return Map.of("mensagem", "Senha de acesso alterada.");
+    }
+
     @GetMapping("/vendedores/{id}")
     public Map<String, Object> vendedor(@PathVariable UUID id) {
         return service.vendedor(id);

@@ -110,6 +110,13 @@ public class RadarService {
         return v;
     }
 
+    /** Troca a senha de acesso do vendedor. A auditoria registra quem trocou, nunca a senha. */
+    @Transactional
+    public void alterarSenhaVendedor(UUID vendedorId, String senha, String confirmacao) {
+        vendedores.alterarSenha(papel(), vendedorId, senha, confirmacao);
+        auditar("vendedor_senha_alterar", vendedorId.toString(), Map.of());
+    }
+
     @Transactional
     public UUID adicionarAnexo(UUID clienteId, String nome, String tipo, byte[] dados) {
         UUID id = clientes.adicionarAnexo(papel(), clienteId, nome, tipo, dados);
@@ -968,7 +975,7 @@ public class RadarService {
                 if (RadarCadastros.OPERACOES.contains(op))
                     result.putAll(cadastros.executar(op, n, papel()));
                 else if (RadarVendedores.OPERACOES.contains(op))
-                    result.putAll(vendedores.salvar(n, papel()));
+                    result.putAll(vendedores.executar(op, n, papel()));
                 else if (RadarAnuncios.OPERACOES.contains(op))
                     result.putAll(anuncios.executar(op, n, papel()));
                 else if (op.equals("clientes_lote")) result.putAll(clientes.lote(n, papel()));

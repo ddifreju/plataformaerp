@@ -1703,6 +1703,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               usuariosSistema={data.usuariosSistema ?? []}
               podeEditar={can("DONO", "GESTOR")}
               podeVerDetalhe={can("DONO", "GESTOR", "FINANCEIRO")}
+              podeAlterarSenha={can("DONO")}
               executar={commandResult}
             />
           )}

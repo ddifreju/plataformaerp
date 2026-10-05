@@ -11,8 +11,10 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +31,7 @@ class RadarVendedoresTest {
     @BeforeAll
     static void preparar() {
         db = BancoRadarDeTeste.comoAplicacao();
-        vendedores = new RadarVendedores(db, BancoRadarDeTeste.JSON);
+        vendedores = new RadarVendedores(db, BancoRadarDeTeste.JSON, new BCryptPasswordEncoder(12));
         clientes = new RadarClientes(db, BancoRadarDeTeste.JSON);
     }
 
@@ -164,6 +166,236 @@ class RadarVendedoresTest {
                         ResponseStatusException.class,
                         () -> naEmpresa(outra, () -> vendedores.detalhe("DONO", id)));
         assertEquals(HttpStatus.NOT_FOUND, abrir.getStatusCode());
+    }
+
+    @Test
+    void excluirMandaParaExcluidosDesligaOAcessoERestaura() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID outra = BancoRadarDeTeste.novaEmpresa();
+        UUID usuario = novoUsuario(empresa);
+        UUID id =
+                salvar(
+                        empresa,
+                        completo("Rafa").replace("}", ",\"usuario_id\":\"" + usuario + "\"}"));
+        String excluir = "{\"acao\":\"EXCLUIR\",\"ids\":[\"" + id + "\"]}";
+
+        var deFora =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        outra,
+                                        () ->
+                                                vendedores.executar(
+                                                        "vendedores_lote", json(excluir), "DONO")));
+        assertEquals(HttpStatus.NOT_FOUND, deFora.getStatusCode());
+        var semCargo =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresa,
+                                        () ->
+                                                vendedores.executar(
+                                                        "vendedores_lote",
+                                                        json(excluir),
+                                                        "ESTOQUE")));
+        assertEquals(HttpStatus.FORBIDDEN, semCargo.getStatusCode());
+
+        String clienteAntigo =
+                "{\"nome\":\"Bia\",\"tipo_pessoa\":\"F\",\"documento\":\"52998224725\","
+                        + "\"cep\":\"01310100\",\"endereco\":\"Av\",\"numero\":\"1\","
+                        + "\"bairro\":\"B\",\"cidade\":\"SP\",\"uf\":\"SP\",\"vendedor_id\":\""
+                        + id
+                        + "\"}";
+        UUID cli =
+                (UUID)
+                        naEmpresa(empresa, () -> clientes.salvar(json(clienteAntigo), "DONO"))
+                                .get("id");
+        naEmpresa(empresa, () -> vendedores.executar("vendedores_lote", json(excluir), "GESTOR"));
+        var v =
+                naEmpresa(
+                        empresa,
+                        () -> db.queryForMap("select * from radar_vendedor where id=?", id));
+        assertTrue(v.get("excluido_em") != null);
+        assertEquals(null, v.get("usuario_id"));
+        assertEquals("INATIVO", v.get("situacao"));
+        // Excluído não se edita nem vira vendedor de cliente.
+        assertThrows(
+                ResponseStatusException.class,
+                () -> salvar(empresa, completo("Rafa").replace("}", ",\"id\":\"" + id + "\"}")));
+        var cliente =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresa,
+                                        () ->
+                                                clientes.salvar(
+                                                        json(
+                                                                "{\"nome\":\"Ana\",\"tipo_pessoa\":\"F\","
+                                                                    + "\"documento\":\"39053344705\","
+                                                                    + "\"cep\":\"01310100\",\"endereco\":\"Av\","
+                                                                    + "\"numero\":\"1\",\"bairro\":\"B\","
+                                                                    + "\"cidade\":\"SP\",\"uf\":\"SP\","
+                                                                    + "\"vendedor_id\":\""
+                                                                        + id
+                                                                        + "\"}"),
+                                                        "DONO")));
+        assertTrue(cliente.getReason().contains("Vendedor não encontrado"), cliente.getReason());
+
+        // Cliente que já tinha o vendedor continua salvando sem trocar.
+        naEmpresa(
+                empresa,
+                () ->
+                        clientes.salvar(
+                                json(clienteAntigo.replace("{", "{\"id\":\"" + cli + "\",")),
+                                "DONO"));
+
+        naEmpresa(
+                empresa,
+                () ->
+                        vendedores.executar(
+                                "vendedores_lote",
+                                json("{\"acao\":\"RESTAURAR\",\"ids\":[\"" + id + "\"]}"),
+                                "DONO"));
+        assertEquals(
+                null,
+                naEmpresa(
+                                empresa,
+                                () ->
+                                        db.queryForMap(
+                                                "select excluido_em from radar_vendedor where id=?",
+                                                id))
+                        .get("excluido_em"));
+    }
+
+    @Test
+    void comissaoRapidaValidaAAliquota() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID id = salvar(empresa, completo("Rafa"));
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        comissao(
+                                empresa,
+                                id,
+                                "{\"comissao_regra\":\"FIXA\",\"comissao_aliquota\":\"101\"}"));
+        comissao(
+                empresa,
+                id,
+                "{\"comissao_regra\":\"DESCONTO\",\"comissao_aliquota\":\"4,5\","
+                        + "\"desconsiderar_comissao_linha\":true}");
+        var v =
+                naEmpresa(
+                        empresa,
+                        () -> db.queryForMap("select * from radar_vendedor where id=?", id));
+        assertEquals("DESCONTO", v.get("comissao_regra"));
+        assertEquals(new BigDecimal("4.50"), v.get("comissao_aliquota"));
+        assertEquals(true, v.get("desconsiderar_comissao_linha"));
+    }
+
+    @Test
+    void senhaDeAcessoSoADonaTrocaComUsuarioLigado() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID outra = BancoRadarDeTeste.novaEmpresa();
+        UUID semUsuario = salvar(empresa, completo("Sem acesso"));
+        UUID usuario = novoUsuario(empresa);
+        UUID id =
+                salvar(
+                        empresa,
+                        completo("Rafa")
+                                .replace("529.982.247-25", "390.533.447-05")
+                                .replace("}", ",\"usuario_id\":\"" + usuario + "\"}"));
+
+        var gestor =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresa,
+                                        () -> senha("GESTOR", id, "novaSenha1", "novaSenha1")));
+        assertEquals(HttpStatus.FORBIDDEN, gestor.getStatusCode());
+        assertTrue(
+                assertThrows(
+                                ResponseStatusException.class,
+                                () ->
+                                        naEmpresa(
+                                                empresa,
+                                                () ->
+                                                        senha(
+                                                                "DONO",
+                                                                semUsuario,
+                                                                "novaSenha1",
+                                                                "novaSenha1")))
+                        .getReason()
+                        .contains("não tem usuário"));
+        assertTrue(
+                assertThrows(
+                                ResponseStatusException.class,
+                                () -> naEmpresa(empresa, () -> senha("DONO", id, "curta", "curta")))
+                        .getReason()
+                        .contains("8 caracteres"));
+        assertTrue(
+                assertThrows(
+                                ResponseStatusException.class,
+                                () ->
+                                        naEmpresa(
+                                                empresa,
+                                                () ->
+                                                        senha(
+                                                                "DONO",
+                                                                id,
+                                                                "novaSenha1",
+                                                                "outraSenha")))
+                        .getReason()
+                        .contains("confirmação"));
+        var deFora =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        outra,
+                                        () -> senha("DONO", id, "novaSenha1", "novaSenha1")));
+        assertEquals(HttpStatus.NOT_FOUND, deFora.getStatusCode());
+
+        naEmpresa(empresa, () -> senha("DONO", id, "novaSenha1", "novaSenha1"));
+        String hash =
+                naEmpresa(
+                        empresa,
+                        () ->
+                                db.queryForObject(
+                                        "select senha_hash from usuario where id=?",
+                                        String.class,
+                                        usuario));
+        assertTrue(new BCryptPasswordEncoder(12).matches("novaSenha1", hash));
+    }
+
+    private static UUID novoUsuario(UUID empresa) throws SQLException {
+        UUID usuario = UUID.randomUUID();
+        BancoRadarDeTeste.executarComoDono(
+                "insert into usuario(id,tenant_id,email,senha_hash,nome,papel)"
+                        + " values(?,?,?,?,'Rafa','ATENDIMENTO')",
+                usuario,
+                empresa,
+                "rafa" + usuario.toString().substring(0, 8) + "@radar.test",
+                "$2a$12$" + "a".repeat(53));
+        return usuario;
+    }
+
+    private static Object senha(String papel, UUID id, String senha, String confirmacao) {
+        vendedores.alterarSenha(papel, id, senha, confirmacao);
+        return null;
+    }
+
+    private static void comissao(UUID empresa, UUID id, String corpo) {
+        naEmpresa(
+                empresa,
+                () ->
+                        vendedores.executar(
+                                "vendedor_comissao",
+                                json(corpo.replace("{", "{\"id\":\"" + id + "\",")),
+                                "DONO"));
     }
 
     private static String completo(String nome) {
