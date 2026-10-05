@@ -310,6 +310,47 @@ class RadarProdutosTest {
 
     // ---- apoio -----------------------------------------------------------------------------
 
+    @Test
+    void semDadosDeNotaEAnuncioNaoSalvaEListaOQueFalta() {
+        var erro =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                salvar(
+                                        empresaA,
+                                        "{\"tipo\":\"SIMPLES\",\"sku\":\"FALTA-1\",\"nome\":\"X\","
+                                                + "\"preco\":\"10.00\",\"custo\":\"1.00\"}"));
+        for (String campo :
+                List.of(
+                        "Origem",
+                        "NCM",
+                        "Código de barras",
+                        "Marca",
+                        "Categoria",
+                        "Descrição",
+                        "Peso bruto",
+                        "Medidas")) assertTrue(erro.getReason().contains(campo), campo);
+    }
+
+    @Test
+    void embalagemValeNoLugarDasMedidas() {
+        String semMedidas =
+                base("EMB-1")
+                        .replace(
+                                ",\"largura_cm\":\"10\",\"altura_cm\":\"10\",\"comprimento_cm\":\"10\"",
+                                "");
+        assertThrows(ResponseStatusException.class, () -> salvar(empresaA, "{" + semMedidas + "}"));
+        UUID id =
+                salvar(
+                        empresaA,
+                        "{"
+                                + semMedidas
+                                + ",\"embalagem_nova\":{\"nome\":\"Caixa"
+                                + " EMB-1\",\"largura_cm\":\"20\","
+                                + "\"altura_cm\":\"10\",\"comprimento_cm\":\"30\"}}");
+        assertNotNull(id);
+    }
+
     private static String base(String sku) {
         return base(sku, "SIMPLES");
     }
@@ -321,7 +362,12 @@ class RadarProdutosTest {
                 + sku
                 + "\",\"nome\":\"Produto "
                 + sku
-                + "\",\"preco\":\"49.90\",\"custo\":\"20.00\"";
+                + "\",\"preco\":\"49.90\",\"custo\":\"20.00\""
+                // Obrigatórios para nota e anúncio.
+                + ",\"origem\":\"0\",\"ncm\":\"63031200\",\"motivo_sem_gtin\":\"SEM_CODIGO_DO_FABRICANTE\","
+                + "\"marca\":\"Casa Clara\",\"categoria_nome\":\"Testes\","
+                + "\"descricao\":\"Produto de teste.\",\"peso_bruto_kg\":\"1\","
+                + "\"largura_cm\":\"10\",\"altura_cm\":\"10\",\"comprimento_cm\":\"10\"";
     }
 
     private static UUID salvar(UUID empresa, String corpo) {

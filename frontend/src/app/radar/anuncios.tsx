@@ -20,6 +20,7 @@ type Props = {
   abrirProduto: (id: string) => void;
   categorias: Row[];
   categoriaCanais: Row[];
+  imagens: Row[];
 };
 
 const CANAIS = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
@@ -61,11 +62,14 @@ type Filtros = { produto: string; situacao: string; ecommerce: string };
 const SEM_FILTRO: Filtros = { produto: "", situacao: "", ecommerce: "" };
 
 /** Motivos para o anúncio pedir atenção. Vazio = tudo certo. */
-function alertas(a: Row, p: Row | undefined, categoriaCanais: Row[]): string[] {
+function alertas(a: Row, p: Row | undefined, categoriaCanais: Row[], imagens: Row[]): string[] {
   const out: string[] = [];
   if (!p) out.push("Sem produto vinculado");
   else {
     if (p.incompleto === true) out.push("Produto com cadastro incompleto");
+    // Variação usa a imagem dela ou a do produto principal.
+    if (!imagens.some((i) => i.produto_id === p.id || (p.pai_id && i.produto_id === p.pai_id)))
+      out.push("Produto sem imagem");
     if (!p.categoria_id) out.push("Produto sem categoria");
     else if (!vinculoDe(categoriaCanais, p.categoria_id, str(a.canal)))
       out.push(`Categoria sem vínculo com o ${str(a.canal)}`);
@@ -80,7 +84,8 @@ export default function Anuncios(props: Props) {
   const [loja, setLoja] = useState<string | null>(null);
   const [novo, setNovo] = useState<string | null>(null);
   const produtoDe = (id: unknown) => props.produtos.find((p) => p.id === id);
-  const atencao = (a: Row) => alertas(a, produtoDe(a.produto_id), props.categoriaCanais).length > 0;
+  const atencao = (a: Row) =>
+    alertas(a, produtoDe(a.produto_id), props.categoriaCanais, props.imagens).length > 0;
 
   const formNovo = novo !== null && (
     <NovoAnuncio {...props} canal={novo} fechar={() => setNovo(null)} />
@@ -171,6 +176,7 @@ function ListaDaLoja({
   novoAnuncio,
   produtoDe,
   categoriaCanais,
+  imagens,
 }: Props & {
   canal: string;
   voltar: () => void;
@@ -189,7 +195,7 @@ function ListaDaLoja({
   const naAba = (a: Row, chave: string) =>
     chave === "TODOS" ||
     (chave === "ATENCAO"
-      ? alertas(a, produtoDe(a.produto_id), categoriaCanais).length > 0
+      ? alertas(a, produtoDe(a.produto_id), categoriaCanais, imagens).length > 0
       : a.situacao_ecommerce === chave);
   const termo = busca.trim().toLowerCase();
   const prodTermo = filtros.produto.trim().toLowerCase();
@@ -385,7 +391,7 @@ function ListaDaLoja({
             ]}
             rows={linhas.map((a) => {
               const p = produtoDe(a.produto_id);
-              const motivos = alertas(a, p, categoriaCanais);
+              const motivos = alertas(a, p, categoriaCanais, imagens);
               const [rotulo, tom] = NO_MARKETPLACE[str(a.situacao_ecommerce)] ?? ["—", "gray"];
               return [
                 podeEditar ? (

@@ -208,16 +208,22 @@ function Campo({
   rotulo,
   dica,
   largo,
+  obrigatorio,
   children,
 }: {
   rotulo: string;
   dica?: string;
   largo?: boolean;
+  // Exigido pela nota fiscal ou pelos marketplaces: sem ele o produto não salva.
+  obrigatorio?: boolean;
   children: ReactNode;
 }) {
   return (
     <label className={largo ? "wide" : ""}>
-      {rotulo}
+      <span>
+        {rotulo}
+        {obrigatorio && <b className="rd-obrigatorio"> *</b>}
+      </span>
       {children}
       {dica && <small className="rd-dica">{dica}</small>}
     </label>
@@ -401,8 +407,37 @@ export default function ProdutoForm({
     return base;
   }
 
+  // Mesma regra do servidor (nota fiscal + marketplaces), para levar direto à aba.
+  function faltando(): [string, Aba][] {
+    const f: [string, Aba][] = [];
+    const vazio = (k: string) => !str(v[k]).trim();
+    if (vazio("nome")) f.push(["Nome", "geral"]);
+    if (vazio("sku")) f.push(["Código (SKU)", "geral"]);
+    if (vazio("gtin") && vazio("motivo_sem_gtin"))
+      f.push(["Código de barras ou motivo de não ter", "geral"]);
+    if (vazio("marca")) f.push(["Marca", "geral"]);
+    if (vazio("origem")) f.push(["Origem (ICMS)", "geral"]);
+    if (vazio("ncm")) f.push(["NCM", "geral"]);
+    if (!categoriaTexto.trim()) f.push(["Categoria", "geral"]);
+    if (vazio("descricao")) f.push(["Descrição", "geral"]);
+    if (!(cents(v.preco) > 0)) f.push(["Preço de venda", "preco"]);
+    if (vazio("peso_bruto_kg")) f.push(["Peso bruto", "dimensoes"]);
+    const medidas = !vazio("largura_cm") && !vazio("altura_cm") && !vazio("comprimento_cm");
+    if (!medidas && !v.embalagem_id && !embalagemNova)
+      f.push(["Medidas ou embalagem", "dimensoes"]);
+    return f;
+  }
+
   async function salvar() {
     setErro("");
+    const f = faltando();
+    if (f.length) {
+      setErro(
+        `Preencha o que a nota fiscal e os marketplaces exigem: ${f.map((x) => x[0]).join(", ")}.`,
+      );
+      setAba(f[0][1]);
+      return;
+    }
     setSalvando(true);
     try {
       const r = await executar(corpo());
@@ -508,15 +543,21 @@ export default function ProdutoForm({
           </div>
           {!novo && <small className="rd-dica">O tipo não muda depois de salvo.</small>}
         </Campo>
-        <Campo rotulo="Nome do produto" largo>
+        <Campo rotulo="Nome do produto" obrigatorio largo>
           {entrada("nome", { maxLength: 250 })}
         </Campo>
-        <Campo rotulo="Código (SKU)">{entrada("sku", { maxLength: 80 })}</Campo>
-        <Campo rotulo="Código de barras (GTIN/EAN)" dica="8, 12, 13 ou 14 dígitos">
+        <Campo rotulo="Código (SKU)" obrigatorio>
+          {entrada("sku", { maxLength: 80 })}
+        </Campo>
+        <Campo
+          rotulo="Código de barras (GTIN/EAN)"
+          obrigatorio={!v.motivo_sem_gtin}
+          dica="8, 12, 13 ou 14 dígitos. Sem código, escolha o motivo ao lado."
+        >
           {entrada("gtin", { inputMode: "numeric", maxLength: 14 })}
         </Campo>
         {!v.gtin && (
-          <Campo rotulo="Sem código de barras? Motivo">
+          <Campo rotulo="Sem código de barras? Motivo" obrigatorio>
             <select
               id="produto-motivo_sem_gtin"
               value={str(v.motivo_sem_gtin)}
@@ -530,7 +571,9 @@ export default function ProdutoForm({
             </select>
           </Campo>
         )}
-        <Campo rotulo="Marca">{entrada("marca", { maxLength: 120 })}</Campo>
+        <Campo rotulo="Marca" obrigatorio>
+          {entrada("marca", { maxLength: 120 })}
+        </Campo>
         <Campo rotulo="Modelo">{entrada("modelo", { maxLength: 120 })}</Campo>
         <Campo rotulo="Condição">
           <select id="produto-condicao" value={str(v.condicao)} onChange={set("condicao")}>
@@ -548,7 +591,7 @@ export default function ProdutoForm({
             ))}
           </select>
         </Campo>
-        <Campo rotulo="Origem do produto conforme ICMS" largo>
+        <Campo rotulo="Origem do produto conforme ICMS" obrigatorio largo>
           <select id="produto-origem" value={str(v.origem)} onChange={set("origem")}>
             {ORIGENS.map(([valor, rotulo]) => (
               <option key={valor} value={valor}>
@@ -557,7 +600,7 @@ export default function ProdutoForm({
             ))}
           </select>
         </Campo>
-        <Campo rotulo="NCM - Nomenclatura Comum do Mercosul" dica="Ex.: 6303.12.00">
+        <Campo rotulo="NCM - Nomenclatura Comum do Mercosul" obrigatorio dica="Ex.: 6303.12.00">
           {entrada("ncm", { maxLength: 10, inputMode: "numeric" })}
         </Campo>
         <Campo rotulo="Código CEST" dica="Ex.: 10.045.01">
@@ -565,6 +608,7 @@ export default function ProdutoForm({
         </Campo>
         <Campo
           rotulo="Categoria"
+          obrigatorio
           dica="Escolha uma existente ou digite uma nova; ela entra no cadastro de categorias."
         >
           <input
@@ -580,7 +624,7 @@ export default function ProdutoForm({
           </datalist>
         </Campo>
         <Campo rotulo="Linha de produto">{entrada("linha_produto", { maxLength: 120 })}</Campo>
-        <Campo rotulo="Descrição" largo>
+        <Campo rotulo="Descrição" obrigatorio largo>
           <textarea
             id="produto-descricao"
             rows={6}
@@ -606,7 +650,7 @@ export default function ProdutoForm({
     preco: (
       <>
         <div className="rd-form-grid">
-          <Campo rotulo="Preço de venda (R$)">
+          <Campo rotulo="Preço de venda (R$)" obrigatorio>
             {entrada("preco", { type: "number", step: "0.01", min: "0" })}
           </Campo>
           <Campo rotulo="Preço promocional (R$)" dica="Opcional">
@@ -732,6 +776,10 @@ export default function ProdutoForm({
     dimensoes: (
       <>
         <h3 className="rd-secao">Dimensões e peso do produto (sem a embalagem)</h3>
+        <p className="rd-dica">
+          * Obrigatório: as três medidas do produto <strong>ou</strong> uma embalagem de envio
+          (abaixo), e o peso bruto. O marketplace usa isso para calcular o frete.
+        </p>
         <div className="rd-form-grid tres">
           <Campo rotulo="Largura (cm)">
             {entrada("largura_cm", { type: "number", step: "0.1", min: "0" })}
@@ -745,7 +793,7 @@ export default function ProdutoForm({
           <Campo rotulo="Peso líquido (kg)">
             {entrada("peso_liquido_kg", { type: "number", step: "0.001", min: "0" })}
           </Campo>
-          <Campo rotulo="Peso bruto (kg)" dica="Com embalagem; usado no frete">
+          <Campo rotulo="Peso bruto (kg)" obrigatorio dica="Com embalagem; usado no frete">
             {entrada("peso_bruto_kg", { type: "number", step: "0.001", min: "0" })}
           </Campo>
           <Campo rotulo="Nº de volumes">

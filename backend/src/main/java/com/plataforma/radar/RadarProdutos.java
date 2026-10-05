@@ -103,6 +103,7 @@ public class RadarProdutos {
         }
 
         Map<String, Object> c = colunasComuns(n);
+        exigirParaNotaEAnuncio(n, c);
         c.put("tipo", tipo);
         c.put("sku", texto(n, "sku", 80));
         c.put("nome", texto(n, "nome", 250));
@@ -144,6 +145,44 @@ public class RadarProdutos {
                             "custo", antes.get("custo").toString(),
                             "preco", antes.get("preco").toString()));
         return r;
+    }
+
+    /**
+     * O que a NF-e (código, descrição, NCM, origem, unidade, valor, GTIN ou "SEM GTIN") e os
+     * marketplaces (título, descrição, marca, categoria, condição, preço, peso e medidas do pacote)
+     * exigem. Sem isso o produto não é salvo pela tela; junta tudo que falta numa mensagem só.
+     * Imagem não entra aqui: só dá para enviar depois de salvar, e a falta dela aparece nos
+     * requisitos por canal e em "necessitam atenção" nos anúncios.
+     */
+    private void exigirParaNotaEAnuncio(JsonNode n, Map<String, Object> c) {
+        List<String> faltando = new ArrayList<>();
+        if (n.path("nome").asText("").isBlank()) faltando.add("Nome");
+        if (n.path("sku").asText("").isBlank()) faltando.add("Código (SKU)");
+        if (c.get("origem") == null) faltando.add("Origem (ICMS)");
+        if (c.get("ncm").toString().isEmpty()) faltando.add("NCM");
+        if (c.get("gtin") == null && c.get("motivo_sem_gtin") == null)
+            faltando.add("Código de barras ou motivo de não ter");
+        if (n.path("preco").asText("").isBlank()
+                || new BigDecimal(n.path("preco").asText("0").trim().replace(",", ".")).signum()
+                        <= 0) faltando.add("Preço de venda");
+        if (c.get("marca").toString().isBlank()) faltando.add("Marca");
+        if (n.path("categoria_id").asText("").isBlank()
+                && n.path("categoria_nome").asText("").isBlank()) faltando.add("Categoria");
+        if (c.get("descricao").toString().isBlank()) faltando.add("Descrição");
+        if (c.get("peso_bruto_kg") == null) faltando.add("Peso bruto");
+        boolean medidas =
+                c.get("largura_cm") != null
+                        && c.get("altura_cm") != null
+                        && c.get("comprimento_cm") != null;
+        boolean embalagem =
+                !n.path("embalagem_id").asText("").isBlank() || n.path("embalagem_nova").isObject();
+        if (!medidas && !embalagem)
+            faltando.add("Medidas (largura, altura e comprimento) ou embalagem");
+        if (!faltando.isEmpty())
+            erro(
+                    "Preencha o que a nota fiscal e os marketplaces exigem: "
+                            + String.join(", ", faltando)
+                            + ".");
     }
 
     /** Imagem enviada pelo formulário. Recusa formato, tamanho ou quantidade fora do limite. */
@@ -437,6 +476,12 @@ public class RadarProdutos {
                 erro("GTIN inválido na variação " + c.get("sku") + ".");
             c.put("gtin", gtin);
             c.put("motivo_sem_gtin", gtin == null ? pai.get("motivo_sem_gtin") : null);
+            if (gtin == null && pai.get("motivo_sem_gtin") == null)
+                erro(
+                        "Variação "
+                                + String.join(" / ", atributos.values())
+                                + ": informe o código de barras ou, no produto, o motivo de não"
+                                + " ter.");
             c.put("permite_venda", v.path("permite_venda").asBoolean(true));
             skuLivre((String) c.get("sku"), id);
             if (nova) {
