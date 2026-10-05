@@ -351,6 +351,149 @@ class RadarProdutosTest {
         assertNotNull(id);
     }
 
+    @Test
+    void loteReajustaPrecoEmPercentualComArredondamentoEAlcancaVariacoes() {
+        UUID simples = salvar(empresaA, "{" + base("LOTE-P1") + "}");
+        naEmpresa(
+                empresaA,
+                () ->
+                        produtos.lote(
+                                json(
+                                        "{\"acao\":\"EDITAR\",\"campo\":\"preco\",\"modo\":"
+                                                + "\"AUMENTAR_PCT\",\"valor\":\"10\",\"ids\":[\""
+                                                + simples
+                                                + "\"]}"),
+                                "DONO"));
+        // 49,90 + 10% = 54,89 (54,890).
+        assertEquals(
+                0,
+                new BigDecimal("54.89")
+                        .compareTo(
+                                (BigDecimal)
+                                        linha(
+                                                        empresaA,
+                                                        "select preco from radar_produto where"
+                                                                + " id=?",
+                                                        simples)
+                                                .get("preco")));
+        var invalido =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresaA,
+                                        () ->
+                                                produtos.lote(
+                                                        json(
+                                                                "{\"acao\":\"EDITAR\",\"campo\":\"preco\","
+                                                                    + "\"modo\":\"SUBTRAIR\",\"valor\":\"999\","
+                                                                    + "\"ids\":[\""
+                                                                        + simples
+                                                                        + "\"]}"),
+                                                        "DONO")));
+        assertTrue(invalido.getReason().contains("valor inválido"));
+    }
+
+    @Test
+    void loteDefineCampoTagsEInativa() {
+        UUID a = salvar(empresaA, "{" + base("LOTE-T1") + ",\"tags\":[\"azul\"]}");
+        String ids = "\"ids\":[\"" + a + "\"]";
+        lote("{\"acao\":\"EDITAR\",\"campo\":\"marca\",\"valor\":\"Nova Marca\"," + ids + "}");
+        lote("{\"acao\":\"TAGS\",\"modo\":\"ADICIONAR\",\"tags\":[\"sala\",\"azul\"]," + ids + "}");
+        lote("{\"acao\":\"TAGS\",\"modo\":\"REMOVER\",\"tags\":[\"azul\"]," + ids + "}");
+        lote("{\"acao\":\"INATIVAR\"," + ids + "}");
+        var p =
+                linha(
+                        empresaA,
+                        "select marca, tags::text t, permite_venda from radar_produto where id=?",
+                        a);
+        assertEquals("Nova Marca", p.get("marca"));
+        assertEquals("[\"sala\"]", p.get("t"));
+        assertEquals(false, p.get("permite_venda"));
+        assertThrows(
+                ResponseStatusException.class,
+                () -> lote("{\"acao\":\"EDITAR\",\"campo\":\"ncm\",\"valor\":\"\"," + ids + "}"));
+        assertThrows(
+                ResponseStatusException.class,
+                () -> lote("{\"acao\":\"EDITAR\",\"campo\":\"sku\",\"valor\":\"X\"," + ids + "}"));
+    }
+
+    @Test
+    void loteExcluiSoProdutoSemHistoricoEOutraEmpresaNaoAlcanca() {
+        UUID novo = salvar(empresaA, "{" + base("LOTE-X1") + "}");
+        UUID comEstoque = salvar(empresaA, "{" + base("LOTE-X2") + ",\"saldo\":\"3\"}");
+        var preso =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                lote(
+                                        "{\"acao\":\"EXCLUIR\",\"ids\":[\""
+                                                + novo
+                                                + "\",\""
+                                                + comEstoque
+                                                + "\"]}"));
+        assertTrue(preso.getReason().contains("LOTE-X2"));
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                empresaB,
+                                () ->
+                                        produtos.lote(
+                                                json(
+                                                        "{\"acao\":\"EXCLUIR\",\"ids\":[\""
+                                                                + novo
+                                                                + "\"]}"),
+                                                "DONO")));
+        lote("{\"acao\":\"EXCLUIR\",\"ids\":[\"" + novo + "\"]}");
+        assertEquals(
+                0L,
+                naEmpresa(
+                        empresaA,
+                        () ->
+                                db.queryForObject(
+                                        "select count(*) from radar_produto where id=?",
+                                        Long.class,
+                                        novo)));
+    }
+
+    @Test
+    void preencherCompletaUmProdutoPorVez() {
+        UUID a = salvar(empresaA, "{" + base("PREENCHE-1") + "}");
+        UUID b = salvar(empresaA, "{" + base("PREENCHE-2") + "}");
+        String um = "\"ids\":[\"" + a + "\"]";
+        lote("{\"acao\":\"PREENCHER\",\"campo\":\"gtin\",\"valor\":\"4006381333931\"," + um + "}");
+        lote("{\"acao\":\"PREENCHER\",\"campo\":\"ncm\",\"valor\":\"94049000\"," + um + "}");
+        var p =
+                linha(
+                        empresaA,
+                        "select gtin, motivo_sem_gtin, ncm from radar_produto where id=?",
+                        a);
+        assertEquals("4006381333931", p.get("gtin"));
+        assertEquals(null, p.get("motivo_sem_gtin"));
+        assertEquals("94049000", p.get("ncm"));
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        lote(
+                                "{\"acao\":\"PREENCHER\",\"campo\":\"gtin\",\"valor\":\"123\","
+                                        + um
+                                        + "}"));
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        lote(
+                                "{\"acao\":\"PREENCHER\",\"campo\":\"descricao\",\"valor\":\"x\",\"ids\":[\""
+                                        + a
+                                        + "\",\""
+                                        + b
+                                        + "\"]}"));
+    }
+
+    private static void lote(String corpo) {
+        naEmpresa(empresaA, () -> produtos.lote(json(corpo), "DONO"));
+    }
+
     private static String base(String sku) {
         return base(sku, "SIMPLES");
     }
@@ -364,9 +507,9 @@ class RadarProdutosTest {
                 + sku
                 + "\",\"preco\":\"49.90\",\"custo\":\"20.00\""
                 // Obrigatórios para nota e anúncio.
-                + ",\"origem\":\"0\",\"ncm\":\"63031200\",\"motivo_sem_gtin\":\"SEM_CODIGO_DO_FABRICANTE\","
-                + "\"marca\":\"Casa Clara\",\"categoria_nome\":\"Testes\","
-                + "\"descricao\":\"Produto de teste.\",\"peso_bruto_kg\":\"1\","
+                + ",\"origem\":\"0\",\"ncm\":\"63031200\",\"motivo_sem_gtin\":\"SEM_CODIGO_DO_FABRICANTE\",\"marca\":\"Casa"
+                + " Clara\",\"categoria_nome\":\"Testes\",\"descricao\":\"Produto de"
+                + " teste.\",\"peso_bruto_kg\":\"1\","
                 + "\"largura_cm\":\"10\",\"altura_cm\":\"10\",\"comprimento_cm\":\"10\"";
     }
 

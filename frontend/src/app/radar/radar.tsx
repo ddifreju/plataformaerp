@@ -22,6 +22,8 @@ import Relatorios from "./relatorios";
 import ProdutoForm, { type Aba as AbaProduto } from "./produto";
 import Clientes from "./cliente";
 import Vendedores from "./vendedor";
+import ProdutosLote from "./produtos-lote";
+import Pendencias from "./pendencias";
 import Anuncios from "./anuncios";
 import Categorias from "./categorias";
 import Embalagens from "./embalagens";
@@ -199,7 +201,9 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       aba: AbaProduto;
       versao: number;
     } | null>(null),
-    [menu, setMenu] = useState(false);
+    [menu, setMenu] = useState(false),
+    // Produtos marcados na lista para as ações em lote.
+    [marcadosProdutos, setMarcadosProdutos] = useState<string[]>([]);
   const refresh = useCallback(async () => {
     const d = await call("");
     setData(d);
@@ -781,6 +785,18 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               aoSalvar={(id, aba) => setEditando({ id, aba, versao: Date.now() })}
             />
           )}
+          {page === "produtos" && !editando && can("DONO", "GESTOR") && (
+            <Pendencias
+              produtos={products}
+              imagens={data.imagens}
+              categorias={data.categorias}
+              fornecedores={data.fornecedores ?? []}
+              produtoFornecedores={data.produtoFornecedores}
+              executar={command}
+              recarregar={refresh}
+              marcarParaLote={setMarcadosProdutos}
+            />
+          )}
           {page === "produtos" && !editando && (
             <section className="rd-card">
               <div className="rd-card-head">
@@ -795,6 +811,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               </div>
               <Table
                 headers={[
+                  can("DONO", "GESTOR") ? "✓" : "",
                   "Produto",
                   "SKU",
                   "Tipo",
@@ -807,6 +824,22 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   const capa = data.imagens.find((i) => i.produto_id === p.id);
                   const variacoes = products.filter((f) => f.pai_id === p.id).length;
                   return [
+                    can("DONO", "GESTOR") ? (
+                      <input
+                        type="checkbox"
+                        aria-label={`Selecionar ${str(p.nome)}`}
+                        checked={marcadosProdutos.includes(str(p.id))}
+                        onChange={(e) =>
+                          setMarcadosProdutos((m) =>
+                            e.target.checked
+                              ? [...m, str(p.id)]
+                              : m.filter((x) => x !== str(p.id)),
+                          )
+                        }
+                      />
+                    ) : (
+                      ""
+                    ),
                     <div className="rd-product-name">
                       {capa ? (
                         // eslint-disable-next-line @next/next/no-img-element -- imagem servida pela API autenticada
@@ -859,6 +892,20 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   ];
                 })}
               />
+              {can("DONO", "GESTOR") && (
+                <ProdutosLote
+                  produtos={products}
+                  linhas={filtered(principais)}
+                  marcados={marcadosProdutos}
+                  setMarcados={setMarcadosProdutos}
+                  categorias={data.categorias}
+                  embalagens={data.embalagens}
+                  kitItens={data.kitItens}
+                  veCusto={data.financeiroPermitido}
+                  disponivel={disponivel}
+                  executar={command}
+                />
+              )}
             </section>
           )}
           {page === "importar" && (
