@@ -1,10 +1,12 @@
 "use client";
 
-// Ações em lote da lista de produtos: barra embaixo quando há produtos
-// marcados, com "editar dados em massa" e o menu "mais ações". O que depende
-// de loja conectada (enviar ao e-commerce) aparece como "em breve".
+// Ações em lote da lista de produtos: caixa de seleção com "⋯" em cada linha,
+// barra embaixo quando há produtos marcados, com "editar dados em massa" e o
+// menu "mais ações". O que depende de loja conectada aparece como "em breve".
+// A tabela é desenhada por quem usa (render prop), recebendo a caixa do
+// cabeçalho e a de cada linha.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { money, str, type Row } from "./ui";
 
 type Props = {
@@ -18,9 +20,23 @@ type Props = {
   veCusto: boolean;
   disponivel: (p: Row) => number;
   executar: (corpo: Record<string, unknown>) => Promise<boolean>;
+  ativo: boolean;
+  children: (k: {
+    cabecalho: ReactNode;
+    celula: (p: Row) => ReactNode;
+  }) => ReactNode;
 };
 
-type Acao = "EDITAR" | "TAGS" | "INATIVAR" | "ATIVAR" | "EXCLUIR_ANEXOS" | "EXCLUIR";
+const SEM_LOJA =
+  "Enviar ao e-commerce precisa de uma loja conectada. As conexões entram depois do CNPJ, em Integrações.";
+
+type Acao =
+  | "EDITAR"
+  | "TAGS"
+  | "INATIVAR"
+  | "ATIVAR"
+  | "EXCLUIR_ANEXOS"
+  | "EXCLUIR";
 
 const CAMPOS: [string, string, string][] = [
   ["preco", "Preço de venda", "DINHEIRO"],
@@ -109,7 +125,8 @@ const esc = (t: unknown) =>
 function imprimir(titulo: string, corpo: string, estilo: string) {
   const janela = window.open("", "_blank");
   if (!janela) return false;
-  janela.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+  janela.document
+    .write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
 <title>${esc(titulo)}</title><style>body{font-family:Arial,sans-serif;margin:8mm;font-size:10pt}
 ${estilo}</style></head><body>${corpo}
 <script>window.onload=function(){window.print()}<\/script></body></html>`);
@@ -121,7 +138,9 @@ ${estilo}</style></head><body>${corpo}
 function baixarCsv(nome: string, linhas: (string | number)[][]) {
   const celula = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
   const csv = linhas.map((l) => l.map(celula).join(";")).join("\n");
-  const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+  const url = URL.createObjectURL(
+    new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }),
+  );
   const a = document.createElement("a");
   a.href = url;
   a.download = `${nome}.csv`;
@@ -140,9 +159,18 @@ export default function ProdutosLote({
   veCusto,
   disponivel,
   executar,
+  ativo,
+  children,
 }: Props) {
   const [menu, setMenu] = useState(false);
+  const [menuLinha, setMenuLinha] = useState<{
+    id: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const [acao, setAcao] = useState<Acao | null>(null);
+  // Produtos que a ação vale: os marcados (barra) ou um só (⋯ da linha).
+  const [alvo, setAlvo] = useState<string[]>([]);
   const [campo, setCampo] = useState("preco");
   const [modo, setModo] = useState("DEFINIR");
   const [valor, setValor] = useState("");
@@ -150,17 +178,30 @@ export default function ProdutosLote({
   const [modoTags, setModoTags] = useState("ADICIONAR");
   const [aviso, setAviso] = useState("");
 
-  const todos = linhas.length > 0 && linhas.every((p) => marcados.includes(str(p.id)));
-  const selecionados = produtos.filter((p) => marcados.includes(str(p.id)));
-  // Relatórios e planilhas levam também as variações dos marcados.
-  const comVariacoes = produtos.filter(
-    (p) => marcados.includes(str(p.id)) || marcados.includes(str(p.pai_id)),
-  );
+  const todos =
+    linhas.length > 0 && linhas.every((p) => marcados.includes(str(p.id)));
+  // Relatórios e planilhas levam também as variações dos escolhidos.
+  const comVariacoes = (ids: string[]) =>
+    produtos.filter(
+      (p) => ids.includes(str(p.id)) || ids.includes(str(p.pai_id)),
+    );
+  const todosInativos =
+    marcados.length > 0 &&
+    produtos
+      .filter((p) => marcados.includes(str(p.id)))
+      .every((p) => p.permite_venda === false);
   const tipoCampo = CAMPOS.find(([c]) => c === campo)?.[2] ?? "TEXTO";
-  const nomeCategoria = (id: unknown) => str(categorias.find((c) => c.id === id)?.nome);
+  const nomeCategoria = (id: unknown) =>
+    str(categorias.find((c) => c.id === id)?.nome);
 
-  function abrir(a: Acao) {
+  function fecharMenus() {
     setMenu(false);
+    setMenuLinha(null);
+  }
+
+  function abrir(a: Acao, ids: string[] = marcados) {
+    fecharMenus();
+    setAlvo(ids);
     setAviso("");
     setValor("");
     setTags("");
@@ -168,11 +209,19 @@ export default function ProdutosLote({
     setAcao(a);
   }
 
-  function relatorio() {
-    setMenu(false);
-    const linhasHtml = comVariacoes
+  function enviarEcommerce() {
+    fecharMenus();
+    setAviso(SEM_LOJA);
+  }
+
+  function relatorio(ids: string[] = marcados) {
+    fecharMenus();
+    const lista = comVariacoes(ids);
+    const linhasHtml = lista
       .map(
-        (p) => `<tr><td>${esc(p.sku)}</td><td>${esc(p.nome)}</td><td>${esc(p.marca)}</td>
+        (
+          p,
+        ) => `<tr><td>${esc(p.sku)}</td><td>${esc(p.nome)}</td><td>${esc(p.marca)}</td>
 <td>${esc(nomeCategoria(p.categoria_id))}</td><td>${esc(p.ncm)}</td>
 ${veCusto ? `<td class="n">${esc(money(p.custo))}</td>` : ""}<td class="n">${esc(money(p.preco))}</td>
 <td class="n">${p.controla_estoque === false ? "—" : disponivel(p)}</td>
@@ -181,20 +230,25 @@ ${veCusto ? `<td class="n">${esc(money(p.custo))}</td>` : ""}<td class="n">${esc
       .join("");
     const ok = imprimir(
       "Relatório de produtos",
-      `<h2>Relatório de produtos</h2><p>${comVariacoes.length} produto(s) · ${new Date().toLocaleString("pt-BR")}</p>
+      `<h2>Relatório de produtos</h2><p>${lista.length} produto(s) · ${new Date().toLocaleString("pt-BR")}</p>
 <table><thead><tr><th>SKU</th><th>Produto</th><th>Marca</th><th>Categoria</th><th>NCM</th>
 ${veCusto ? "<th>Custo</th>" : ""}<th>Preço</th><th>Disponível</th><th>Situação</th></tr></thead><tbody>${linhasHtml}</tbody></table>`,
       "table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}td.n{text-align:right}th{background:#f3f4f6}",
     );
-    if (!ok) setAviso("O navegador bloqueou a janela de impressão. Libere pop-ups para este site.");
+    if (!ok)
+      setAviso(
+        "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.",
+      );
   }
 
-  function etiquetas() {
-    setMenu(false);
-    const html = comVariacoes
+  function etiquetas(ids: string[] = marcados) {
+    fecharMenus();
+    const html = comVariacoes(ids)
       .filter((p) => p.tipo !== "VARIACAO")
       .map(
-        (p) => `<div class="etq"><strong>${esc(p.nome)}</strong><span>SKU ${esc(p.sku)}</span>
+        (
+          p,
+        ) => `<div class="etq"><strong>${esc(p.nome)}</strong><span>SKU ${esc(p.sku)}</span>
 ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">${esc(money(p.preco))}</span></div>`,
       )
       .join("");
@@ -203,11 +257,14 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
       `<div class="grade">${html}</div>`,
       ".grade{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm}.etq{border:1px dashed #999;border-radius:2mm;padding:3mm;display:flex;flex-direction:column;gap:1mm;break-inside:avoid}.gtin{font-family:monospace;letter-spacing:2px}.preco{font-size:13pt;font-weight:bold}",
     );
-    if (!ok) setAviso("O navegador bloqueou a janela de impressão. Libere pop-ups para este site.");
+    if (!ok)
+      setAviso(
+        "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.",
+      );
   }
 
-  function exportarProdutos() {
-    setMenu(false);
+  function exportarProdutos(ids: string[] = marcados) {
+    fecharMenus();
     const cab = [
       "SKU",
       "Nome",
@@ -232,7 +289,7 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
     const sku = (id: unknown) => str(produtos.find((p) => p.id === id)?.sku);
     baixarCsv("produtos", [
       cab,
-      ...comVariacoes.map((p) => [
+      ...comVariacoes(ids).map((p) => [
         str(p.sku),
         str(p.nome),
         str(p.tipo),
@@ -256,9 +313,11 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
     ]);
   }
 
-  function exportarKits() {
-    setMenu(false);
-    const kits = selecionados.filter((p) => p.tipo === "KIT");
+  function exportarKits(ids: string[] = marcados) {
+    fecharMenus();
+    const kits = produtos.filter(
+      (p) => ids.includes(str(p.id)) && p.tipo === "KIT",
+    );
     if (!kits.length) {
       setAviso("Nenhum kit entre os produtos marcados.");
       return;
@@ -281,7 +340,11 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
   }
 
   async function confirmar() {
-    const corpo: Record<string, unknown> = { op: "produtos_lote", acao, ids: marcados };
+    const corpo: Record<string, unknown> = {
+      op: "produtos_lote",
+      acao,
+      ids: alvo,
+    };
     if (acao === "EDITAR") {
       corpo.campo = campo;
       corpo.valor = valor.trim().replace(",", ".");
@@ -298,7 +361,7 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
     }
     const ok = await executar(corpo);
     setAcao(null);
-    if (ok) setMarcados(() => []);
+    if (ok) setMarcados((m) => m.filter((id) => !alvo.includes(id)));
   }
 
   const emBreve = (rotulo: string, motivo: string) => (
@@ -327,16 +390,28 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
   const campoValor = () => {
     const opcoes =
       tipoCampo === "CATEGORIA"
-        ? [["", "Escolha"], ...categorias.map((c): [string, string] => [str(c.id), str(c.nome)])]
+        ? [
+            ["", "Escolha"],
+            ...categorias.map((c): [string, string] => [
+              str(c.id),
+              str(c.nome),
+            ]),
+          ]
         : tipoCampo === "EMBALAGEM"
-          ? [["", "Nenhuma"], ...embalagens.map((e): [string, string] => [str(e.id), str(e.nome)])]
+          ? [
+              ["", "Nenhuma"],
+              ...embalagens.map((e): [string, string] => [
+                str(e.id),
+                str(e.nome),
+              ]),
+            ]
           : OPCOES[tipoCampo];
     if (opcoes)
       return (
         <select value={valor} onChange={(e) => setValor(e.target.value)}>
-          {tipoCampo !== "CATEGORIA" && tipoCampo !== "EMBALAGEM" && tipoCampo !== "GARANTIA" && (
-            <option value="">Escolha</option>
-          )}
+          {tipoCampo !== "CATEGORIA" &&
+            tipoCampo !== "EMBALAGEM" &&
+            tipoCampo !== "GARANTIA" && <option value="">Escolha</option>}
           {opcoes.map(([v, r]) => (
             <option key={v} value={v}>
               {r}
@@ -346,7 +421,9 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
       );
     return (
       <input
-        inputMode={tipoCampo === "TEXTO" && campo === "marca" ? "text" : "decimal"}
+        inputMode={
+          tipoCampo === "TEXTO" && campo === "marca" ? "text" : "decimal"
+        }
         placeholder={
           tipoCampo === "DINHEIRO" && modo.endsWith("PCT")
             ? "Ex.: 10"
@@ -360,28 +437,113 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
     );
   };
 
+  const caixa = (p: Row) => {
+    const id = str(p.id);
+    return (
+      <span className="rd-celula-lote">
+        <input
+          type="checkbox"
+          aria-label={`Selecionar ${str(p.nome)}`}
+          checked={marcados.includes(id)}
+          onChange={(e) =>
+            setMarcados((m) =>
+              e.target.checked ? [...m, id] : m.filter((x) => x !== id),
+            )
+          }
+        />
+        <button
+          type="button"
+          className="rd-linha-mais"
+          aria-label={`Ações de ${str(p.nome)}`}
+          aria-expanded={menuLinha?.id === id}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setMenu(false);
+            // Perto do rodapé o menu abre para cima, para não sair da tela.
+            const altura = Math.min(420, window.innerHeight * 0.6);
+            const y =
+              r.bottom + altura > window.innerHeight
+                ? Math.max(8, r.top - altura)
+                : r.bottom + 4;
+            setMenuLinha(menuLinha?.id === id ? null : { id, x: r.left, y });
+          }}
+        >
+          ⋯
+        </button>
+      </span>
+    );
+  };
+  const cabecalho = (
+    <input
+      type="checkbox"
+      aria-label="Marcar todos da lista"
+      title="Marcar todos da lista"
+      checked={todos}
+      onChange={(e) =>
+        setMarcados(() =>
+          e.target.checked ? linhas.map((p) => str(p.id)) : [],
+        )
+      }
+    />
+  );
+  const produtoLinha =
+    menuLinha && produtos.find((p) => str(p.id) === menuLinha.id);
+
   return (
     <>
-      {linhas.length > 0 && (
-        <label className="rd-check rd-marcar-todos">
-          <input
-            type="checkbox"
-            checked={todos}
-            onChange={(e) =>
-              setMarcados(() => (e.target.checked ? linhas.map((p) => str(p.id)) : []))
-            }
-          />
-          Marcar todos da lista ({linhas.length})
-        </label>
+      {children({
+        cabecalho: ativo ? cabecalho : "",
+        celula: (p) => (ativo ? caixa(p) : ""),
+      })}
+      {menuLinha && produtoLinha && (
+        <>
+          <div className="rd-menu-fundo" onClick={() => setMenuLinha(null)} />
+          <ul
+            role="menu"
+            className="rd-menu-linha"
+            style={{ left: menuLinha.x, top: menuLinha.y }}
+            aria-label={`Ações de ${str(produtoLinha.nome)}`}
+          >
+            {item("⇪ Enviar para o e-commerce", enviarEcommerce)}
+            {item("🖨 Imprimir relatório", () => relatorio([menuLinha.id]))}
+            {item("⇩ Exportar para planilha", () =>
+              exportarProdutos([menuLinha.id]),
+            )}
+            {produtoLinha.tipo === "KIT" &&
+              item("⇩ Exportar composição do kit", () =>
+                exportarKits([menuLinha.id]),
+              )}
+            <li className="rd-menu-sep" />
+            {item("✎ Editar dados", () => abrir("EDITAR", [menuLinha.id]))}
+            {item("🏷 Imprimir etiqueta", () => etiquetas([menuLinha.id]))}
+            {item("# Alterar tags", () => abrir("TAGS", [menuLinha.id]))}
+            <li className="rd-menu-sep" />
+            {produtoLinha.permite_venda === false
+              ? item("✓ Ativar produto", () => abrir("ATIVAR", [menuLinha.id]))
+              : item("⊘ Inativar produto", () =>
+                  abrir("INATIVAR", [menuLinha.id]),
+                )}
+            {item("🗑 Excluir anexos", () =>
+              abrir("EXCLUIR_ANEXOS", [menuLinha.id]),
+            )}
+            {item("🗑 Excluir produto", () => abrir("EXCLUIR", [menuLinha.id]))}
+          </ul>
+        </>
       )}
       {aviso && (
         <div className="rd-error" role="alert">
           {aviso}
         </div>
       )}
-      {marcados.length > 0 && (
-        <div className="rd-barra-lote" role="region" aria-label="Ações para os produtos marcados">
-          <span className="rd-barra-qtd">
+      {ativo && marcados.length > 0 && (
+        <div
+          className="rd-barra-lote"
+          role="region"
+          aria-label="Ações para os produtos marcados"
+        >
+          <span className="rd-barra-qtd rd-pilula">
+            <span aria-hidden="true">↥</span>
+            {String(marcados.length).padStart(2, "0")} de {linhas.length} itens
             <button
               type="button"
               aria-label="Limpar seleção"
@@ -390,50 +552,58 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             >
               ✕
             </button>
-            {String(marcados.length).padStart(2, "0")} de {linhas.length} itens
           </span>
-          <button
-            type="button"
-            className="primary"
-            disabled
-            title="Entra quando a loja for conectada"
-          >
+          <button type="button" className="primary" onClick={enviarEcommerce}>
             ⇪ Enviar para o e-commerce
           </button>
           <button type="button" onClick={() => abrir("EDITAR")}>
             ✎ Editar dados em massa
           </button>
           <div className="rd-mais-acoes">
-            <button type="button" aria-expanded={menu} onClick={() => setMenu(!menu)}>
-              Mais ações ⋯
+            <button
+              type="button"
+              aria-expanded={menu}
+              onClick={() => {
+                setMenuLinha(null);
+                setMenu(!menu);
+              }}
+            >
+              Mais ações{" "}
+              <span className="rd-circulo" aria-hidden="true">
+                ⋯
+              </span>
             </button>
             {menu && (
               <ul role="menu" className="rd-menu-cima rd-menu-longo">
-                {emBreve("⇪ Enviar para o e-commerce", "Entra quando a loja for conectada")}
-                {emBreve("$ Enviar preços para o e-commerce", "Entra quando a loja for conectada")}
-                {emBreve("▦ Enviar estoque ao e-commerce", "Entra quando a loja for conectada")}
-                {emBreve(
-                  "▤ Enviar dados fiscais para o e-commerce",
-                  "Entra quando a loja for conectada",
-                )}
+                {emBreve("⇪ Enviar para o e-commerce", SEM_LOJA)}
+                {emBreve("$ Enviar preços para o e-commerce", SEM_LOJA)}
+                {emBreve("▦ Enviar estoque ao e-commerce", SEM_LOJA)}
+                {emBreve("▤ Enviar dados fiscais para o e-commerce", SEM_LOJA)}
                 <li className="rd-menu-sep" />
-                {item("🖨 Imprimir relatório", relatorio)}
-                {item("⇩ Exportar produtos para planilha", exportarProdutos)}
-                {item("⇩ Exportar composição de kits para planilha", exportarKits)}
+                {item("🖨 Imprimir relatório", () => relatorio())}
+                {item("⇩ Exportar produtos para planilha", () =>
+                  exportarProdutos(),
+                )}
+                {item("⇩ Exportar composição de kits para planilha", () =>
+                  exportarKits(),
+                )}
                 {emBreve(
-                  "⇩ Exportar estrutura de fabricados",
+                  "⇩ Exportar estrutura de fabricados para planilha",
                   "Entra junto com o cadastro de produção (fabricados)",
                 )}
                 <li className="rd-menu-sep" />
                 {item("✎ Editar dados em massa", () => abrir("EDITAR"))}
-                {item("🏷 Imprimir etiquetas", etiquetas)}
+                {item("🏷 Imprimir etiquetas", () => etiquetas())}
                 {item("# Alterar tags", () => abrir("TAGS"))}
                 {emBreve(
                   "⇆ Unificar cadastros",
                   "Precisa juntar estoque e histórico; vem numa próxima etapa",
                 )}
                 <li className="rd-menu-sep" />
-                {emBreve("⤨ Transformar em variações", "Vem numa próxima etapa")}
+                {emBreve(
+                  "⤨ Transformar em variações",
+                  "Vem numa próxima etapa",
+                )}
                 {emBreve("⊞ Transformar em kits", "Vem numa próxima etapa")}
                 <li className="rd-menu-sep" />
                 {emBreve(
@@ -445,9 +615,12 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
                   "Sugestão por IA, sempre revisada por você; vem numa próxima etapa",
                 )}
                 <li className="rd-menu-sep" />
-                {item("✓ Ativar produtos", () => abrir("ATIVAR"))}
-                {item("✕ Inativar produtos", () => abrir("INATIVAR"))}
-                {item("🗑 Excluir anexos dos produtos", () => abrir("EXCLUIR_ANEXOS"))}
+                {todosInativos
+                  ? item("✓ Ativar produtos", () => abrir("ATIVAR"))
+                  : item("⊘ Inativar produtos", () => abrir("INATIVAR"))}
+                {item("🗑 Excluir anexos dos produtos", () =>
+                  abrir("EXCLUIR_ANEXOS"),
+                )}
                 {item("🗑 Excluir produto", () => abrir("EXCLUIR"))}
               </ul>
             )}
@@ -470,7 +643,10 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
               </button>
             </div>
             <p className="rd-note">
-              {marcados.length} produto(s) marcado(s). Vale também para as variações deles.
+              {alvo.length === 1
+                ? `Produto: ${str(produtos.find((p) => str(p.id) === alvo[0])?.nome)}.`
+                : `${alvo.length} produtos marcados.`}{" "}
+              Vale também para as variações.
             </p>
             {acao === "EDITAR" && (
               <div className="rd-form-grid">
@@ -484,17 +660,22 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
                       setModo("DEFINIR");
                     }}
                   >
-                    {CAMPOS.filter(([c]) => veCusto || c !== "custo").map(([c, r]) => (
-                      <option key={c} value={c}>
-                        {r}
-                      </option>
-                    ))}
+                    {CAMPOS.filter(([c]) => veCusto || c !== "custo").map(
+                      ([c, r]) => (
+                        <option key={c} value={c}>
+                          {r}
+                        </option>
+                      ),
+                    )}
                   </select>
                 </label>
                 {tipoCampo === "DINHEIRO" && (
                   <label>
                     Como mudar
-                    <select value={modo} onChange={(e) => setModo(e.target.value)}>
+                    <select
+                      value={modo}
+                      onChange={(e) => setModo(e.target.value)}
+                    >
                       {MODOS.map(([m, r]) => (
                         <option key={m} value={m}>
                           {r}
@@ -504,7 +685,9 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
                   </label>
                 )}
                 <label className="wide">
-                  {tipoCampo === "DINHEIRO" && modo.endsWith("PCT") ? "Percentual" : "Novo valor"}
+                  {tipoCampo === "DINHEIRO" && modo.endsWith("PCT")
+                    ? "Percentual"
+                    : "Novo valor"}
                   {campoValor()}
                   <small className="rd-dica">
                     {tipoCampo === "DINHEIRO" && modo !== "DEFINIR"
@@ -518,7 +701,10 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
               <div className="rd-form-grid">
                 <label>
                   O que fazer
-                  <select value={modoTags} onChange={(e) => setModoTags(e.target.value)}>
+                  <select
+                    value={modoTags}
+                    onChange={(e) => setModoTags(e.target.value)}
+                  >
                     <option value="ADICIONAR">Adicionar estas tags</option>
                     <option value="REMOVER">Remover estas tags</option>
                     <option value="SUBSTITUIR">Trocar todas por estas</option>
@@ -536,25 +722,40 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
               </div>
             )}
             {acao === "INATIVAR" && (
-              <p>Os produtos saem da venda (novos pedidos e anúncios). O histórico continua.</p>
+              <p>
+                Os produtos saem da venda (novos pedidos e anúncios). O
+                histórico continua.
+              </p>
             )}
-            {acao === "ATIVAR" && <p>Os produtos voltam a ficar disponíveis para venda.</p>}
+            {acao === "ATIVAR" && (
+              <p>Os produtos voltam a ficar disponíveis para venda.</p>
+            )}
             {acao === "EXCLUIR_ANEXOS" && (
-              <p>Remove todas as imagens dos produtos marcados. Não dá para desfazer.</p>
+              <p>
+                Remove todas as imagens dos produtos marcados. Não dá para
+                desfazer.
+              </p>
             )}
             {acao === "EXCLUIR" && (
               <p>
-                Excluir {marcados.length} produto(s)? Não dá para desfazer. Produto com pedido,
-                anúncio, estoque ou que faz parte de kit não é excluído: inative em vez disso.
+                Excluir {alvo.length} produto(s)? Não dá para desfazer. Produto
+                com pedido, anúncio, estoque ou que faz parte de kit não é
+                excluído: inative em vez disso.
               </p>
             )}
             <div className="rd-modal-foot">
               <button onClick={() => setAcao(null)}>Cancelar</button>
               <button
-                className={acao === "EXCLUIR" || acao === "EXCLUIR_ANEXOS" ? "perigo" : "primary"}
+                className={
+                  acao === "EXCLUIR" || acao === "EXCLUIR_ANEXOS"
+                    ? "perigo"
+                    : "primary"
+                }
                 onClick={confirmar}
               >
-                {acao === "EXCLUIR" || acao === "EXCLUIR_ANEXOS" ? "Excluir" : "Confirmar"}
+                {acao === "EXCLUIR" || acao === "EXCLUIR_ANEXOS"
+                  ? "Excluir"
+                  : "Confirmar"}
               </button>
             </div>
           </section>
