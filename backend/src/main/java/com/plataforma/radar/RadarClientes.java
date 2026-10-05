@@ -371,7 +371,7 @@ public class RadarClientes {
         String acao = n.path("acao").asText("");
         return switch (acao) {
             case "VENDEDOR" -> {
-                UUID vendedor = vendedor(n);
+                UUID vendedor = vendedor(n, null);
                 int k = atualizarTodos("vendedor_id=?", vendedor, ids);
                 yield Map.of(
                         "mensagem",
@@ -760,7 +760,7 @@ public class RadarClientes {
         if (!STATUS_CRM.contains(status)) erro("Status no CRM inválido.");
         c.put("status_crm", status);
         c.put("prazo_entrega_dias", inteiroOpcional(n, "prazo_entrega_dias", 0, 365));
-        c.put("vendedor_id", vendedor(n));
+        c.put("vendedor_id", vendedor(n, id));
         c.put("condicao_pagamento", campo(n, "condicao_pagamento", 60, "Condição de pagamento"));
         c.put("lista_preco", campo(n, "lista_preco", 60, "Lista de preço"));
         BigDecimal limite = valorOpcional(n, "limite_credito");
@@ -831,15 +831,23 @@ public class RadarClientes {
                     HttpStatus.FORBIDDEN, "Seu cargo não permite abrir cadastro de cliente.");
     }
 
-    private UUID vendedor(JsonNode n) {
+    /**
+     * Vendedor escolhido para o cliente. Excluído não pode ser escolhido, mas o cliente que já
+     * tinha esse vendedor continua salvando sem trocar.
+     */
+    private UUID vendedor(JsonNode n, UUID cliente) {
         if (n.path("vendedor_id").asText("").isBlank()) return null;
         UUID v = id(n, "vendedor_id");
         Integer existe =
                 db.queryForObject(
-                        "select count(*) from radar_vendedor where tenant_id=? and id=?",
+                        "select count(*) from radar_vendedor where tenant_id=? and id=? and"
+                                + " (excluido_em is null or exists (select 1 from radar_cliente"
+                                + " c where c.tenant_id=radar_vendedor.tenant_id and c.id=? and"
+                                + " c.vendedor_id=radar_vendedor.id))",
                         Integer.class,
                         tenant(),
-                        v);
+                        v,
+                        cliente);
         if (existe == null || existe == 0) erro("Vendedor não encontrado.");
         return v;
     }

@@ -15,6 +15,7 @@ type Props = {
   usuariosSistema: Row[];
   podeEditar: boolean;
   podeVerDetalhe: boolean;
+  podeAlterarSenha: boolean;
   executar: (corpo: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
 };
 
@@ -109,9 +110,33 @@ function iniciais(c: Row | null): Valores {
   return v;
 }
 
+const ABAS_LISTA: [string, string][] = [
+  ["ACESSO", "Ativos com acesso ao sistema"],
+  ["TODOS", "Todos"],
+  ["ATIVO", "Ativos"],
+  ["INATIVO", "Inativos"],
+  ["EXCLUIDO", "Excluídos"],
+];
+
+function naAba(v: Row, aba: string) {
+  const excluido = !!v.excluido_em;
+  if (aba === "EXCLUIDO") return excluido;
+  if (excluido) return false;
+  if (aba === "ACESSO") return v.situacao === "ATIVO" && !!v.usuario_id;
+  if (aba === "ATIVO" || aba === "INATIVO") return v.situacao === aba;
+  return true;
+}
+
+type Rapida = { tipo: "comissao" | "senha" | "excluir" | "restaurar"; ids: string[] };
+
 export default function Vendedores(props: Props) {
   const [aberto, setAberto] = useState<{ id: string | null; versao: number } | null>(null);
   const [busca, setBusca] = useState("");
+  const [aba, setAba] = useState("ACESSO");
+  const [marcados, setMarcados] = useState<string[]>([]);
+  const [menuLinha, setMenuLinha] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [rapida, setRapida] = useState<Rapida | null>(null);
+  const [aviso, setAviso] = useState("");
 
   if (aberto)
     return (
@@ -127,16 +152,72 @@ export default function Vendedores(props: Props) {
   const termo = busca.trim().toLowerCase();
   const linhas = props.vendedores.filter(
     (v) =>
-      !termo ||
-      [v.nome, v.fantasia, v.codigo, v.email, v.cidade].some((x) =>
-        str(x).toLowerCase().includes(termo),
-      ),
+      naAba(v, aba) &&
+      (!termo ||
+        [v.nome, v.fantasia, v.codigo, v.email, v.cidade].some((x) =>
+          str(x).toLowerCase().includes(termo),
+        )),
   );
+  const visiveis = marcados.filter((id) => linhas.some((v) => str(v.id) === id));
+  const todos = linhas.length > 0 && linhas.every((v) => marcados.includes(str(v.id)));
+  const naLixeira = aba === "EXCLUIDO";
+  const vendedorLinha = menuLinha && props.vendedores.find((v) => str(v.id) === menuLinha.id);
+
+  function trocarAba(chave: string) {
+    setAba(chave);
+    setMarcados([]);
+    setMenuLinha(null);
+  }
+
+  function abrirRapida(r: Rapida) {
+    setMenuLinha(null);
+    setAviso("");
+    setRapida(r);
+  }
+
+  // Depois de uma ação, tira da seleção só os vendedores em que ela valeu.
+  function concluir(ids: string[]) {
+    setRapida(null);
+    setMarcados((m) => m.filter((id) => !ids.includes(id)));
+  }
+
+  const caixa = (v: Row) => {
+    const id = str(v.id);
+    return (
+      <span key="m" className="rd-celula-lote">
+        <input
+          type="checkbox"
+          aria-label={`Selecionar ${str(v.nome)}`}
+          checked={marcados.includes(id)}
+          onChange={(e) =>
+            setMarcados((m) => (e.target.checked ? [...m, id] : m.filter((x) => x !== id)))
+          }
+        />
+        <button
+          type="button"
+          className="rd-linha-mais"
+          aria-label={`Edição rápida de ${str(v.nome)}`}
+          title="Edição rápida"
+          aria-expanded={menuLinha?.id === id}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            // Perto do rodapé o menu abre para cima, para não sair da tela.
+            const altura = 200;
+            const y =
+              r.bottom + altura > window.innerHeight ? Math.max(8, r.top - altura) : r.bottom + 4;
+            setMenuLinha(menuLinha?.id === id ? null : { id, x: r.left, y });
+          }}
+        >
+          ⋯
+        </button>
+      </span>
+    );
+  };
 
   return (
     <section className="rd-card">
       <div className="rd-card-head">
-        <h2>{props.vendedores.length} vendedores</h2>
+        <h2>{props.vendedores.filter((v) => !v.excluido_em).length} vendedores</h2>
         <input
           aria-label="Buscar vendedor"
           className="rd-search"
@@ -150,11 +231,46 @@ export default function Vendedores(props: Props) {
           </button>
         )}
       </div>
+      <div className="rd-tabs" role="tablist" aria-label="Situação dos vendedores">
+        {ABAS_LISTA.map(([chave, rotulo]) => (
+          <button
+            key={chave}
+            role="tab"
+            aria-selected={aba === chave}
+            className={aba === chave ? "active" : ""}
+            onClick={() => trocarAba(chave)}
+          >
+            {rotulo}
+            <span className="rd-tab-num">
+              {props.vendedores.filter((v) => naAba(v, chave)).length}
+            </span>
+          </button>
+        ))}
+      </div>
+      {aviso && (
+        <p className="rd-ok" role="status">
+          {aviso}
+        </p>
+      )}
       {props.vendedores.length === 0 ? (
         <Empty text="Nenhum vendedor cadastrado ainda." />
+      ) : linhas.length === 0 ? (
+        <Empty text="Nenhum vendedor nesta aba." />
       ) : (
         <Table
           headers={[
+            props.podeEditar ? (
+              <input
+                key="todos"
+                type="checkbox"
+                aria-label="Marcar todos da lista"
+                title="Marcar todos da lista"
+                checked={todos}
+                onChange={(e) => setMarcados(e.target.checked ? linhas.map((v) => str(v.id)) : [])}
+              />
+            ) : (
+              ""
+            ),
             "Código",
             "Vendedor",
             "CPF/CNPJ",
@@ -166,6 +282,7 @@ export default function Vendedores(props: Props) {
             "",
           ]}
           rows={linhas.map((v) => [
+            props.podeEditar ? caixa(v) : "",
             str(v.codigo),
             <div key="n">
               <strong>{str(v.nome)}</strong>
@@ -175,15 +292,21 @@ export default function Vendedores(props: Props) {
             </div>,
             str(v.documento) || "—",
             [str(v.cidade), str(v.uf)].filter(Boolean).join(" / ") || "—",
-            <Badge key="s" tone={v.situacao === "ATIVO" ? "green" : "gray"}>
-              {v.situacao === "ATIVO" ? "Ativo" : "Inativo"}
-            </Badge>,
+            v.excluido_em ? (
+              <Badge key="s" tone="red">
+                Excluído
+              </Badge>
+            ) : (
+              <Badge key="s" tone={v.situacao === "ATIVO" ? "green" : "gray"}>
+                {v.situacao === "ATIVO" ? "Ativo" : "Inativo"}
+              </Badge>
+            ),
             "comissao_aliquota" in v
               ? `${str(v.comissao_aliquota).replace(".", ",")}% ${v.comissao_regra === "DESCONTO" ? "(conforme desconto)" : "(fixa)"}`
               : "—",
             str(v.clientes),
             str(v.usuario_nome) || "—",
-            props.podeVerDetalhe ? (
+            props.podeVerDetalhe && !v.excluido_em ? (
               <button key="a" onClick={() => setAberto({ id: str(v.id), versao: Date.now() })}>
                 {props.podeEditar ? "Editar" : "Ver"}
               </button>
@@ -193,11 +316,307 @@ export default function Vendedores(props: Props) {
           ])}
         />
       )}
+      {props.podeEditar && visiveis.length > 0 && (
+        <div className="rd-barra-lote" role="region" aria-label="Ações para os vendedores marcados">
+          <span className="rd-barra-qtd rd-pilula">
+            <span aria-hidden="true">↥</span>
+            {String(visiveis.length).padStart(2, "0")}
+            <button
+              type="button"
+              aria-label="Limpar seleção"
+              title="Limpar seleção"
+              onClick={() => setMarcados([])}
+            >
+              ✕
+            </button>
+          </span>
+          {naLixeira ? (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => abrirRapida({ tipo: "restaurar", ids: visiveis })}
+            >
+              ↺ Restaurar vendedores
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => abrirRapida({ tipo: "excluir", ids: visiveis })}
+            >
+              🗑 Excluir vendedores
+            </button>
+          )}
+          <span className="rd-barra-total">
+            <strong>{linhas.length}</strong>
+            <small>cadastros</small>
+          </span>
+          <button
+            type="button"
+            className="rd-barra-topo"
+            aria-label="Voltar ao topo da página"
+            title="Voltar ao topo da página"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          >
+            ↑
+          </button>
+        </div>
+      )}
+      {menuLinha && vendedorLinha && (
+        <>
+          <div className="rd-menu-fundo" onClick={() => setMenuLinha(null)} />
+          <ul
+            role="menu"
+            className="rd-menu-linha"
+            style={{ left: menuLinha.x, top: menuLinha.y }}
+            aria-label={`Edição rápida de ${str(vendedorLinha.nome)}`}
+          >
+            <li className="rd-menu-titulo">
+              <span className="rd-circulo-cheio" aria-hidden="true">
+                ⋯
+              </span>
+              {str(vendedorLinha.nome)}
+            </li>
+            {vendedorLinha.excluido_em ? (
+              <li>
+                <button
+                  role="menuitem"
+                  onClick={() => abrirRapida({ tipo: "restaurar", ids: [menuLinha.id] })}
+                >
+                  ↺ Restaurar vendedor
+                </button>
+              </li>
+            ) : (
+              <>
+                <li>
+                  <button
+                    role="menuitem"
+                    onClick={() => abrirRapida({ tipo: "comissao", ids: [menuLinha.id] })}
+                  >
+                    ▤ Gerenciar comissões
+                  </button>
+                </li>
+                <li>
+                  <button
+                    role="menuitem"
+                    onClick={() => abrirRapida({ tipo: "excluir", ids: [menuLinha.id] })}
+                  >
+                    🗑 Excluir vendedor
+                  </button>
+                </li>
+                <li>
+                  <button
+                    role="menuitem"
+                    disabled={!props.podeAlterarSenha || !vendedorLinha.usuario_id}
+                    title={
+                      !props.podeAlterarSenha
+                        ? "Só a dona da conta troca senhas."
+                        : !vendedorLinha.usuario_id
+                          ? "Este vendedor não tem usuário do sistema. Ligue um em Dados de acesso."
+                          : undefined
+                    }
+                    onClick={() => abrirRapida({ tipo: "senha", ids: [menuLinha.id] })}
+                  >
+                    ⚿ Alterar senha de acesso
+                  </button>
+                </li>
+              </>
+            )}
+          </ul>
+        </>
+      )}
+      {rapida && (
+        <EdicaoRapida
+          rapida={rapida}
+          vendedores={props.vendedores}
+          executar={props.executar}
+          fechar={() => setRapida(null)}
+          concluir={() => {
+            if (rapida.tipo === "senha") setAviso("✓ Senha de acesso alterada.");
+            concluir(rapida.ids);
+          }}
+        />
+      )}
       <p className="rd-note">
         O vendedor aparece como &quot;Vendedor padrão&quot; no cadastro do cliente. CPF/CNPJ
-        completo só ao abrir o cadastro.
+        completo só ao abrir o cadastro. Vendedor excluído vai para a aba &quot;Excluídos&quot;,
+        perde o acesso ao sistema e pode ser restaurado.
       </p>
     </section>
+  );
+}
+
+/** Janelas da edição rápida (⋯ da linha) e das ações em lote. */
+function EdicaoRapida({
+  rapida,
+  vendedores,
+  executar,
+  fechar,
+  concluir,
+}: {
+  rapida: Rapida;
+  vendedores: Row[];
+  executar: Props["executar"];
+  fechar: () => void;
+  concluir: () => void;
+}) {
+  const um = vendedores.find((v) => str(v.id) === rapida.ids[0]);
+  const [regra, setRegra] = useState(str(um?.comissao_regra) || "FIXA");
+  const [aliquota, setAliquota] = useState(str(um?.comissao_aliquota).replace(".", ","));
+  const [semLinha, setSemLinha] = useState(um?.desconsiderar_comissao_linha === true);
+  const [senha, setSenha] = useState("");
+  const [confirmacao, setConfirmacao] = useState("");
+  const [erro, setErro] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const titulo = {
+    comissao: "Gerenciar comissões",
+    senha: "Alterar senha de acesso",
+    excluir: rapida.ids.length > 1 ? "Excluir vendedores" : "Excluir vendedor",
+    restaurar: rapida.ids.length > 1 ? "Restaurar vendedores" : "Restaurar vendedor",
+  }[rapida.tipo];
+  const quem = rapida.ids.length === 1 ? str(um?.nome) : `${rapida.ids.length} vendedores`;
+
+  async function confirmar() {
+    setErro("");
+    setOcupado(true);
+    try {
+      if (rapida.tipo === "senha") {
+        const r = await fetch(`/api/radar/vendedores/${rapida.ids[0]}/senha`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", "X-Radar-Request": "1" },
+          body: JSON.stringify({ senha, confirmacao }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          setErro(str(d.mensagem) || "Não foi possível trocar a senha.");
+          return;
+        }
+        concluir();
+        return;
+      }
+      const corpo =
+        rapida.tipo === "comissao"
+          ? {
+              op: "vendedor_comissao",
+              id: rapida.ids[0],
+              comissao_regra: regra,
+              comissao_aliquota: aliquota.trim() || "0",
+              desconsiderar_comissao_linha: semLinha,
+            }
+          : {
+              op: "vendedores_lote",
+              acao: rapida.tipo === "excluir" ? "EXCLUIR" : "RESTAURAR",
+              ids: rapida.ids,
+            };
+      if (await executar(corpo)) concluir();
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  return (
+    <div className="rd-modal-backdrop" onClick={fechar}>
+      <section
+        className="rd-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={titulo}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="rd-card-head">
+          <h2>{titulo}</h2>
+          <button aria-label="Fechar" onClick={fechar}>
+            ×
+          </button>
+        </div>
+        <p className="rd-note">{quem}</p>
+        {rapida.tipo === "comissao" && (
+          <div className="rd-form-grid">
+            <label>
+              Regra
+              <select value={regra} onChange={(e) => setRegra(e.target.value)}>
+                <option value="FIXA">Alíquota fixa</option>
+                <option value="DESCONTO">Conforme o desconto do pedido</option>
+              </select>
+            </label>
+            <label>
+              Alíquota (%)
+              <input
+                inputMode="decimal"
+                placeholder="Ex.: 5"
+                value={aliquota}
+                onChange={(e) => setAliquota(e.target.value)}
+              />
+            </label>
+            <label className="rd-check wide">
+              <input
+                type="checkbox"
+                checked={semLinha}
+                onChange={(e) => setSemLinha(e.target.checked)}
+              />
+              Desconsiderar a comissão definida nas linhas de produtos
+            </label>
+          </div>
+        )}
+        {rapida.tipo === "senha" && (
+          <div className="rd-form-grid">
+            <label>
+              Nova senha
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+              />
+            </label>
+            <label>
+              Repita a senha
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={confirmacao}
+                onChange={(e) => setConfirmacao(e.target.value)}
+              />
+            </label>
+            <small className="rd-dica wide">
+              Pelo menos 8 caracteres. Vale para o usuário do sistema ligado a este vendedor.
+            </small>
+          </div>
+        )}
+        {rapida.tipo === "excluir" && (
+          <p>
+            O cadastro vai para a aba &quot;Excluídos&quot; e o acesso ao sistema é desligado. Os
+            clientes e pedidos antigos continuam mostrando este vendedor. Dá para restaurar depois.
+          </p>
+        )}
+        {rapida.tipo === "restaurar" && (
+          <p>
+            O cadastro volta para a lista como inativo e sem usuário do sistema. Para devolver o
+            acesso, edite o vendedor e ligue o usuário de novo.
+          </p>
+        )}
+        {erro && (
+          <div className="rd-error" role="alert">
+            {erro}
+          </div>
+        )}
+        <div className="rd-modal-foot">
+          <button onClick={fechar}>Cancelar</button>
+          <button
+            className={rapida.tipo === "excluir" ? "perigo" : "primary"}
+            disabled={ocupado}
+            onClick={confirmar}
+          >
+            {rapida.tipo === "excluir"
+              ? "Excluir"
+              : rapida.tipo === "restaurar"
+                ? "Restaurar"
+                : "Salvar"}
+          </button>
+        </div>
+      </section>
+    </div>
   );
 }
 

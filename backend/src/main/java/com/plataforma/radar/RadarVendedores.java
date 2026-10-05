@@ -23,10 +23,12 @@ import com.plataforma.comum.tenant.ContextoTenant;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -46,7 +48,8 @@ import java.util.UUID;
 @Service
 public class RadarVendedores {
 
-    static final Set<String> OPERACOES = Set.of("vendedor_salvar");
+    static final Set<String> OPERACOES =
+            Set.of("vendedor_salvar", "vendedores_lote", "vendedor_comissao");
 
     /** Veem a lista (para escolher o vendedor padrão do cliente, por exemplo). */
     static final Set<String> VEEM =
@@ -80,10 +83,12 @@ public class RadarVendedores {
 
     private final JdbcTemplate db;
     private final ObjectMapper json;
+    private final PasswordEncoder codificador;
 
-    public RadarVendedores(JdbcTemplate db, ObjectMapper json) {
+    public RadarVendedores(JdbcTemplate db, ObjectMapper json, PasswordEncoder codificador) {
         this.db = db;
         this.json = json;
+        this.codificador = codificador;
     }
 
     /** Lista de vendedores e, para quem cadastra, os usuários do sistema que podem ser ligados. */
@@ -98,7 +103,8 @@ public class RadarVendedores {
                 db.queryForList(
                         "select v.id, v.codigo, v.nome, v.fantasia, v.tipo_pessoa, v.documento,"
                             + " v.email, v.celular, v.telefone, v.cidade, v.uf, v.situacao,"
-                            + " v.comissao_regra, v.comissao_aliquota, v.usuario_id, u.nome"
+                            + " v.comissao_regra, v.comissao_aliquota,"
+                            + " v.desconsiderar_comissao_linha, v.excluido_em, v.usuario_id, u.nome"
                             + " usuario_nome, (select count(*) from radar_cliente c where"
                             + " c.tenant_id=v.tenant_id and c.vendedor_id=v.id) clientes from"
                             + " radar_vendedor v left join usuario u on u.tenant_id=v.tenant_id and"
@@ -141,10 +147,20 @@ public class RadarVendedores {
         return v;
     }
 
+    /** Despacha as operações de vendedor que chegam pelos comandos do Radar. */
+    Map<String, Object> executar(String op, JsonNode n, String papel) {
+        return switch (op) {
+            case "vendedores_lote" -> lote(n, papel);
+            case "vendedor_comissao" -> comissao(n, papel);
+            default -> salvar(n, papel);
+        };
+    }
+
     Map<String, Object> salvar(JsonNode n, String papel) {
         permitir(papel, EDITAM.toArray(String[]::new));
         boolean novo = n.path("id").asText("").isBlank();
         UUID id = novo ? UUID.randomUUID() : id(n, "id");
+        if (!novo && excluido(id)) erro("Vendedor excluído: restaure o cadastro antes de editar.");
         Map<String, Object> c = colunas(n, id);
         if (c.get("codigo") == null) {
             if (novo) c.put("codigo", proximoCodigo());
@@ -176,6 +192,138 @@ public class RadarVendedores {
         r.put("id", id);
         r.put("mensagem", novo ? "Vendedor cadastrado." : "Vendedor atualizado.");
         return r;
+    }
+
+    /**
+     * Ações em lote. EXCLUIR não apaga a linha: marca como excluído, inativa e desliga o usuário do
+     * sistema (o vendedor perde o acesso). Clientes e pedidos antigos continuam apontando para ele.
+     * RESTAURAR devolve o cadastro, inativo e sem usuário: religar o acesso é uma escolha nova.
+     */
+    private Map<String, Object> lote(JsonNode n, String papel) {
+        permitir(papel, EDITAM.toArray(String[]::new));
+        String acao = n.path("acao").asText("");
+        JsonNode lista = n.path("ids");
+        if (!lista.isArray() || lista.isEmpty() || lista.size() > 500)
+            erro("Escolha entre 1 e 500 vendedores.");
+        List<UUID> ids = new ArrayList<>();
+        for (JsonNode i : lista) {
+            try {
+                ids.add(UUID.fromString(i.asText()));
+            } catch (IllegalArgumentException e) {
+                erro("Identificador inválido.");
+            }
+        }
+        UUID[] arr = ids.toArray(UUID[]::new);
+        Integer existentes =
+                db.queryForObject(
+                        "select count(*) from radar_vendedor where tenant_id=? and id = any(?)",
+                        Integer.class,
+                        tenant(),
+                        arr);
+        if (existentes == null || existentes != ids.size())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendedor não encontrado.");
+        int k =
+                switch (acao) {
+                    case "EXCLUIR" ->
+                            db.update(
+                                    "update radar_vendedor set"
+                                        + " excluido_em=now(),situacao='INATIVO',usuario_id=null,atualizado_em=now()"
+                                        + " where tenant_id=? and id = any(?) and excluido_em is"
+                                        + " null",
+                                    tenant(),
+                                    arr);
+                    case "RESTAURAR" ->
+                            db.update(
+                                    "update radar_vendedor set excluido_em=null,atualizado_em=now()"
+                                            + " where tenant_id=? and id = any(?) and excluido_em"
+                                            + " is not null",
+                                    tenant(),
+                                    arr);
+                    default -> {
+                        erro("Ação em lote não reconhecida.");
+                        yield 0;
+                    }
+                };
+        return Map.of(
+                "alterados",
+                k,
+                "mensagem",
+                acao.equals("EXCLUIR")
+                        ? k + " vendedor(es) excluído(s). O acesso ao sistema foi desligado."
+                        : k + " vendedor(es) restaurado(s), inativo(s) e sem acesso ao sistema.");
+    }
+
+    /** Edição rápida da comissão (o mesmo bloco do cadastro completo). */
+    private Map<String, Object> comissao(JsonNode n, String papel) {
+        permitir(papel, EDITAM.toArray(String[]::new));
+        UUID id = id(n, "id");
+        if (excluido(id)) erro("Vendedor excluído: restaure o cadastro antes de editar.");
+        String regra = n.path("comissao_regra").asText("FIXA");
+        if (!Set.of("FIXA", "DESCONTO").contains(regra)) erro("Regra de comissão inválida.");
+        BigDecimal aliquota;
+        try {
+            aliquota =
+                    new BigDecimal(n.path("comissao_aliquota").asText("0").replace(",", "."))
+                            .setScale(2, RoundingMode.HALF_UP);
+        } catch (NumberFormatException e) {
+            erro("Alíquota inválida.");
+            return Map.of();
+        }
+        if (aliquota.signum() < 0 || aliquota.compareTo(new BigDecimal("100")) > 0)
+            erro("A alíquota de comissão vai de 0 a 100%.");
+        confirmar(
+                db.update(
+                        "update radar_vendedor set comissao_regra=?,comissao_aliquota=?,"
+                                + "desconsiderar_comissao_linha=?,atualizado_em=now()"
+                                + " where tenant_id=? and id=?",
+                        regra,
+                        aliquota,
+                        n.path("desconsiderar_comissao_linha").asBoolean(false),
+                        tenant(),
+                        id));
+        return Map.of("id", id, "mensagem", "Comissão atualizada.");
+    }
+
+    /**
+     * Troca a senha do usuário do sistema ligado ao vendedor. Só a dona. Não passa pelos comandos
+     * do Radar de propósito: lá o corpo inteiro vira hash de idempotência e vai para a auditoria.
+     */
+    void alterarSenha(String papel, UUID vendedorId, String senha, String confirmacao) {
+        permitir(papel, "DONO");
+        var linhas =
+                db.queryForList(
+                        "select usuario_id, excluido_em from radar_vendedor where tenant_id=?"
+                                + " and id=?",
+                        tenant(),
+                        vendedorId);
+        if (linhas.isEmpty())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Vendedor não encontrado.");
+        var v = linhas.getFirst();
+        if (v.get("excluido_em") != null) erro("Vendedor excluído não tem acesso ao sistema.");
+        if (v.get("usuario_id") == null)
+            erro("Este vendedor não tem usuário do sistema. Ligue um usuário no cadastro.");
+        if (senha == null || senha.length() < 8)
+            erro("A senha precisa de pelo menos 8 caracteres.");
+        // BCrypt só considera os primeiros 72 bytes.
+        if (senha.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 72)
+            erro("A senha pode ter no máximo 72 caracteres.");
+        if (!senha.equals(confirmacao)) erro("A confirmação não confere com a senha.");
+        confirmar(
+                db.update(
+                        "update usuario set senha_hash=?,atualizado_em=now() where tenant_id=?"
+                                + " and id=?",
+                        codificador.encode(senha),
+                        tenant(),
+                        v.get("usuario_id")));
+    }
+
+    private boolean excluido(UUID id) {
+        var r =
+                db.queryForList(
+                        "select excluido_em from radar_vendedor where tenant_id=? and id=?",
+                        tenant(),
+                        id);
+        return !r.isEmpty() && r.getFirst().get("excluido_em") != null;
     }
 
     /** Colunas validadas; junta os obrigatórios que faltam numa mensagem só. */
