@@ -2720,3 +2720,262 @@ ul.rd-menu-linha li button:disabled {
 .rd-barra-compacta .rd-barra-total small {
   font-size: 11px;
 }
+
+/* Busca e filtros de produtos */
+.rd-filtros-produtos {
+  margin: 4px 0 12px;
+}
+.rd-filtros-linha {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.rd-busca-produtos {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 360px;
+  max-width: 560px;
+  border: 1px solid var(--rd-line);
+  border-radius: 10px;
+  background: white;
+  padding-right: 4px;
+}
+.radar-app .rd-busca-produtos input {
+  flex: 1;
+  border: 0;
+  background: none;
+  padding: 10px 12px;
+  min-width: 0;
+}
+.radar-app .rd-busca-produtos input:focus {
+  outline: none;
+}
+.rd-busca-produtos:focus-within {
+  border-color: var(--rd-blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.rd-busca-lupa {
+  color: var(--rd-muted);
+  padding: 0 6px;
+  font-size: 18px;
+}
+.radar-app button.rd-busca-campo {
+  border: 1px solid var(--rd-line);
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: white;
+  font-size: 12px;
+}
+.rd-filtro-pop {
+  position: relative;
+}
+.radar-app button.rd-chip-filtro {
+  border: 1px solid var(--rd-line);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: white;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.radar-app button.rd-chip-filtro.ativo {
+  color: var(--rd-blue);
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+.radar-app button.rd-chip-filtro.foco {
+  border-color: var(--rd-blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+.rd-chip-num {
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 5px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--rd-blue);
+  color: white;
+  font-size: 11px;
+}
+.radar-app button.rd-chip-limpar {
+  border: 0;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+.radar-app button.rd-chip-limpar:disabled {
+  color: var(--rd-muted);
+  cursor: default;
+}
+.rd-pop-lista,
+.rd-sugestoes,
+.rd-pop-chips,
+.rd-painel-filtros {
+  position: absolute;
+  top: calc(100% + 6px);
+  z-index: 25;
+  background: white;
+  border: 1px solid var(--rd-line);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+}
+.rd-pop-lista,
+.rd-sugestoes {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  min-width: 260px;
+}
+.rd-pop-lista {
+  right: 0;
+}
+.rd-sugestoes {
+  left: 0;
+  right: 0;
+}
+.rd-pop-lista li button,
+.rd-sugestoes li button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 8px 10px;
+  border-radius: 7px;
+}
+.rd-pop-lista li button:hover,
+.rd-sugestoes li button:hover,
+.rd-pop-lista li button.ativo {
+  background: #eff6ff;
+  color: var(--rd-blue);
+}
+.rd-pop-titulo {
+  padding: 6px 10px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--rd-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.rd-pop-chips {
+  left: 0;
+  padding: 12px;
+  min-width: 300px;
+  display: grid;
+  gap: 8px;
+}
+.rd-pop-chips small {
+  color: var(--rd-muted);
+}
+.rd-pop-chips > div,
+.rd-filtro-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rd-painel-filtros {
+  right: 0;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  max-height: 75vh;
+}
+.rd-painel-corpo {
+  overflow-y: auto;
+  padding: 14px;
+  display: grid;
+  gap: 14px;
+}
+.rd-painel-corpo > label:not(.rd-check),
+.rd-filtro-faixa label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--rd-muted);
+}
+.rd-filtro-grupo {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.rd-filtro-grupo legend {
+  font-size: 12px;
+  color: var(--rd-muted);
+  margin-bottom: 6px;
+}
+.rd-filtro-sub {
+  font-weight: 700;
+}
+.rd-filtro-rolagem {
+  display: grid;
+  gap: 6px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+.rd-filtro-faixa {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.rd-painel-rodape {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  border-top: 1px solid var(--rd-line);
+}
+.rd-filtros-ativos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.rd-filtros-contagem {
+  font-size: 12px;
+  font-weight: 700;
+  margin-right: 4px;
+}
+.rd-chip-ativo,
+.rd-chip-salvo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1e40af;
+  font-size: 12px;
+}
+.rd-chip-salvo {
+  background: #fef3c7;
+  color: #92400e;
+}
+.radar-app .rd-chip-ativo button,
+.radar-app .rd-chip-salvo button {
+  border: 0;
+  background: none;
+  color: inherit;
+  padding: 0 4px;
+  font-size: 12px;
+}
+.radar-app button.rd-chip-salvar {
+  border: 1px dashed var(--rd-line);
+  border-radius: 999px;
+  background: none;
+  font-size: 12px;
+  padding: 3px 10px;
+}
+@media (max-width: 720px) {
+  .rd-painel-filtros {
+    position: fixed;
+    inset: auto 8px 8px 8px;
+    width: auto;
+  }
+}

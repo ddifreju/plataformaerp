@@ -24,6 +24,11 @@ import Clientes from "./cliente";
 import Vendedores from "./vendedor";
 import ProdutosLote from "./produtos-lote";
 import PedidosLote from "./pedidos-lote";
+import FiltrosProdutos, {
+  filtrarProdutos,
+  filtroInicial,
+  type FiltroProdutos,
+} from "./produtos-filtros";
 import Pendencias from "./pendencias";
 import Anuncios from "./anuncios";
 import Categorias from "./categorias";
@@ -192,7 +197,6 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(""),
     [error, setError] = useState(""),
-    [search, setSearch] = useState(""),
     [modal, setModal] = useState<ModalSpec | null>(null),
     [tour, setTour] = useState(0),
     [abertos, setAbertos] = useState<string[]>([]),
@@ -205,7 +209,9 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [menu, setMenu] = useState(false),
     // Produtos marcados na lista para as ações em lote.
     [marcadosProdutos, setMarcadosProdutos] = useState<string[]>([]),
-    [marcadosPedidos, setMarcadosPedidos] = useState<string[]>([]);
+    [marcadosPedidos, setMarcadosPedidos] = useState<string[]>([]),
+    // null até a lista de produtos abrir: aí lê o último filtro deste navegador.
+    [filtroProdutosSalvo, setFiltroProdutos] = useState<FiltroProdutos | null>(null);
   const refresh = useCallback(async () => {
     const d = await call("");
     setData(d);
@@ -260,7 +266,6 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   function go(p: string) {
     setEditando(null);
     setPage(p);
-    setSearch("");
     setMenu(false);
     setNotice("");
     setError("");
@@ -417,8 +422,18 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       </div>
     );
   if (!data) return <Login onLogin={refresh} />;
-  const filtered = (items: Row[]) =>
-    items.filter((x) => JSON.stringify(x).toLowerCase().includes(search.toLowerCase()));
+  const filtroProdutos = filtroProdutosSalvo ?? filtroInicial();
+  const contextoFiltro = {
+    produtos: products,
+    anuncios: listings,
+    categorias: data.categorias,
+    fornecedores: data.fornecedores ?? [],
+    produtoFornecedores: data.produtoFornecedores ?? [],
+    imagens: data.imagens,
+    disponivel,
+  };
+  const listaProdutos =
+    page === "produtos" ? filtrarProdutos(principais, filtroProdutos, contextoFiltro) : [];
   const liberadas = new Set(
     nav
       .map(([p]) => p)
@@ -803,18 +818,18 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             <section className="rd-card">
               <div className="rd-card-head">
                 <h2>{principais.length} produtos</h2>
-                <input
-                  aria-label="Buscar produto"
-                  className="rd-search"
-                  placeholder="Buscar por nome, SKU ou marca…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
               </div>
+              <FiltrosProdutos
+                filtro={filtroProdutos}
+                setFiltro={setFiltroProdutos}
+                contexto={contextoFiltro}
+                principais={principais}
+                total={listaProdutos.length}
+              />
               <ProdutosLote
                 ativo={can("DONO", "GESTOR")}
                 produtos={products}
-                linhas={filtered(principais)}
+                linhas={listaProdutos}
                 marcados={marcadosProdutos}
                 setMarcados={setMarcadosProdutos}
                 categorias={data.categorias}
@@ -836,7 +851,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                       "Cadastro",
                       "Ações",
                     ]}
-                    rows={filtered(principais).map((p) => {
+                    rows={listaProdutos.map((p) => {
                       const capa = data.imagens.find((i) => i.produto_id === p.id);
                       const variacoes = products.filter((f) => f.pai_id === p.id).length;
                       return [
