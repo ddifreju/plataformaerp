@@ -252,6 +252,7 @@ function ListaClientes(props: Props) {
   } | null>(null);
   const [filtro, setFiltro] = useState("TODOS");
   const [busca, setBusca] = useState("");
+  const [marcados, setMarcados] = useState<string[]>([]);
 
   if (aberto)
     return (
@@ -351,6 +352,7 @@ function ListaClientes(props: Props) {
         ) : (
           <Table
             headers={[
+              props.podeEditar ? "✓" : "",
               "Código",
               "Cliente",
               "CPF/CNPJ",
@@ -367,6 +369,7 @@ function ListaClientes(props: Props) {
                 "gray",
               ];
               return [
+                caixa(c, marcados, setMarcados, props.podeEditar),
                 str(c.codigo),
                 <div key="n">
                   <strong>{str(c.nome)}</strong>
@@ -405,6 +408,12 @@ function ListaClientes(props: Props) {
             })}
           />
         )}
+        <BarraLote
+          {...props}
+          linhas={linhas}
+          marcados={marcados}
+          setMarcados={setMarcados}
+        />
         <p className="rd-note">
           Lead: cadastrado sem compra. Primeira compra: um pedido. Recorrente:
           dois ou mais. Pedidos cancelados não contam. O cliente é reconhecido
@@ -425,6 +434,7 @@ function Fornecedores(props: Props) {
   } | null>(null);
   const [filtro, setFiltro] = useState("TODOS");
   const [busca, setBusca] = useState("");
+  const [marcados, setMarcados] = useState<string[]>([]);
 
   if (aberto)
     return (
@@ -505,6 +515,7 @@ function Fornecedores(props: Props) {
       ) : (
         <Table
           headers={[
+            props.podeEditar ? "✓" : "",
             "Código",
             "Fornecedor",
             "CPF/CNPJ",
@@ -515,6 +526,7 @@ function Fornecedores(props: Props) {
             "",
           ]}
           rows={linhas.map((c) => [
+            caixa(c, marcados, setMarcados, props.podeEditar),
             str(c.codigo),
             <div key="n">
               <strong>{str(c.nome)}</strong>
@@ -559,12 +571,405 @@ function Fornecedores(props: Props) {
           ])}
         />
       )}
+      <BarraLote
+        {...props}
+        linhas={linhas}
+        marcados={marcados}
+        setMarcados={setMarcados}
+      />
       <p className="rd-note">
         Fornecedor e transportador usam o mesmo cadastro do cliente. Um contato
         pode ser mais de um tipo ao mesmo tempo (por exemplo, fornecedor e
         cliente).
       </p>
     </section>
+  );
+}
+
+function caixa(
+  c: Row,
+  marcados: string[],
+  setMarcados: (f: (m: string[]) => string[]) => void,
+  podeEditar: boolean,
+) {
+  if (!podeEditar) return "";
+  const id = str(c.id);
+  return (
+    <input
+      key="m"
+      type="checkbox"
+      aria-label={`Selecionar ${str(c.nome)}`}
+      checked={marcados.includes(id)}
+      onChange={(e) =>
+        setMarcados((m) =>
+          e.target.checked ? [...m, id] : m.filter((x) => x !== id),
+        )
+      }
+    />
+  );
+}
+
+type AcaoLote =
+  | "VENDEDOR"
+  | "LISTA_PRECO"
+  | "TIPO_CONTATO"
+  | "UNIFICAR"
+  | "EXCLUIR";
+
+/**
+ * Barra que aparece embaixo quando há cadastros marcados: imprimir etiquetas, excluir e
+ * "mais ações" (vendedor, lista de preço, tipo de contato, unificar).
+ */
+function BarraLote({
+  linhas,
+  marcados,
+  setMarcados,
+  clientes,
+  vendedores,
+  podeEditar,
+  executar,
+}: Props & {
+  linhas: Row[];
+  marcados: string[];
+  setMarcados: (f: (m: string[]) => string[]) => void;
+}) {
+  const [menu, setMenu] = useState(false);
+  const [acao, setAcao] = useState<AcaoLote | null>(null);
+  const [valor, setValor] = useState("");
+  const [tiposLote, setTiposLote] = useState<string[]>(["CLIENTE"]);
+  const [erro, setErro] = useState("");
+  if (!podeEditar) return null;
+  const todos =
+    linhas.length > 0 && linhas.every((c) => marcados.includes(str(c.id)));
+  const selecionados = clientes.filter((c) => marcados.includes(str(c.id)));
+  const listas = [
+    ...new Set(clientes.map((c) => str(c.lista_preco)).filter(Boolean)),
+  ].sort();
+
+  async function imprimirEtiquetas() {
+    setMenu(false);
+    setErro("");
+    const qs = marcados.map((id) => `ids=${encodeURIComponent(id)}`).join("&");
+    const res = await fetch(`/api/radar/clientes/etiquetas?${qs}`, {
+      credentials: "include",
+    });
+    const corpo = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setErro(corpo.mensagem ?? "Não foi possível montar as etiquetas.");
+      return;
+    }
+    const esc = (t: unknown) =>
+      str(t).replace(
+        /[&<>"]/g,
+        (ch) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!,
+      );
+    const cep = (t: unknown) => str(t).replace(/^(\d{5})(\d{3})$/, "$1-$2");
+    const etiquetas = (corpo as Row[])
+      .map(
+        (e) => `<div class="etq"><strong>${esc(e.nome)}</strong>
+<span>${esc(e.endereco)}${e.numero ? ", " + esc(e.numero) : ""}${e.complemento ? " - " + esc(e.complemento) : ""}</span>
+<span>${esc(e.bairro)}</span>
+<span>${e.cep ? "CEP " + cep(e.cep) + " · " : ""}${esc(e.cidade)}${e.uf ? "/" + esc(e.uf) : ""}${e.pais ? " · " + esc(e.pais) : ""}</span></div>`,
+      )
+      .join("");
+    const janela = window.open("", "_blank");
+    if (!janela) {
+      setErro(
+        "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.",
+      );
+      return;
+    }
+    janela.document
+      .write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<title>Etiquetas</title><style>
+body{font-family:Arial,sans-serif;margin:8mm}
+.grade{display:grid;grid-template-columns:repeat(2,1fr);gap:4mm}
+.etq{border:1px dashed #999;border-radius:2mm;padding:4mm;display:flex;flex-direction:column;gap:1mm;font-size:11pt;break-inside:avoid}
+@media print{.etq{border-color:#ddd}}
+</style></head><body><div class="grade">${etiquetas}</div>
+<script>window.onload=function(){window.print()}<\/script></body></html>`);
+    janela.document.close();
+  }
+
+  function abrir(a: AcaoLote) {
+    setMenu(false);
+    setErro("");
+    setValor(a === "UNIFICAR" ? marcados[0] : "");
+    setTiposLote(["CLIENTE"]);
+    setAcao(a);
+  }
+
+  async function confirmar() {
+    setErro("");
+    if (acao === "UNIFICAR" && marcados.length < 2) {
+      setErro("Marque ao menos dois cadastros para unificar.");
+      return;
+    }
+    const corpo: Record<string, unknown> = {
+      op: "clientes_lote",
+      acao,
+      ids: marcados,
+    };
+    if (acao === "VENDEDOR") corpo.vendedor_id = valor;
+    if (acao === "LISTA_PRECO") corpo.lista_preco = valor;
+    if (acao === "TIPO_CONTATO") {
+      if (!tiposLote.length) {
+        setErro("Escolha ao menos um tipo de contato.");
+        return;
+      }
+      corpo.tipos_contato = tiposLote;
+    }
+    if (acao === "UNIFICAR") corpo.principal_id = valor;
+    // Fecha nos dois casos: o aviso de erro (ou de sucesso) aparece no topo da página.
+    const ok = await executar(corpo);
+    setAcao(null);
+    if (ok) setMarcados(() => []);
+  }
+
+  const titulos: Record<AcaoLote, string> = {
+    VENDEDOR: "Vincular a vendedor",
+    LISTA_PRECO: "Vincular a lista de preços",
+    TIPO_CONTATO: "Definir tipo de contato",
+    UNIFICAR: "Unificar cadastros",
+    EXCLUIR: "Excluir cadastros",
+  };
+
+  return (
+    <>
+      {linhas.length > 0 && (
+        <label className="rd-check rd-marcar-todos">
+          <input
+            type="checkbox"
+            checked={todos}
+            onChange={(e) =>
+              setMarcados(() =>
+                e.target.checked ? linhas.map((c) => str(c.id)) : [],
+              )
+            }
+          />
+          Marcar todos da lista ({linhas.length})
+        </label>
+      )}
+      {erro && !acao && (
+        <div className="rd-error" role="alert">
+          {erro}
+        </div>
+      )}
+      {marcados.length > 0 && (
+        <div
+          className="rd-barra-lote"
+          role="region"
+          aria-label="Ações para os selecionados"
+        >
+          <span className="rd-barra-qtd">
+            <button
+              type="button"
+              aria-label="Limpar seleção"
+              title="Limpar seleção"
+              onClick={() => setMarcados(() => [])}
+            >
+              ✕
+            </button>
+            {String(marcados.length).padStart(2, "0")} selecionado(s)
+          </span>
+          <button type="button" className="primary" onClick={imprimirEtiquetas}>
+            🏷 Imprimir etiquetas
+          </button>
+          <button type="button" onClick={() => abrir("EXCLUIR")}>
+            🗑 Excluir cadastros
+          </button>
+          <div className="rd-mais-acoes">
+            <button
+              type="button"
+              aria-expanded={menu}
+              onClick={() => setMenu(!menu)}
+            >
+              Mais ações ⋯
+            </button>
+            {menu && (
+              <ul role="menu" className="rd-menu-cima">
+                <li>
+                  <button role="menuitem" onClick={imprimirEtiquetas}>
+                    🏷 Imprimir etiquetas
+                  </button>
+                </li>
+                <li>
+                  <button role="menuitem" onClick={() => abrir("EXCLUIR")}>
+                    🗑 Excluir cadastros
+                  </button>
+                </li>
+                <li>
+                  <button role="menuitem" onClick={() => abrir("VENDEDOR")}>
+                    👤 Vincular a vendedor
+                  </button>
+                </li>
+                <li>
+                  <button role="menuitem" onClick={() => abrir("LISTA_PRECO")}>
+                    ☰ Vincular a lista de preços
+                  </button>
+                </li>
+                <li>
+                  <button role="menuitem" onClick={() => abrir("TIPO_CONTATO")}>
+                    ◫ Definir tipo de contato
+                  </button>
+                </li>
+                <li>
+                  <button role="menuitem" onClick={() => abrir("UNIFICAR")}>
+                    ⇆ Unificar cadastros
+                  </button>
+                </li>
+                <li>
+                  <button
+                    role="menuitem"
+                    disabled
+                    title="Entra com a integração dos Correios"
+                  >
+                    ⇪ Exportar para o SIGEP <small>(em breve)</small>
+                  </button>
+                </li>
+                <li className="rd-menu-sep">
+                  <button
+                    role="menuitem"
+                    disabled
+                    title="Disponível quando houver mais de uma empresa na conta"
+                  >
+                    ⇪ Enviar cadastros para empresas <small>(em breve)</small>
+                  </button>
+                </li>
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+      {acao && (
+        <div className="rd-modal-backdrop" onClick={() => setAcao(null)}>
+          <section
+            className="rd-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={titulos[acao]}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="rd-card-head">
+              <h2>{titulos[acao]}</h2>
+              <button aria-label="Fechar" onClick={() => setAcao(null)}>
+                ×
+              </button>
+            </div>
+            <p className="rd-note">
+              {marcados.length} cadastro(s) selecionado(s).
+            </p>
+            {acao === "VENDEDOR" && (
+              <label className="rd-campo-lote">
+                Vendedor padrão
+                <select
+                  value={valor}
+                  onChange={(e) => setValor(e.target.value)}
+                >
+                  <option value="">Nenhum (tirar o vendedor)</option>
+                  {vendedores
+                    .filter((v) => v.situacao !== "INATIVO")
+                    .map((v) => (
+                      <option key={str(v.id)} value={str(v.id)}>
+                        {str(v.codigo)} · {str(v.nome)}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
+            {acao === "LISTA_PRECO" && (
+              <label className="rd-campo-lote">
+                Lista de preço
+                <input
+                  list="listas-preco"
+                  maxLength={60}
+                  placeholder="Ex.: Atacado (vazio tira a lista)"
+                  value={valor}
+                  onChange={(e) => setValor(e.target.value)}
+                />
+                <datalist id="listas-preco">
+                  {listas.map((l) => (
+                    <option key={l} value={l} />
+                  ))}
+                </datalist>
+              </label>
+            )}
+            {acao === "TIPO_CONTATO" && (
+              <div className="rd-campo-lote">
+                <span>Os selecionados passam a ser:</span>
+                <div className="rd-opcoes">
+                  {TIPOS_CONTATO.map(([v, r]) => (
+                    <label
+                      key={v}
+                      className={tiposLote.includes(v) ? "ativo" : ""}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={tiposLote.includes(v)}
+                        onChange={(e) =>
+                          setTiposLote((t) =>
+                            e.target.checked
+                              ? [...t, v]
+                              : t.filter((x) => x !== v),
+                          )
+                        }
+                      />
+                      {r}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+            {acao === "UNIFICAR" && (
+              <div className="rd-campo-lote">
+                <span>
+                  Qual cadastro fica? Os outros juntam nele (pedidos, anexos e
+                  tipos).
+                </span>
+                {selecionados.map((c) => (
+                  <label key={str(c.id)} className="rd-check">
+                    <input
+                      type="radio"
+                      name="principal"
+                      checked={valor === str(c.id)}
+                      onChange={() => setValor(str(c.id))}
+                    />
+                    {str(c.codigo)} · {str(c.nome)}{" "}
+                    {str(c.documento) && `· ${str(c.documento)}`}
+                  </label>
+                ))}
+                <small className="rd-dica">
+                  Cadastros com CPF/CNPJ diferentes são pessoas diferentes e não
+                  se juntam.
+                </small>
+              </div>
+            )}
+            {acao === "EXCLUIR" && (
+              <p>
+                Excluir {marcados.length} cadastro(s)? Não dá para desfazer.
+                Quem tem pedidos ou fornece produtos não é excluído: inative
+                esses cadastros.
+              </p>
+            )}
+            {erro && (
+              <div className="rd-error" role="alert">
+                {erro}
+              </div>
+            )}
+            <div className="rd-modal-foot">
+              <button onClick={() => setAcao(null)}>Cancelar</button>
+              <button
+                className={acao === "EXCLUIR" ? "perigo" : "primary"}
+                onClick={confirmar}
+              >
+                {acao === "EXCLUIR" ? "Excluir" : "Confirmar"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </>
   );
 }
 

@@ -340,6 +340,90 @@ class RadarClientesTest {
                 List.of("Tecidos Norte"), fornecedores.stream().map(f -> f.get("nome")).toList());
     }
 
+    @Test
+    void loteDefineTipoListaDePrecoEExcluiSoQuemNaoTemPedido() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID produto = BancoRadarDeTeste.novoProduto(empresa, "LOTE-1", "1.00", "10.00");
+        UUID a = salvar(empresa, completo("F", CPF, "Ana Lote"));
+        UUID b = salvar(empresa, completo("F", "39053344705", "Bia Lote"));
+        lote(
+                empresa,
+                "{\"acao\":\"TIPO_CONTATO\",\"tipos_contato\":[\"FORNECEDOR\"],\"ids\":"
+                        + ids(a, b)
+                        + "}");
+        lote(
+                empresa,
+                "{\"acao\":\"LISTA_PRECO\",\"lista_preco\":\"Atacado\",\"ids\":" + ids(a, b) + "}");
+        var c =
+                linha(
+                        empresa,
+                        "select tipos_contato::text t, lista_preco from radar_cliente where id=?",
+                        a);
+        assertEquals("[\"FORNECEDOR\"]", c.get("t"));
+        assertEquals("Atacado", c.get("lista_preco"));
+
+        vincularPedido(empresa, produto, a);
+        var erro =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> lote(empresa, "{\"acao\":\"EXCLUIR\",\"ids\":" + ids(a, b) + "}"));
+        assertTrue(erro.getReason().contains("Ana Lote"));
+        lote(empresa, "{\"acao\":\"EXCLUIR\",\"ids\":" + ids(b) + "}");
+        assertEquals(
+                0L,
+                naEmpresa(
+                        empresa,
+                        () ->
+                                db.queryForObject(
+                                        "select count(*) from radar_cliente where id=?",
+                                        Long.class,
+                                        b)));
+    }
+
+    @Test
+    void unificarJuntaPedidosMasRecusaDocumentosDiferentes() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID produto = BancoRadarDeTeste.novoProduto(empresa, "UNI-1", "1.00", "10.00");
+        UUID principal = salvar(empresa, completo("F", CPF, "Carla Uni"));
+        UUID semDoc = naEmpresa(empresa, () -> clientes.clienteDoPedido("Carla", null));
+        vincularPedido(empresa, produto, semDoc);
+        UUID outroCpf = salvar(empresa, completo("F", "39053344705", "Outra Carla"));
+
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        lote(
+                                empresa,
+                                "{\"acao\":\"UNIFICAR\",\"principal_id\":\""
+                                        + principal
+                                        + "\",\"ids\":"
+                                        + ids(principal, outroCpf)
+                                        + "}"));
+        lote(
+                empresa,
+                "{\"acao\":\"UNIFICAR\",\"principal_id\":\""
+                        + principal
+                        + "\",\"ids\":"
+                        + ids(principal, semDoc)
+                        + "}");
+        assertEquals("PRIMEIRA_COMPRA", classificacao(empresa, principal));
+        assertTrue(lista(empresa, "DONO").stream().noneMatch(x -> x.get("id").equals(semDoc)));
+    }
+
+    @Test
+    void etiquetasTrazemEnderecoSemDocumentoEOutraEmpresaNaoVe() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID outra = BancoRadarDeTeste.novaEmpresa();
+        UUID a = salvar(empresa, completo("F", CPF, "Dora Etiqueta"));
+        var etiquetas = naEmpresa(empresa, () -> clientes.etiquetas("ATENDIMENTO", List.of(a)));
+        assertEquals("Av. Paulista", etiquetas.getFirst().get("endereco"));
+        assertTrue(!etiquetas.getFirst().containsKey("documento"));
+        assertTrue(naEmpresa(outra, () -> clientes.etiquetas("DONO", List.of(a))).isEmpty());
+        assertThrows(
+                ResponseStatusException.class,
+                () -> naEmpresa(empresa, () -> clientes.etiquetas("ANALISTA", List.of(a))));
+    }
+
     // ---- apoio -----------------------------------------------------------------------------
 
     private static UUID naEmpresaNova() {
@@ -348,6 +432,16 @@ class RadarClientesTest {
         } catch (SQLException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    private static void lote(UUID empresa, String corpo) {
+        naEmpresa(empresa, () -> clientes.lote(json(corpo), "DONO"));
+    }
+
+    private static String ids(UUID... ids) {
+        return java.util.Arrays.stream(ids)
+                .map(i -> "\"" + i + "\"")
+                .collect(java.util.stream.Collectors.joining(",", "[", "]"));
     }
 
     private static String completo(String tipo, String documento, String nome) {

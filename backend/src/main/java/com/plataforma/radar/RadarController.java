@@ -70,6 +70,11 @@ public class RadarController {
         return service.cliente(id);
     }
 
+    @GetMapping("/clientes/etiquetas")
+    public java.util.List<Map<String, Object>> etiquetas(@RequestParam java.util.List<UUID> ids) {
+        return service.etiquetas(ids);
+    }
+
     @GetMapping("/vendedores/{id}")
     public Map<String, Object> vendedor(@PathVariable UUID id) {
         return service.vendedor(id);
