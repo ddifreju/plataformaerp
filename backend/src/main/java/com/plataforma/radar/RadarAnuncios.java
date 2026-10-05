@@ -34,7 +34,8 @@ import java.util.UUID;
 @Service
 public class RadarAnuncios {
 
-    static final Set<String> OPERACOES = Set.of("anuncio_relacionar", "anuncios_precos");
+    static final Set<String> OPERACOES =
+            Set.of("anuncio_relacionar", "anuncios_precos", "anuncios_acao_lote");
 
     static final Set<String> CANAIS = Set.of("Mercado Livre", "Shopee", "TikTok Shop", "SHEIN");
     private static final Set<String> SITUACOES =
@@ -53,6 +54,7 @@ public class RadarAnuncios {
         return switch (op) {
             case "anuncio_relacionar" -> relacionar(n);
             case "anuncios_precos" -> proporPrecos(n);
+            case "anuncios_acao_lote" -> lote(n);
             default -> {
                 erro("Operação não reconhecida.");
                 yield Map.of();
@@ -82,6 +84,99 @@ public class RadarAnuncios {
         r.put("id", produto);
         r.put("mensagem", alterados + " anúncio(s) vinculado(s) a " + p.get("sku") + ".");
         return r;
+    }
+
+    /**
+     * Ações em lote da lista de anúncios de uma loja. EXCLUIR apaga só o que não está no ar no
+     * marketplace (sem loja conectada, apagar no Radar não tiraria o anúncio de lá) e não tem
+     * histórico de preço na Central de ações. CRIAR_PRODUTOS cria um produto novo, incompleto, a
+     * partir de cada anúncio e passa o anúncio para ele (o vínculo continua obrigatório).
+     */
+    private Map<String, Object> lote(JsonNode n) {
+        String acao = n.path("acao").asText("");
+        List<UUID> ids = ids(n.path("ids"));
+        var linhas =
+                db.queryForList(
+                        "select a.id, a.canal, a.titulo, a.preco, a.id_externo, a.sku_externo,"
+                                + " a.situacao_ecommerce, exists (select 1 from radar_acao x"
+                                + " where x.tenant_id=a.tenant_id and x.anuncio_id=a.id)"
+                                + " as tem_historico from radar_anuncio a where a.tenant_id=?"
+                                + " and a.id = any(?)",
+                        tenant(),
+                        ids.toArray(new UUID[0]));
+        if (linhas.size() != ids.size())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Anúncio não encontrado.");
+        return switch (acao) {
+            case "EXCLUIR" -> excluir(linhas);
+            case "CRIAR_PRODUTOS" -> criarProdutos(linhas);
+            default -> {
+                erro("Ação em lote não reconhecida.");
+                yield Map.of();
+            }
+        };
+    }
+
+    private Map<String, Object> excluir(List<Map<String, Object>> linhas) {
+        int excluidos = 0, noAr = 0, comHistorico = 0;
+        for (var a : linhas) {
+            String situacao = (String) a.get("situacao_ecommerce");
+            if (situacao.equals("ATIVO") || situacao.equals("PAUSADO")) noAr++;
+            else if (Boolean.TRUE.equals(a.get("tem_historico"))) comHistorico++;
+            else
+                excluidos +=
+                        db.update(
+                                "delete from radar_anuncio where tenant_id=? and id=?",
+                                tenant(),
+                                a.get("id"));
+        }
+        StringBuilder msg = new StringBuilder(excluidos + " anúncio(s) excluído(s).");
+        if (noAr > 0)
+            msg.append(" ")
+                    .append(noAr)
+                    .append(
+                            " mantido(s) porque está(ão) no ar no marketplace: encerre lá"
+                                    + " primeiro.");
+        if (comHistorico > 0)
+            msg.append(" ")
+                    .append(comHistorico)
+                    .append(" mantido(s) porque tem(têm) histórico de preço na Central de ações.");
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("excluidos", excluidos);
+        r.put("mantidosNoAr", noAr);
+        r.put("mantidosComHistorico", comHistorico);
+        r.put("mensagem", msg.toString());
+        return r;
+    }
+
+    private Map<String, Object> criarProdutos(List<Map<String, Object>> linhas) {
+        for (var a : linhas) {
+            String canal = (String) a.get("canal");
+            String externo = (String) a.get("id_externo");
+            // Anúncio criado no Radar não tem código lá fora: usa o começo do id dele.
+            if (externo == null) externo = a.get("id").toString().substring(0, 8).toUpperCase();
+            UUID produto =
+                    criarProduto(
+                            canal,
+                            externo,
+                            (String) a.get("titulo"),
+                            (String) a.get("sku_externo"),
+                            null,
+                            (BigDecimal) a.get("preco"),
+                            null);
+            db.update(
+                    "update radar_anuncio set produto_id=?,versao=versao+1,atualizado_em=now()"
+                            + " where tenant_id=? and id=?",
+                    produto,
+                    tenant(),
+                    a.get("id"));
+        }
+        return Map.of(
+                "criados",
+                linhas.size(),
+                "mensagem",
+                linhas.size()
+                        + " produto(s) criado(s) com cadastro incompleto e vinculado(s) aos"
+                        + " anúncios. Complete o cadastro em Produtos.");
     }
 
     /**

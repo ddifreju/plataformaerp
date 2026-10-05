@@ -305,6 +305,100 @@ class RadarAnunciosTest {
                         .get("categoria_id"));
     }
 
+    @Test
+    void excluirEmLoteSoApagaOQueNaoEstaNoArNemTemHistorico() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID outra = BancoRadarDeTeste.novaEmpresa();
+        logar(empresa);
+        importar(
+                empresa,
+                "[{\"id_externo\":\"E1\",\"titulo\":\"x\",\"preco\":\"5.00\","
+                        + "\"situacao\":\"NAO_PUBLICADO\"},"
+                        + "{\"id_externo\":\"E2\",\"titulo\":\"x\",\"preco\":\"5.00\"},"
+                        + "{\"id_externo\":\"E3\",\"titulo\":\"x\",\"preco\":\"5.00\","
+                        + "\"situacao\":\"ENCERRADO\"}]");
+        UUID e1 = (UUID) anuncio(empresa, "E1").get("id");
+        UUID e2 = (UUID) anuncio(empresa, "E2").get("id");
+        UUID e3 = (UUID) anuncio(empresa, "E3").get("id");
+        // E3 tem proposta de preço: fica, pelo histórico.
+        naEmpresa(
+                empresa,
+                () ->
+                        anuncios.executar(
+                                "anuncios_precos",
+                                json(
+                                        "{\"motivo\":\"r\",\"itens\":[{\"id\":\""
+                                                + e3
+                                                + "\",\"preco\":\"6.00\"}]}"),
+                                "DONO"));
+        String corpo =
+                "{\"acao\":\"EXCLUIR\",\"ids\":[\"" + e1 + "\",\"" + e2 + "\",\"" + e3 + "\"]}";
+
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                outra,
+                                () ->
+                                        anuncios.executar(
+                                                "anuncios_acao_lote", json(corpo), "DONO")));
+        var r =
+                naEmpresa(
+                        empresa,
+                        () -> anuncios.executar("anuncios_acao_lote", json(corpo), "DONO"));
+        assertEquals(1, r.get("excluidos"));
+        assertEquals(1, r.get("mantidosNoAr"));
+        assertEquals(1, r.get("mantidosComHistorico"));
+        Integer restam =
+                naEmpresa(
+                        empresa,
+                        () ->
+                                db.queryForObject(
+                                        "select count(*) from radar_anuncio where id_externo in"
+                                                + " ('E1','E2','E3')",
+                                        Integer.class));
+        assertEquals(2, restam);
+
+        var semCargo =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresa,
+                                        () ->
+                                                anuncios.executar(
+                                                        "anuncios_acao_lote",
+                                                        json(corpo),
+                                                        "ESTOQUE")));
+        assertEquals(HttpStatus.FORBIDDEN, semCargo.getStatusCode());
+    }
+
+    @Test
+    void criarProdutosEmLoteCriaIncompletoEVinculaOAnuncio() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID antigo = BancoRadarDeTeste.novoProduto(empresa, "CORT-1", "10.00", "50.00");
+        importar(
+                empresa,
+                "[{\"id_externo\":\"C1\",\"titulo\":\"Cortina verde\",\"preco\":\"79.90\","
+                        + "\"sku\":\"CORT-1\"}]");
+        assertEquals(antigo, anuncio(empresa, "C1").get("produto_id"));
+        UUID a = (UUID) anuncio(empresa, "C1").get("id");
+        naEmpresa(
+                empresa,
+                () ->
+                        anuncios.executar(
+                                "anuncios_acao_lote",
+                                json("{\"acao\":\"CRIAR_PRODUTOS\",\"ids\":[\"" + a + "\"]}"),
+                                "MARKETING"));
+        Object novo = anuncio(empresa, "C1").get("produto_id");
+        assertTrue(!antigo.equals(novo));
+        var p = linha(empresa, "select * from radar_produto where id=?", novo);
+        assertEquals(true, p.get("incompleto"));
+        assertEquals("Cortina verde", p.get("nome"));
+        assertEquals("CORT-1-2", p.get("sku"));
+        assertEquals(0, new BigDecimal("79.90").compareTo((BigDecimal) p.get("preco")));
+    }
+
     // ---- apoio -----------------------------------------------------------------------------
 
     private static Map<String, Object> importar(UUID empresa, String itens) {

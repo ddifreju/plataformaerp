@@ -58,6 +58,11 @@ const ABAS: [string, string][] = [
   ["ATENCAO", "Necessitam atenção"],
 ];
 
+const SEM_LOJA =
+  "Enviar ao marketplace precisa de uma loja conectada. As conexões entram depois do CNPJ, em Integrações.";
+
+type AcaoLote = "relacionar" | "precos" | "excluir" | "criar";
+
 type Filtros = { produto: string; situacao: string; ecommerce: string };
 const SEM_FILTRO: Filtros = { produto: "", situacao: "", ecommerce: "" };
 
@@ -187,9 +192,17 @@ function ListaDaLoja({
   const [busca, setBusca] = useState("");
   const [filtros, setFiltros] = useState<Filtros>(SEM_FILTRO);
   const [rascunho, setRascunho] = useState<Filtros | null>(null);
-  const [menu, setMenu] = useState(false);
   const [marcados, setMarcados] = useState<string[]>([]);
-  const [acao, setAcao] = useState<"relacionar" | "precos" | null>(null);
+  const [acao, setAcao] = useState<AcaoLote | null>(null);
+  // Anúncios que a ação vale: os marcados (barra) ou um só (⋯ da linha).
+  const [alvo, setAlvo] = useState<string[]>([]);
+  const [menuLote, setMenuLote] = useState(false);
+  const [menuLinha, setMenuLinha] = useState<{
+    id: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [aviso, setAviso] = useState("");
 
   const daLoja = anuncios.filter((a) => a.canal === canal);
   const naAba = (a: Row, chave: string) =>
@@ -212,18 +225,49 @@ function ListaDaLoja({
     );
   });
   const problemas = daLoja.filter((a) => naAba(a, "ATENCAO")).length;
-  const selecionados = daLoja.filter((a) => marcados.includes(str(a.id)));
+  const selecionados = daLoja.filter((a) => alvo.includes(str(a.id)));
   const todosMarcados = linhas.length > 0 && linhas.every((a) => marcados.includes(str(a.id)));
   const filtrosAtivos = Object.values(filtros).filter(Boolean).length;
 
-  function escolherAcao(qual: "relacionar" | "precos") {
-    setMenu(false);
-    if (!marcados.length) {
+  function escolherAcao(qual: AcaoLote, ids: string[] = marcados) {
+    setMenuLote(false);
+    setMenuLinha(null);
+    if (!ids.length) {
       alert("Marque na lista os anúncios que quer alterar.");
       return;
     }
+    setAviso("");
+    setAlvo(ids);
     setAcao(qual);
   }
+
+  function semLoja() {
+    setMenuLote(false);
+    setMenuLinha(null);
+    setAviso(SEM_LOJA);
+  }
+
+  // Depois de uma ação, tira da seleção só os anúncios em que ela valeu.
+  function concluir() {
+    setAcao(null);
+    setMarcados((m) => m.filter((id) => !alvo.includes(id)));
+  }
+
+  const item = (rotulo: string, onClick: () => void) => (
+    <li>
+      <button role="menuitem" onClick={onClick}>
+        {rotulo}
+      </button>
+    </li>
+  );
+  const emBreve = (rotulo: string, motivo: string, sufixo = "em breve") => (
+    <li>
+      <button role="menuitem" disabled title={motivo}>
+        {rotulo} <small>({sufixo})</small>
+      </button>
+    </li>
+  );
+  const anuncioLinha = menuLinha && daLoja.find((a) => str(a.id) === menuLinha.id);
 
   return (
     <>
@@ -243,36 +287,6 @@ function ListaDaLoja({
             <button className="primary" onClick={novoAnuncio}>
               + Novo anúncio
             </button>
-            <div className="rd-mais-acoes">
-              <button aria-expanded={menu} onClick={() => setMenu(!menu)}>
-                Mais ações ⋯
-              </button>
-              {menu && (
-                <ul role="menu">
-                  <li>
-                    <button role="menuitem" onClick={() => escolherAcao("relacionar")}>
-                      🔗 Relacionar anúncios
-                    </button>
-                  </li>
-                  <li>
-                    <button role="menuitem" onClick={() => escolherAcao("precos")}>
-                      $ Gerenciar preços dos anúncios
-                    </button>
-                  </li>
-                  <li>
-                    <button
-                      role="menuitem"
-                      onClick={() => {
-                        setMenu(false);
-                        setAba("ATENCAO");
-                      }}
-                    >
-                      ⚠ Verificar anúncios com problemas
-                    </button>
-                  </li>
-                </ul>
-              )}
-            </div>
           </div>
         )}
       </div>
@@ -381,7 +395,20 @@ function ListaDaLoja({
         ) : (
           <Table
             headers={[
-              podeEditar ? "✓" : "",
+              podeEditar ? (
+                <input
+                  key="todos"
+                  type="checkbox"
+                  aria-label="Marcar todos da lista"
+                  title="Marcar todos da lista"
+                  checked={todosMarcados}
+                  onChange={(e) =>
+                    setMarcados(e.target.checked ? linhas.map((a) => str(a.id)) : [])
+                  }
+                />
+              ) : (
+                ""
+              ),
               "Anúncio",
               "Produto vinculado",
               "Preço",
@@ -395,17 +422,38 @@ function ListaDaLoja({
               const [rotulo, tom] = NO_MARKETPLACE[str(a.situacao_ecommerce)] ?? ["—", "gray"];
               return [
                 podeEditar ? (
-                  <input
-                    key="m"
-                    type="checkbox"
-                    aria-label={`Selecionar ${str(a.titulo)}`}
-                    checked={marcados.includes(str(a.id))}
-                    onChange={(e) =>
-                      setMarcados((m) =>
-                        e.target.checked ? [...m, str(a.id)] : m.filter((x) => x !== str(a.id)),
-                      )
-                    }
-                  />
+                  <span key="m" className="rd-celula-lote">
+                    <input
+                      type="checkbox"
+                      aria-label={`Selecionar ${str(a.titulo)}`}
+                      checked={marcados.includes(str(a.id))}
+                      onChange={(e) =>
+                        setMarcados((m) =>
+                          e.target.checked ? [...m, str(a.id)] : m.filter((x) => x !== str(a.id)),
+                        )
+                      }
+                    />
+                    <button
+                      type="button"
+                      className="rd-linha-mais"
+                      aria-label={`Ações de ${str(a.titulo)}`}
+                      aria-expanded={menuLinha?.id === str(a.id)}
+                      onClick={(e) => {
+                        const id = str(a.id);
+                        const ret = e.currentTarget.getBoundingClientRect();
+                        // Perto do rodapé o menu abre para cima, para não sair da tela.
+                        const altura = Math.min(380, window.innerHeight * 0.6);
+                        const y =
+                          ret.bottom + altura > window.innerHeight
+                            ? Math.max(8, ret.top - altura)
+                            : ret.bottom + 4;
+                        setMenuLote(false);
+                        setMenuLinha(menuLinha?.id === id ? null : { id, x: ret.left, y });
+                      }}
+                    >
+                      ⋯
+                    </button>
+                  </span>
                 ) : (
                   ""
                 ),
@@ -485,17 +533,77 @@ function ListaDaLoja({
             })}
           />
         )}
-        {podeEditar && linhas.length > 0 && (
-          <div className="rd-selecao">
-            <label className="rd-check">
-              <input
-                type="checkbox"
-                checked={todosMarcados}
-                onChange={(e) => setMarcados(e.target.checked ? linhas.map((a) => str(a.id)) : [])}
-              />
-              Marcar todos da lista ({linhas.length})
-            </label>
-            {marcados.length > 0 && <span>{marcados.length} marcado(s)</span>}
+        {aviso && (
+          <div className="rd-error" role="alert">
+            {aviso}
+          </div>
+        )}
+        {podeEditar && marcados.length > 0 && (
+          <div className="rd-barra-lote" role="region" aria-label="Ações para os anúncios marcados">
+            <span
+              className="rd-barra-qtd rd-pilula"
+              title={`${marcados.length} de ${linhas.length} anúncios`}
+            >
+              <span aria-hidden="true">↥</span>
+              {String(marcados.length).padStart(2, "0")}
+              <button
+                type="button"
+                aria-label="Limpar seleção"
+                title="Limpar seleção"
+                onClick={() => setMarcados([])}
+              >
+                ✕
+              </button>
+            </span>
+            <button type="button" className="primary" onClick={semLoja}>
+              ⇪ Enviar para o e-commerce
+            </button>
+            <button type="button" onClick={() => escolherAcao("precos")}>
+              $ Enviar preços para o e-commerce
+            </button>
+            <button type="button" onClick={semLoja}>
+              ▣ Enviar estoque para o e-commerce
+            </button>
+            <div className="rd-mais-acoes">
+              <button
+                type="button"
+                aria-expanded={menuLote}
+                onClick={() => {
+                  setMenuLinha(null);
+                  setMenuLote(!menuLote);
+                }}
+              >
+                Mais ações{" "}
+                <span className="rd-circulo" aria-hidden="true">
+                  ⋯
+                </span>
+              </button>
+              {menuLote && (
+                <ul role="menu" className="rd-menu-cima rd-menu-longo">
+                  {item("⇪ Enviar para o e-commerce", semLoja)}
+                  {item("$ Enviar preços para o e-commerce", () => escolherAcao("precos"))}
+                  {item("▣ Enviar estoque para o e-commerce", semLoja)}
+                  {item("🔗 Relacionar anúncios", () => escolherAcao("relacionar"))}
+                  {emBreve("⇩ Importar anúncios", SEM_LOJA)}
+                  {item("🗑 Excluir anúncios", () => escolherAcao("excluir"))}
+                  <li className="rd-menu-sep" />
+                  {emBreve("↻ Atualizar situação no e-commerce", SEM_LOJA)}
+                  <li className="rd-menu-sep" />
+                  {item("⊞ Criar produtos", () => escolherAcao("criar"))}
+                  {emBreve(
+                    "↻ Atualizar produtos",
+                    "Traz título, preço e fotos do marketplace para o produto. " + SEM_LOJA,
+                  )}
+                  {emBreve(
+                    "⛓ Desvincular produtos",
+                    "Todo anúncio precisa de um produto. Para trocar, use Relacionar anúncios.",
+                    "use relacionar",
+                  )}
+                  <li className="rd-menu-sep" />
+                  {emBreve("🚀 Impulsionar anúncios", SEM_LOJA)}
+                </ul>
+              )}
+            </div>
           </div>
         )}
         <p className="rd-note">
@@ -504,6 +612,91 @@ function ListaDaLoja({
         </p>
       </section>
 
+      {menuLinha && anuncioLinha && (
+        <>
+          <div className="rd-menu-fundo" onClick={() => setMenuLinha(null)} />
+          <ul
+            role="menu"
+            className="rd-menu-linha"
+            style={{ left: menuLinha.x, top: menuLinha.y }}
+            aria-label={`Ações de ${str(anuncioLinha.titulo)}`}
+          >
+            {item("⇪ Enviar para o e-commerce", semLoja)}
+            {item("$ Enviar preço para o e-commerce", () => escolherAcao("precos", [menuLinha.id]))}
+            {item("▣ Enviar estoque para o e-commerce", semLoja)}
+            {item("🔗 Relacionar a outro produto", () =>
+              escolherAcao("relacionar", [menuLinha.id]),
+            )}
+            <li className="rd-menu-sep" />
+            {emBreve("↻ Atualizar situação no e-commerce", SEM_LOJA)}
+            {item("⊞ Criar produto a partir do anúncio", () =>
+              escolherAcao("criar", [menuLinha.id]),
+            )}
+            <li className="rd-menu-sep" />
+            {item("🗑 Excluir anúncio", () => escolherAcao("excluir", [menuLinha.id]))}
+          </ul>
+        </>
+      )}
+      {acao === "excluir" && (
+        <Janela titulo="Excluir anúncios" fechar={() => setAcao(null)}>
+          <p>
+            Excluir {alvo.length} anúncio(s) do Radar? Não dá para desfazer. Anúncio no ar no
+            marketplace (ativo ou pausado) ou com histórico de preço na Central de ações não é
+            excluído.
+          </p>
+          <div className="rd-modal-foot">
+            <button onClick={() => setAcao(null)}>Cancelar</button>
+            <button
+              className="perigo"
+              disabled={busy}
+              onClick={async () => {
+                if (
+                  await executar({
+                    op: "anuncios_acao_lote",
+                    acao: "EXCLUIR",
+                    ids: alvo,
+                  })
+                )
+                  concluir();
+              }}
+            >
+              Excluir
+            </button>
+          </div>
+        </Janela>
+      )}
+      {acao === "criar" && (
+        <Janela titulo="Criar produtos a partir dos anúncios" fechar={() => setAcao(null)}>
+          <p>
+            Cria {alvo.length} produto(s) novo(s), um por anúncio, com título, SKU e preço do
+            anúncio, e passa cada anúncio para o produto novo. Os produtos entram com cadastro
+            incompleto: complete em Produtos.
+          </p>
+          <p className="rd-note">
+            Use quando o anúncio estiver ligado ao produto errado e o produto certo ainda não
+            existir. Se ele já existe, use &quot;Relacionar anúncios&quot;.
+          </p>
+          <div className="rd-modal-foot">
+            <button onClick={() => setAcao(null)}>Cancelar</button>
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={async () => {
+                if (
+                  await executar({
+                    op: "anuncios_acao_lote",
+                    acao: "CRIAR_PRODUTOS",
+                    ids: alvo,
+                  })
+                )
+                  concluir();
+              }}
+            >
+              Criar produtos
+            </button>
+          </div>
+        </Janela>
+      )}
       {acao === "relacionar" && (
         <Janela titulo="Relacionar anúncios a um produto" fechar={() => setAcao(null)}>
           <Relacionar
@@ -516,25 +709,27 @@ function ListaDaLoja({
                 produto_id: produto,
                 ids: selecionados.map((a) => a.id),
               });
-              if (ok) {
-                setAcao(null);
-                setMarcados([]);
-              }
+              if (ok) concluir();
             }}
           />
         </Janela>
       )}
       {acao === "precos" && (
-        <Janela titulo="Gerenciar preços dos anúncios" fechar={() => setAcao(null)}>
+        <Janela titulo="Enviar preços para o e-commerce" fechar={() => setAcao(null)}>
+          <p className="rd-note">
+            Sem loja conectada, o preço novo vale só no Radar, depois de aprovado na Central de
+            ações. O envio ao marketplace entra com a conexão da loja.
+          </p>
           <Precos
             selecionados={selecionados}
             busy={busy}
             enviar={async (itens, motivo) => {
-              const ok = await executar({ op: "anuncios_precos", itens, motivo });
-              if (ok) {
-                setAcao(null);
-                setMarcados([]);
-              }
+              const ok = await executar({
+                op: "anuncios_precos",
+                itens,
+                motivo,
+              });
+              if (ok) concluir();
             }}
           />
         </Janela>
@@ -692,7 +887,15 @@ function NovoAnuncio({
             });
             if (!ok) return;
           }
-          if (await executar({ op: "anuncio", produto_id: produto, canal: destino, titulo, preco }))
+          if (
+            await executar({
+              op: "anuncio",
+              produto_id: produto,
+              canal: destino,
+              titulo,
+              preco,
+            })
+          )
             fechar();
         }}
       >
