@@ -1758,6 +1758,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           )}
           {page === "embalagens" && (
             <Embalagens
+              produtos={products}
               embalagens={data.embalagens}
               veCusto={data.financeiroPermitido}
               podeEditar={can("DONO", "GESTOR", "ESTOQUE")}
