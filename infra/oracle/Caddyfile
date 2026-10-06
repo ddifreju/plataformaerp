@@ -1,0 +1,18 @@
+# Proxy do servidor na Oracle. DOMINIO vem do .env (ex.:
+# 152-67-10-20.sslip.io: o sslip.io responde com o próprio IP, sem
+# registrar domínio). Com um nome de verdade, o Caddy busca sozinho o
+# certificado Let's Encrypt e renova antes de vencer.
+
+{$DOMINIO} {
+	encode gzip
+
+	# /api/* vai para o backend; o prefixo fica, os controllers esperam ele.
+	handle /api/* {
+		reverse_proxy backend:8080
+	}
+
+	# O resto é o frontend Next.js.
+	handle {
+		reverse_proxy frontend:3000
+	}
+}
