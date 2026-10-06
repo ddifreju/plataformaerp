@@ -5,6 +5,12 @@
 // como incompleto; salvar pela tela exige os dados da nota fiscal.
 
 import { useEffect, useState, type ReactNode } from "react";
+import { configClientes, configFornecedores } from "./contatos-filtros";
+import FiltrosGenericos, {
+  filtrar,
+  filtroVazio,
+  type Filtro,
+} from "./filtros-genericos";
 import { Badge, Empty, Table, date, money, str, type Row } from "./ui";
 
 type Valores = Record<string, string | boolean>;
@@ -38,7 +44,7 @@ export const TIPOS_PESSOA: [string, string, string][] = [
   ["E", "Estrangeira", "Documento do país de origem"],
   ["B", "Estrangeira no Brasil", "CPF (se tiver)"],
 ];
-const TIPOS_CONTATO: [string, string][] = [
+export const TIPOS_CONTATO: [string, string][] = [
   ["CLIENTE", "Cliente"],
   ["FORNECEDOR", "Fornecedor"],
   ["TRANSPORTADOR", "Transportador"],
@@ -56,7 +62,7 @@ const REGIMES: [string, string][] = [
   ["3", "3 - Regime normal"],
   ["4", "4 - MEI"],
 ];
-const STATUS_CRM: [string, string][] = [
+export const STATUS_CRM: [string, string][] = [
   ["NOVO", "Novo"],
   ["EM_CONTATO", "Em contato"],
   ["NEGOCIACAO", "Em negociação"],
@@ -251,7 +257,8 @@ function ListaClientes(props: Props) {
     versao: number;
   } | null>(null);
   const [filtro, setFiltro] = useState("TODOS");
-  const [busca, setBusca] = useState("");
+  const cfg = configClientes(props.vendedores);
+  const [busca, setBusca] = useState<Filtro>(() => filtroVazio(cfg));
   const [marcados, setMarcados] = useState<string[]>([]);
 
   if (aberto)
@@ -276,24 +283,14 @@ function ListaClientes(props: Props) {
       : f === "INCOMPLETO"
         ? clientes.filter((c) => c.incompleto === true).length
         : clientes.filter((c) => c.classificacao === f).length;
-  const termo = busca.trim().toLowerCase();
-  const linhas = clientes.filter(
+  const naAba = clientes.filter(
     (c) =>
-      (filtro === "TODOS" ||
-        (filtro === "INCOMPLETO"
-          ? c.incompleto === true
-          : c.classificacao === filtro)) &&
-      (!termo ||
-        [
-          c.nome,
-          c.fantasia,
-          c.codigo,
-          c.email,
-          c.cidade,
-          c.telefone,
-          c.celular,
-        ].some((x) => str(x).toLowerCase().includes(termo))),
+      filtro === "TODOS" ||
+      (filtro === "INCOMPLETO"
+        ? c.incompleto === true
+        : c.classificacao === filtro),
   );
+  const linhas = filtrar(naAba, busca, cfg);
 
   return (
     <>
@@ -313,13 +310,6 @@ function ListaClientes(props: Props) {
       <section className="rd-card">
         <div className="rd-card-head">
           <h2>{clientes.length} clientes</h2>
-          <input
-            aria-label="Buscar cliente"
-            className="rd-search"
-            placeholder="Buscar por nome, código, e-mail, cidade…"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-          />
           {props.podeEditar && (
             <button
               type="button"
@@ -347,6 +337,13 @@ function ListaClientes(props: Props) {
             </button>
           ))}
         </div>
+        <FiltrosGenericos
+          cfg={cfg}
+          filtro={busca}
+          setFiltro={setBusca}
+          base={naAba}
+          total={linhas.length}
+        />
         {clientes.length === 0 ? (
           <Empty text="Nenhum cliente ainda. Cada pedido novo cadastra o cliente sozinho." />
         ) : (
@@ -433,7 +430,8 @@ function Fornecedores(props: Props) {
     versao: number;
   } | null>(null);
   const [filtro, setFiltro] = useState("TODOS");
-  const [busca, setBusca] = useState("");
+  const cfg = configFornecedores(props.produtoFornecedores ?? []);
+  const [busca, setBusca] = useState<Filtro>(() => filtroVazio(cfg));
   const [marcados, setMarcados] = useState<string[]>([]);
 
   if (aberto)
@@ -456,33 +454,13 @@ function Fornecedores(props: Props) {
   const produtosDe = (id: unknown) =>
     (props.produtoFornecedores ?? []).filter((pf) => pf.fornecedor_id === id)
       .length;
-  const termo = busca.trim().toLowerCase();
-  const linhas = contatos.filter(
-    (c) =>
-      noFiltro(c, filtro) &&
-      (!termo ||
-        [
-          c.nome,
-          c.fantasia,
-          c.codigo,
-          c.email,
-          c.cidade,
-          c.telefone,
-          c.celular,
-        ].some((x) => str(x).toLowerCase().includes(termo))),
-  );
+  const naAba = contatos.filter((c) => noFiltro(c, filtro));
+  const linhas = filtrar(naAba, busca, cfg);
 
   return (
     <section className="rd-card">
       <div className="rd-card-head">
         <h2>{contatos.length} fornecedores e transportadores</h2>
-        <input
-          aria-label="Buscar fornecedor"
-          className="rd-search"
-          placeholder="Buscar por nome, código, e-mail, cidade…"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-        />
         {props.podeEditar && (
           <button
             type="button"
@@ -510,6 +488,13 @@ function Fornecedores(props: Props) {
           </button>
         ))}
       </div>
+      <FiltrosGenericos
+        cfg={cfg}
+        filtro={busca}
+        setFiltro={setBusca}
+        base={naAba}
+        total={linhas.length}
+      />
       {contatos.length === 0 ? (
         <Empty text="Nenhum fornecedor ainda." />
       ) : (
