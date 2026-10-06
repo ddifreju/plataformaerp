@@ -1,0 +1,62 @@
+# Servidor de desenvolvimento na Oracle Cloud (máquina Always Free, ARM).
+# Sobe frontend + backend + Caddy numa origem só (decisões 0025 e 0032).
+# O banco NÃO roda aqui: continua no Supabase (região sa-east-1, São
+# Paulo), com os mesmos dados e as mesmas migrations de sempre.
+#
+# Quem sobe isto é o infra/oracle/instalar.sh (primeira vez) e o
+# infra/oracle/atualizar.sh (a cada merge na main, automático).
+# Nenhum segredo aqui: tudo vem de infra/oracle/.env, que NÃO vai para o
+# git (ver .gitignore) e só existe na máquina, com permissão 600.
+
+name: radar
+
+services:
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    container_name: radar-backend
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: staging
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:?defina em infra/oracle/.env}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:?defina em infra/oracle/.env}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:?defina em infra/oracle/.env}
+      APP_DOCUMENTO_HMAC_CHAVE: ${APP_DOCUMENTO_HMAC_CHAVE:?defina em infra/oracle/.env}
+      # Mesma origem atrás do Caddy: sem CORS (decisão 0025).
+      APP_CORS_ORIGENS: ""
+      # Memória reservada de propósito (AlwaysPreTouch ocupa os 2 GB de
+      # verdade). A Oracle recupera máquina grátis "ociosa" quando CPU,
+      # rede E memória ficam abaixo de 20% por 7 dias; com a memória
+      # sempre acima de 20% da máquina de 8 GB, ela nunca conta como ociosa.
+      JAVA_TOOL_OPTIONS: "-Xms2g -Xmx3g -XX:+AlwaysPreTouch"
+
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile
+    container_name: radar-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: radar-caddy
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    environment:
+      DOMINIO: ${DOMINIO:?defina em infra/oracle/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_dados:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_dados:
+  caddy_config:
