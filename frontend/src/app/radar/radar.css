@@ -2979,3 +2979,15 @@ ul.rd-menu-linha li button:disabled {
     width: auto;
   }
 }
+.radar-app button.rd-link-produto {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--rd-blue);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.radar-app button.rd-link-produto:hover {
+  text-decoration: underline;
+}

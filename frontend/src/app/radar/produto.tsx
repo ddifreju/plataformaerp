@@ -8,6 +8,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Badge, Empty, Table, cents, centMoney, money, str, type ModalSpec, type Row } from "./ui";
+import { verNaCentral } from "./anuncios";
 
 type Valores = Record<string, string | boolean>;
 type Par = { nome: string; valor: string };
@@ -326,6 +327,7 @@ export default function ProdutoForm({
 
   const imagensDo = (produtoId: string | null) =>
     produtoId ? dados.imagens.filter((i) => i.produto_id === produtoId) : [];
+  const [avisoCentral, setAvisoCentral] = useState("");
   const anunciosDoProduto = produto
     ? dados.anuncios.filter(
         (a) => a.produto_id === produto.id || filhas.some((f) => f.id === a.produto_id),
@@ -1224,6 +1226,11 @@ export default function ProdutoForm({
           </div>
         </section>
         <h3 className="rd-secao">Anúncios deste produto</h3>
+        {avisoCentral && (
+          <p className="rd-ok" role="status">
+            {avisoCentral}
+          </p>
+        )}
         {id && podeAnunciar && (
           <div className="rd-actions">
             <button
@@ -1264,62 +1271,77 @@ export default function ProdutoForm({
                 <Table
                   headers={["Título", "Preço", "Situação", ""]}
                   rows={doCanal.map((a) => [
-                    str(a.titulo),
+                    <div key="t">
+                      {str(a.titulo)}
+                      <br />
+                      <small>
+                        {a.id_externo
+                          ? `Código no marketplace: ${str(a.id_externo)}`
+                          : "Criado no Radar"}
+                      </small>
+                    </div>,
                     money(a.preco),
                     <Badge tone={a.estado === "SIMULADO" ? "green" : "gray"}>
                       {str(a.estado)}
                     </Badge>,
-                    podeAnunciar ? (
-                      <span className="rd-row-actions">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            abrirModal({
-                              title: "Situação do anúncio",
-                              op: "anuncio_estado",
-                              extra: { id: a.id },
-                              fields: [
-                                {
-                                  key: "estado",
-                                  label: "Situação",
-                                  value: str(a.estado),
-                                  options: [
-                                    { value: "RASCUNHO", label: "Rascunho" },
-                                    { value: "SIMULADO", label: "Publicado (simulação)" },
-                                    { value: "PAUSADO", label: "Pausado" },
-                                  ],
-                                },
-                              ],
-                            })
-                          }
-                        >
-                          Editar situação
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            abrirModal({
-                              title: "Propor novo preço",
-                              op: "propor_preco",
-                              extra: { id: a.id },
-                              fields: [
-                                {
-                                  key: "preco",
-                                  label: "Novo preço",
-                                  type: "number",
-                                  value: str(a.preco),
-                                },
-                                { key: "motivo", label: "Motivo" },
-                              ],
-                            })
-                          }
-                        >
-                          Propor preço
-                        </button>
-                      </span>
-                    ) : (
-                      ""
-                    ),
+                    <span key="a" className="rd-row-actions">
+                      <button
+                        type="button"
+                        title="Abre a central do vendedor e copia o código do anúncio"
+                        onClick={() => setAvisoCentral(verNaCentral(a))}
+                      >
+                        Ver na central ↗
+                      </button>
+                      {podeAnunciar && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              abrirModal({
+                                title: "Situação do anúncio",
+                                op: "anuncio_estado",
+                                extra: { id: a.id },
+                                fields: [
+                                  {
+                                    key: "estado",
+                                    label: "Situação",
+                                    value: str(a.estado),
+                                    options: [
+                                      { value: "RASCUNHO", label: "Rascunho" },
+                                      { value: "SIMULADO", label: "Publicado (simulação)" },
+                                      { value: "PAUSADO", label: "Pausado" },
+                                    ],
+                                  },
+                                ],
+                              })
+                            }
+                          >
+                            Editar situação
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              abrirModal({
+                                title: "Propor novo preço",
+                                op: "propor_preco",
+                                extra: { id: a.id },
+                                fields: [
+                                  {
+                                    key: "preco",
+                                    label: "Novo preço",
+                                    type: "number",
+                                    value: str(a.preco),
+                                  },
+                                  { key: "motivo", label: "Motivo" },
+                                ],
+                              })
+                            }
+                          >
+                            Propor preço
+                          </button>
+                        </>
+                      )}
+                    </span>,
                   ])}
                 />
               ) : (
