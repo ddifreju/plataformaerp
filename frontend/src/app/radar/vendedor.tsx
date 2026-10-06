@@ -7,6 +7,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Campo, CONTRIBUINTE, TIPOS_PESSOA, UFS, formatarDocumento } from "./cliente";
 import { Badge, Empty, Table, str, type Row } from "./ui";
+import { configVendedores } from "./contatos-filtros";
+import FiltrosGenericos, { filtrar, filtroVazio, type Filtro } from "./filtros-genericos";
 
 type Valores = Record<string, string | boolean>;
 
@@ -131,7 +133,8 @@ type Rapida = { tipo: "comissao" | "senha" | "excluir" | "restaurar"; ids: strin
 
 export default function Vendedores(props: Props) {
   const [aberto, setAberto] = useState<{ id: string | null; versao: number } | null>(null);
-  const [busca, setBusca] = useState("");
+  const cfg = configVendedores();
+  const [busca, setBusca] = useState<Filtro>(() => filtroVazio(cfg));
   const [aba, setAba] = useState("ACESSO");
   const [marcados, setMarcados] = useState<string[]>([]);
   const [menuLinha, setMenuLinha] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -149,15 +152,8 @@ export default function Vendedores(props: Props) {
       />
     );
 
-  const termo = busca.trim().toLowerCase();
-  const linhas = props.vendedores.filter(
-    (v) =>
-      naAba(v, aba) &&
-      (!termo ||
-        [v.nome, v.fantasia, v.codigo, v.email, v.cidade].some((x) =>
-          str(x).toLowerCase().includes(termo),
-        )),
-  );
+  const naAbaAtual = props.vendedores.filter((v) => naAba(v, aba));
+  const linhas = filtrar(naAbaAtual, busca, cfg);
   const visiveis = marcados.filter((id) => linhas.some((v) => str(v.id) === id));
   const todos = linhas.length > 0 && linhas.every((v) => marcados.includes(str(v.id)));
   const naLixeira = aba === "EXCLUIDO";
@@ -218,13 +214,6 @@ export default function Vendedores(props: Props) {
     <section className="rd-card">
       <div className="rd-card-head">
         <h2>{props.vendedores.filter((v) => !v.excluido_em).length} vendedores</h2>
-        <input
-          aria-label="Buscar vendedor"
-          className="rd-search"
-          placeholder="Buscar por nome, código, e-mail…"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-        />
         {props.podeEditar && (
           <button className="primary" onClick={() => setAberto({ id: null, versao: Date.now() })}>
             + Novo vendedor
@@ -247,6 +236,13 @@ export default function Vendedores(props: Props) {
           </button>
         ))}
       </div>
+      <FiltrosGenericos
+        cfg={cfg}
+        filtro={busca}
+        setFiltro={setBusca}
+        base={naAbaAtual}
+        total={linhas.length}
+      />
       {aviso && (
         <p className="rd-ok" role="status">
           {aviso}
