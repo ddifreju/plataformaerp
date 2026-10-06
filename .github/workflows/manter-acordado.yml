@@ -1,0 +1,24 @@
+# Mantém o backend do Render acordado. O plano gratuito desliga o serviço
+# depois de 15 minutos sem acesso e ele leva ~3 minutos para voltar.
+# Uma chamada a cada 10 minutos evita isso. O cron do GitHub pode atrasar
+# em horários de pico; o cron-job.org (configurado pela Juliana) é o
+# despertador principal e este é o reserva.
+name: manter-acordado
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  chamar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Chamar o backend
+        run: |
+          curl -fsS -o /dev/null -w "status %{http_code} em %{time_total}s\n" \
+            --retry 3 --retry-delay 10 --max-time 240 \
+            https://radar-api-navega.onrender.com/actuator/health
