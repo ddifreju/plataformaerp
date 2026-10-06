@@ -2991,3 +2991,13 @@ ul.rd-menu-linha li button:disabled {
 .radar-app button.rd-link-produto:hover {
   text-decoration: underline;
 }
+.rd-filtro-medidas {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+.rd-filtro-medidas span {
+  font-size: 12px;
+  color: var(--rd-muted);
+}

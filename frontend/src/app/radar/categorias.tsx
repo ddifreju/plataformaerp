@@ -7,6 +7,8 @@
 
 import { useState } from "react";
 import { Badge, Empty, Table, str, type Row } from "./ui";
+import { configCategorias } from "./catalogo-filtros";
+import FiltrosGenericos, { filtrar, filtroVazio, type Filtro } from "./filtros-genericos";
 
 export const CANAIS = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 
@@ -27,7 +29,8 @@ export function vinculoDe(categoriaCanais: Row[], categoria: unknown, canal: str
 
 export default function Categorias(props: Props) {
   const [aberta, setAberta] = useState<Row | "nova" | null>(null);
-  const [busca, setBusca] = useState("");
+  const cfg = configCategorias(props.produtos, props.categoriaCanais);
+  const [busca, setBusca] = useState<Filtro>(() => filtroVazio(cfg));
   const produtosDa = (id: unknown) =>
     props.produtos.filter((p) => p.categoria_id === id && !p.pai_id).length;
   const semVinculo = props.categorias.filter(
@@ -35,15 +38,7 @@ export default function Categorias(props: Props) {
       produtosDa(c.id) > 0 &&
       !CANAIS.some((canal) => vinculoDe(props.categoriaCanais, c.id, canal)),
   );
-  const termo = busca.trim().toLowerCase();
-  const linhas = props.categorias.filter(
-    (c) =>
-      !termo ||
-      str(c.nome).toLowerCase().includes(termo) ||
-      props.categoriaCanais.some(
-        (v) => v.categoria_id === c.id && str(v.nome_externo).toLowerCase().includes(termo),
-      ),
-  );
+  const linhas = filtrar(props.categorias, busca, cfg);
 
   return (
     <>
@@ -58,19 +53,19 @@ export default function Categorias(props: Props) {
       <section className="rd-card">
         <div className="rd-card-head">
           <h2>{props.categorias.length} categorias</h2>
-          <input
-            aria-label="Buscar categoria"
-            className="rd-search"
-            placeholder="Buscar pelo nome, aqui ou no marketplace…"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-          />
           {props.podeEditar && (
             <button className="primary" onClick={() => setAberta("nova")}>
               + Nova categoria
             </button>
           )}
         </div>
+        <FiltrosGenericos
+          cfg={cfg}
+          filtro={busca}
+          setFiltro={setBusca}
+          base={props.categorias}
+          total={linhas.length}
+        />
         {props.categorias.length === 0 ? (
           <Empty text="Nenhuma categoria ainda. Ao importar anúncios, elas vêm junto, já vinculadas." />
         ) : (

@@ -6,9 +6,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Badge, Empty, Table, money, str, type Row } from "./ui";
+import { configEmbalagens } from "./catalogo-filtros";
+import FiltrosGenericos, { filtrar, filtroVazio, type Filtro } from "./filtros-genericos";
 
 type Props = {
   embalagens: Row[];
+  produtos: Row[];
   veCusto: boolean;
   podeEditar: boolean;
   busy: boolean;
@@ -36,7 +39,8 @@ function tags(e: Row): string[] {
 export default function Embalagens(props: Props) {
   const [aberta, setAberta] = useState<Row | "nova" | null>(null);
   const [tipo, setTipo] = useState("");
-  const [busca, setBusca] = useState("");
+  const cfg = configEmbalagens(props.embalagens, props.produtos, props.veCusto);
+  const [busca, setBusca] = useState<Filtro>(() => filtroVazio(cfg));
   const pediuSugeridas = useRef(false);
 
   // As sugeridas vêm "de fábrica": na primeira visita de quem pode editar,
@@ -52,14 +56,8 @@ export default function Embalagens(props: Props) {
   const semCusto = props.veCusto
     ? props.embalagens.filter((e) => Number(e.custo ?? 0) === 0).length
     : 0;
-  const termo = busca.trim().toLowerCase();
-  const linhas = props.embalagens.filter(
-    (e) =>
-      (!tipo || e.tipo === tipo) &&
-      (!termo ||
-        str(e.nome).toLowerCase().includes(termo) ||
-        tags(e).some((t) => t.includes(termo))),
-  );
+  const doTipo = props.embalagens.filter((e) => !tipo || e.tipo === tipo);
+  const linhas = filtrar(doTipo, busca, cfg);
 
   return (
     <>
@@ -72,13 +70,6 @@ export default function Embalagens(props: Props) {
       <section className="rd-card">
         <div className="rd-card-head">
           <h2>{props.embalagens.length} embalagens</h2>
-          <input
-            aria-label="Buscar embalagem"
-            className="rd-search"
-            placeholder="Buscar por nome ou tag…"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-          />
           {props.podeEditar && (
             <button className="primary" onClick={() => setAberta("nova")}>
               + Nova embalagem
@@ -104,6 +95,13 @@ export default function Embalagens(props: Props) {
             );
           })}
         </div>
+        <FiltrosGenericos
+          cfg={cfg}
+          filtro={busca}
+          setFiltro={setBusca}
+          base={doTipo}
+          total={linhas.length}
+        />
         {props.embalagens.length === 0 ? (
           <Empty text="Carregando as embalagens sugeridas…" />
         ) : (

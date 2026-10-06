@@ -40,9 +40,17 @@ export type Campo =
   /** Caixinha de marcar: passa quem atende à condição. */
   | { tipo: "marca"; chave: string; rotulo: string; teste: (r: Row) => boolean }
   /** Data: passa quem tem a data a partir do dia escolhido. */
-  | { tipo: "data"; chave: string; rotulo: string; valor: (r: Row) => unknown };
+  | { tipo: "data"; chave: string; rotulo: string; valor: (r: Row) => unknown }
+  /** Medidas de um produto (cm): passa a embalagem em que ele cabe, em qualquer posição. */
+  | {
+      tipo: "cabe";
+      chave: string;
+      rotulo: string;
+      valor: (r: Row) => [number, number, number] | null;
+    };
 
-type Valor = string | string[] | boolean | { de: string; ate: string };
+type Medidas = { c: string; l: string; a: string };
+type Valor = string | string[] | boolean | { de: string; ate: string } | Medidas;
 
 export type Filtro = { busca: string; ordem: string; v: Record<string, Valor> };
 
@@ -75,7 +83,7 @@ const ativo = (v: Valor | undefined) =>
   v !== false &&
   v !== "" &&
   !(Array.isArray(v) && v.length === 0) &&
-  !(typeof v === "object" && !Array.isArray(v) && !v.de && !v.ate);
+  !(typeof v === "object" && !Array.isArray(v) && !Object.values(v).some(Boolean));
 
 export function filtrar(lista: Row[], f: Filtro, cfg: Config): Row[] {
   const termo = normal(f.busca.trim());
@@ -101,6 +109,16 @@ export function filtrar(lista: Row[], f: Filtro, cfg: Config): Row[] {
       } else if (c.tipo === "data") {
         const d = new Date(str(c.valor(r))).getTime();
         if (!d || d < new Date(`${v as string}T00:00:00`).getTime()) return false;
+      } else if (c.tipo === "cabe") {
+        const caixa = c.valor(r);
+        if (!caixa) return false;
+        const m = v as Medidas;
+        // Ordena as duas pelo tamanho: o produto pode ser girado dentro da caixa.
+        const produto = [m.c, m.l, m.a]
+          .map((x) => Number(x.replace(",", ".")) || 0)
+          .sort((a, b) => b - a);
+        const dentro = [...caixa].sort((a, b) => b - a);
+        if (produto.some((x, i) => x > dentro[i])) return false;
       }
     }
     return true;
@@ -150,6 +168,13 @@ function chipsDe(f: Filtro, cfg: Config): Chip[] {
         rotulo: `${nome} ${(v as string).split("-").reverse().join("/")}`,
         tirar: (x) => sem(x, c.chave),
       });
+    else if (c.tipo === "cabe") {
+      const m = v as Medidas;
+      out.push({
+        rotulo: `${nome} ${[m.c, m.l, m.a].map((x) => x || "?").join(" × ")} cm`,
+        tirar: (x) => sem(x, c.chave, { c: "", l: "", a: "" }),
+      });
+    }
   }
   return out;
 }
@@ -344,6 +369,27 @@ export default function FiltrosGenericos({
           {c.rotulo}
         </label>
       );
+    if (c.tipo === "cabe") {
+      const m = (v as Medidas) ?? { c: "", l: "", a: "" };
+      return (
+        <fieldset key={c.chave} className="rd-filtro-grupo">
+          <legend>{c.rotulo}</legend>
+          <div className="rd-filtro-medidas">
+            {(["c", "l", "a"] as const).map((k) => (
+              <input
+                key={k}
+                inputMode="decimal"
+                aria-label={{ c: "Comprimento (cm)", l: "Largura (cm)", a: "Altura (cm)" }[k]}
+                placeholder={{ c: "C", l: "L", a: "A" }[k]}
+                value={m[k]}
+                onChange={(e) => muda(c.chave, { ...m, [k]: e.target.value })}
+              />
+            ))}
+            <span>cm</span>
+          </div>
+        </fieldset>
+      );
+    }
     return (
       <label key={c.chave}>
         {c.rotulo}
