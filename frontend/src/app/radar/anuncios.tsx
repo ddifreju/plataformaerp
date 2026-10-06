@@ -9,6 +9,11 @@
 import { useState, type ReactNode } from "react";
 import { Badge, Empty, Table, money, str, type ModalSpec, type Row } from "./ui";
 import { vinculoDe } from "./categorias";
+import FiltrosAnuncios, {
+  ANUNCIOS_VAZIO,
+  filtrarAnuncios,
+  type FiltroAnuncios,
+} from "./anuncios-filtros";
 
 type Props = {
   anuncios: Row[];
@@ -26,7 +31,7 @@ type Props = {
 const CANAIS = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 
 // Central do vendedor de cada marketplace. A lojista entra com o próprio login.
-const CENTRAL: Record<string, string> = {
+export const CENTRAL: Record<string, string> = {
   "Mercado Livre": "https://www.mercadolivre.com.br/anuncios",
   Shopee: "https://seller.shopee.com.br",
   "TikTok Shop": "https://seller-br.tiktok.com",
@@ -63,8 +68,18 @@ const SEM_LOJA =
 
 type AcaoLote = "relacionar" | "precos" | "excluir" | "criar";
 
-type Filtros = { produto: string; situacao: string; ecommerce: string };
-const SEM_FILTRO: Filtros = { produto: "", situacao: "", ecommerce: "" };
+/**
+ * Abre a central do vendedor do marketplace e copia o código do anúncio, para
+ * colar na busca de lá. Sem loja conectada o Radar não sabe o endereço exato da
+ * página de cada anúncio. Devolve o aviso para mostrar.
+ */
+export function verNaCentral(a: Row): string {
+  const codigo = str(a.id_externo);
+  window.open(CENTRAL[str(a.canal)], "_blank", "noopener,noreferrer");
+  if (!codigo) return "Este anúncio foi criado no Radar e ainda não tem código no marketplace.";
+  navigator.clipboard?.writeText(codigo).catch(() => {});
+  return `Código ${codigo} copiado: cole na busca da central do vendedor.`;
+}
 
 /** Motivos para o anúncio pedir atenção. Vazio = tudo certo. */
 function alertas(a: Row, p: Row | undefined, categoriaCanais: Row[], imagens: Row[]): string[] {
@@ -180,6 +195,7 @@ function ListaDaLoja({
   voltar,
   novoAnuncio,
   produtoDe,
+  categorias,
   categoriaCanais,
   imagens,
 }: Props & {
@@ -189,9 +205,7 @@ function ListaDaLoja({
   produtoDe: (id: unknown) => Row | undefined;
 }) {
   const [aba, setAba] = useState("TODOS");
-  const [busca, setBusca] = useState("");
-  const [filtros, setFiltros] = useState<Filtros>(SEM_FILTRO);
-  const [rascunho, setRascunho] = useState<Filtros | null>(null);
+  const [filtro, setFiltro] = useState<FiltroAnuncios>(ANUNCIOS_VAZIO);
   const [marcados, setMarcados] = useState<string[]>([]);
   const [acao, setAcao] = useState<AcaoLote | null>(null);
   // Anúncios que a ação vale: os marcados (barra) ou um só (⋯ da linha).
@@ -203,6 +217,7 @@ function ListaDaLoja({
     y: number;
   } | null>(null);
   const [aviso, setAviso] = useState("");
+  const [avisoOk, setAvisoOk] = useState("");
 
   const daLoja = anuncios.filter((a) => a.canal === canal);
   const naAba = (a: Row, chave: string) =>
@@ -210,24 +225,16 @@ function ListaDaLoja({
     (chave === "ATENCAO"
       ? alertas(a, produtoDe(a.produto_id), categoriaCanais, imagens).length > 0
       : a.situacao_ecommerce === chave);
-  const termo = busca.trim().toLowerCase();
-  const prodTermo = filtros.produto.trim().toLowerCase();
-  const linhas = daLoja.filter((a) => {
-    const p = produtoDe(a.produto_id);
-    return (
-      naAba(a, aba) &&
-      (!termo ||
-        [a.id_externo, a.titulo, p?.nome].some((x) => str(x).toLowerCase().includes(termo))) &&
-      (!prodTermo ||
-        [p?.nome, p?.sku, p?.gtin].some((x) => str(x).toLowerCase().includes(prodTermo))) &&
-      (!filtros.situacao || a.estado === filtros.situacao) &&
-      (!filtros.ecommerce || a.situacao_ecommerce === filtros.ecommerce)
-    );
-  });
+  const contextoFiltro = {
+    produtoDe,
+    motivos: (a: Row) => alertas(a, produtoDe(a.produto_id), categoriaCanais, imagens),
+    categorias,
+  };
+  const daAba = daLoja.filter((a) => naAba(a, aba));
+  const linhas = filtrarAnuncios(daAba, filtro, contextoFiltro);
   const problemas = daLoja.filter((a) => naAba(a, "ATENCAO")).length;
   const selecionados = daLoja.filter((a) => alvo.includes(str(a.id)));
   const todosMarcados = linhas.length > 0 && linhas.every((a) => marcados.includes(str(a.id)));
-  const filtrosAtivos = Object.values(filtros).filter(Boolean).length;
 
   function escolherAcao(qual: AcaoLote, ids: string[] = marcados) {
     setMenuLote(false);
@@ -314,82 +321,14 @@ function ListaDaLoja({
             </button>
           ))}
         </div>
-        <div className="rd-card-head rd-busca-anuncios">
-          <input
-            aria-label="Buscar anúncio"
-            className="rd-search"
-            placeholder="Pesquise por identificador, título ou nome do produto"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-          />
-          <div className="rd-filtros-wrap">
-            <button
-              aria-expanded={rascunho !== null}
-              onClick={() => setRascunho(rascunho ? null : filtros)}
-            >
-              ⚲ Filtros{filtrosAtivos > 0 && ` (${filtrosAtivos})`}
-            </button>
-            {rascunho && (
-              <div className="rd-filtros-painel">
-                <label>
-                  Produto no Radar
-                  <input
-                    placeholder="Descrição, SKU ou GTIN"
-                    value={rascunho.produto}
-                    onChange={(e) => setRascunho({ ...rascunho, produto: e.target.value })}
-                  />
-                </label>
-                <label>
-                  Situação no Radar
-                  <select
-                    value={rascunho.situacao}
-                    onChange={(e) => setRascunho({ ...rascunho, situacao: e.target.value })}
-                  >
-                    <option value="">Todas</option>
-                    {Object.entries(NO_RADAR).map(([v, r]) => (
-                      <option key={v} value={v}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Situação no marketplace
-                  <select
-                    value={rascunho.ecommerce}
-                    onChange={(e) => setRascunho({ ...rascunho, ecommerce: e.target.value })}
-                  >
-                    <option value="">Todas</option>
-                    {Object.entries(NO_MARKETPLACE).map(([v, [r]]) => (
-                      <option key={v} value={v}>
-                        {r}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="rd-actions">
-                  <button
-                    className="primary"
-                    onClick={() => {
-                      setFiltros(rascunho);
-                      setRascunho(null);
-                    }}
-                  >
-                    Aplicar
-                  </button>
-                  <button
-                    onClick={() => {
-                      setFiltros(SEM_FILTRO);
-                      setRascunho(null);
-                    }}
-                  >
-                    Limpar
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <FiltrosAnuncios
+          filtro={filtro}
+          setFiltro={setFiltro}
+          contexto={contextoFiltro}
+          produtos={produtos}
+          base={daAba}
+          total={linhas.length}
+        />
         {daLoja.length === 0 ? (
           <Empty text="Nenhum anúncio nesta loja." />
         ) : (
@@ -473,7 +412,14 @@ function ListaDaLoja({
                 </div>,
                 p ? (
                   <div key="p">
-                    {str(p.sku)} · {str(p.nome)}
+                    <button
+                      type="button"
+                      className="rd-link-produto"
+                      title="Abrir a página do produto"
+                      onClick={() => abrirProduto(str(p.id))}
+                    >
+                      {str(p.sku)} · {str(p.nome)}
+                    </button>
                     {p.incompleto === true && (
                       <div>
                         <Badge tone="amber">Cadastro incompleto</Badge>{" "}
@@ -537,6 +483,11 @@ function ListaDaLoja({
           <div className="rd-error" role="alert">
             {aviso}
           </div>
+        )}
+        {avisoOk && (
+          <p className="rd-ok" role="status">
+            {avisoOk}
+          </p>
         )}
         {podeEditar && marcados.length > 0 && (
           <div className="rd-barra-lote" role="region" aria-label="Ações para os anúncios marcados">
@@ -621,6 +572,17 @@ function ListaDaLoja({
             style={{ left: menuLinha.x, top: menuLinha.y }}
             aria-label={`Ações de ${str(anuncioLinha.titulo)}`}
           >
+            {anuncioLinha.produto_id &&
+              item("▥ Ver na página do produto", () => {
+                setMenuLinha(null);
+                abrirProduto(str(anuncioLinha.produto_id));
+              })}
+            {item(`↗ Ver na central do vendedor (${canal})`, () => {
+              setMenuLinha(null);
+              setAviso("");
+              setAvisoOk(verNaCentral(anuncioLinha));
+            })}
+            <li className="rd-menu-sep" />
             {item("⇪ Enviar para o e-commerce", semLoja)}
             {item("$ Enviar preço para o e-commerce", () => escolherAcao("precos", [menuLinha.id]))}
             {item("▣ Enviar estoque para o e-commerce", semLoja)}

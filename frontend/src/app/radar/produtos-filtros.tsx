@@ -108,7 +108,7 @@ export type ContextoFiltro = {
   disponivel: (p: Row) => number;
 };
 
-const normal = (t: unknown) => str(t).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+export const normal = (t: unknown) => str(t).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /**
  * Aplica busca, filtros e ordem à lista de produtos principais. Variação conta
@@ -401,7 +401,7 @@ function sugestoes(texto: string, c: ContextoFiltro): Sugestao[] {
 const CHAVE_SALVOS = "radar.produtos.filtrosSalvos";
 const CHAVE_ULTIMO = "radar.produtos.ultimoFiltro";
 
-function ler<T>(chave: string, padrao: T): T {
+export function ler<T>(chave: string, padrao: T): T {
   try {
     const v = window.localStorage.getItem(chave);
     return v ? (JSON.parse(v) as T) : padrao;
@@ -409,7 +409,7 @@ function ler<T>(chave: string, padrao: T): T {
     return padrao;
   }
 }
-function gravar(chave: string, valor: unknown) {
+export function gravar(chave: string, valor: unknown) {
   try {
     window.localStorage.setItem(chave, JSON.stringify(valor));
   } catch {
