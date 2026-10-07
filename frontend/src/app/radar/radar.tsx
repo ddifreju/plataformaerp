@@ -120,7 +120,7 @@ const grupos: { id: string; rotulo: string; icone: string; itens: string[] }[] =
   { id: "mercado", rotulo: "Mercado", icone: "◉", itens: ["mercado"] },
   { id: "ia", rotulo: "Radar AI", icone: "✳", itens: ["ia"] },
 ];
-const rodape = ["configuracoes", "integracoes", "auditoria", "guia"];
+const rodape = ["configuracoes", "guia"];
 const titles: Record<string, [string, string]> = {
   visao: ["Sua operação, em um só lugar", "Acompanhe o que importa e encontre seu próximo passo."],
   missao: ["O que precisa de você", "Prioridades com contexto, responsáveis e ações."],
@@ -469,8 +469,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           can("DONO", "GESTOR", "ESTOQUE", "FINANCEIRO", "ATENDIMENTO", "ANALISTA"),
       )
       .filter(
-        (p) =>
-          p !== "vendedores" || can("DONO", "GESTOR", "ATENDIMENTO", "FINANCEIRO", "ANALISTA"),
+        (p) => p !== "vendedores" || can("DONO", "GESTOR", "ATENDIMENTO", "FINANCEIRO", "ANALISTA"),
       ),
   );
   const rotuloDe = (id: string) => nav.find((x) => x[0] === id)?.[1] ?? id;
@@ -541,7 +540,16 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           {rodape
             .filter((id) => liberadas.has(id))
             .map((id) => (
-              <button key={id} className={page === id ? "active" : ""} onClick={() => go(id)}>
+              <button
+                key={id}
+                className={
+                  page === id ||
+                  (id === "configuracoes" && ["integracoes", "auditoria"].includes(page))
+                    ? "active"
+                    : ""
+                }
+                onClick={() => go(id)}
+              >
                 <span className="rd-nav-icon">{nav.find((x) => x[0] === id)?.[2]}</span>
                 {rotuloDe(id)}
               </button>
@@ -1005,7 +1013,9 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                       `${o.quantidade} × ${prod(o.produto_id)?.nome}`,
                       str(o.canal),
                       centMoney(cents(o.preco) * Number(o.quantidade)),
-                      <Badge tone={o.estado === "EXPEDIDO" ? "green" : "blue"}>{str(o.estado)}</Badge>,
+                      <Badge tone={o.estado === "EXPEDIDO" ? "green" : "blue"}>
+                        {str(o.estado)}
+                      </Badge>,
                       <div className="rd-row-actions">
                         {can("DONO", "GESTOR", "ESTOQUE") &&
                           ["RESERVADO", "SEPARADO"].includes(str(o.estado)) && (
@@ -1036,15 +1046,16 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                               {o.estado === "RESERVADO" ? "Separar" : "Simular expedição"}
                             </button>
                           )}
-                        {can("DONO", "GESTOR") && ["RESERVADO", "SEPARADO"].includes(str(o.estado)) && (
-                          <button
-                            onClick={() =>
-                              command({ op: "pedido_estado", id: o.id, estado: "CANCELADO" })
-                            }
-                          >
-                            Cancelar
-                          </button>
-                        )}
+                        {can("DONO", "GESTOR") &&
+                          ["RESERVADO", "SEPARADO"].includes(str(o.estado)) && (
+                            <button
+                              onClick={() =>
+                                command({ op: "pedido_estado", id: o.id, estado: "CANCELADO" })
+                              }
+                            >
+                              Cancelar
+                            </button>
+                          )}
                         {can("DONO", "GESTOR") && o.estado === "EXPEDIDO" && (
                           <button
                             onClick={() =>
@@ -1908,7 +1919,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             </section>
           )}
           {page === "guia" && <Guide step={tour} onStep={setTour} go={go} />}
-          {page === "configuracoes" && <Configuracoes />}
+          {page === "configuracoes" && <Configuracoes go={go} />}
           {!data.financeiroPermitido && ["financeiro", "precos", "relatorios"].includes(page) && (
             <Empty text="Seu cargo não tem acesso a dados financeiros." />
           )}
@@ -2140,8 +2151,9 @@ function Login({ onLogin }: { onLogin: () => Promise<void> }) {
             </label>
             {acordando > 0 ? (
               <div className="rd-note" role="status">
-                Acordando o servidor… já se passaram {Math.round((acordando * ESPERA_ENTRE_TENTATIVAS_MS) / 1000)} s.
-                Depois de alguns dias sem uso pode levar até 5 minutos. Não precisa clicar de novo.
+                Acordando o servidor… já se passaram{" "}
+                {Math.round((acordando * ESPERA_ENTRE_TENTATIVAS_MS) / 1000)} s. Depois de alguns
+                dias sem uso pode levar até 5 minutos. Não precisa clicar de novo.
               </div>
             ) : (
               <div className="rd-note" role="status">
