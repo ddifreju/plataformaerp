@@ -53,3 +53,7 @@ pgdata/
 work/runtime/
 init-password.txt
 configure-role.sql
+
+# --- Continuidade ---------------------------------------------------------
+# Senhas reais preenchidas a partir do modelo ACESSOS-LOCAL.exemplo.md.
+docs/continuidade/ACESSOS-LOCAL.md
