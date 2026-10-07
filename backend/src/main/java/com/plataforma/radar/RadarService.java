@@ -126,7 +126,7 @@ public class RadarService {
     /** Linha do tempo do produto. Leitura: não entra na auditoria. */
     @Transactional(readOnly = true)
     public Map<String, Object> historicoProduto(UUID produtoId) {
-        return produtos.historico(produtoId, financeiro());
+        return produtos.historico(produtoId, papel(), financeiro());
     }
 
     /** Cria um usuário do sistema. A auditoria registra quem criou, nunca a senha. */

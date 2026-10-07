@@ -879,7 +879,11 @@ public class RadarProdutos {
      * Linha do tempo do produto (e das variações): estoque, pedidos, compras planejadas e
      * alterações do cadastro, com quem fez. Custo só para quem vê o financeiro.
      */
-    Map<String, Object> historico(UUID id, boolean veCusto) {
+    Map<String, Object> historico(UUID id, String papel, boolean veCusto) {
+        // Mesma visibilidade de GET /api/radar: compras só para quem cuida de compra; quem alterou
+        // o cadastro (auditoria), só para quem gerencia.
+        boolean veCompras = !Set.of("ATENDIMENTO", "ANALISTA", "MARKETING").contains(papel);
+        boolean veAlteracoes = Set.of("DONO", "GESTOR").contains(papel);
         var linhas =
                 db.queryForList(
                         "select id from radar_produto where tenant_id=? and id=?", tenant(), id);
@@ -936,7 +940,9 @@ public class RadarProdutos {
                                     + ")",
                             null));
         for (var r :
-                db.queryForList(
+                !veCompras
+                        ? List.<Map<String, Object>>of()
+                        : db.queryForList(
                         "select r.criado_em, r.dados->>'quantidade' quantidade,"
                                 + " r.dados->>'custo_unitario' custo, r.dados->>'recebida_em'"
                                 + " recebida from radar_registro r where r.tenant_id=? and"
@@ -957,7 +963,9 @@ public class RadarProdutos {
                                     + (veCusto ? " a R$ " + r.get("custo") + " cada" : ""),
                             null));
         for (var a :
-                db.queryForList(
+                !veAlteracoes
+                        ? List.<Map<String, Object>>of()
+                        : db.queryForList(
                         "select a.criado_em, a.operacao, a.detalhes->'resultado'->'antes' antes,"
                                 + " a.detalhes->'parametros'->>'acao' acao, u.nome ator from"
                                 + " radar_auditoria a left join usuario u on"
@@ -1070,6 +1078,11 @@ public class RadarProdutos {
                         arr,
                         arr,
                         daLixeira);
+        // Trava as linhas: ninguém cria pedido ou anúncio para elas entre a checagem e a mudança.
+        db.queryForList(
+                "select id from radar_produto where tenant_id=? and id = any(?) for update",
+                tenant(),
+                alvo.toArray(UUID[]::new));
         if (alvo.isEmpty())
             erro(
                     daLixeira
@@ -1453,15 +1466,19 @@ public class RadarProdutos {
                                 + " where x.tenant_id=p.tenant_id and x.produto_id=p.id) or"
                                 + " exists(select 1 from radar_kit_item x where"
                                 + " x.tenant_id=p.tenant_id and x.componente_id=p.id and not"
-                                + " (x.kit_id = any(?)))) order by p.sku",
+                                + " (x.kit_id = any(?))) or exists(select 1 from radar_promocao x"
+                                + " where x.tenant_id=p.tenant_id and x.produto_id=p.id) or"
+                                + " exists(select 1 from radar_registro x where"
+                                + " x.tenant_id=p.tenant_id and x.tipo='COMPRA' and"
+                                + " x.dados->>'produto_id'=p.id::text)) order by p.sku",
                         String.class,
                         tenant(),
                         ids,
                         ids);
         if (!presos.isEmpty())
             erro(
-                    "Não dá para apagar de vez produto com histórico (pedido, anúncio, estoque ou"
-                            + " kit): "
+                    "Não dá para apagar de vez produto com histórico (pedido, anúncio, estoque,"
+                            + " kit, promoção ou compra): "
                             + String.join(", ", presos)
                             + ". Ele pode ficar na lixeira para sempre, sem atrapalhar.");
         for (String tabela : List.of("radar_produto_imagem", "radar_produto_fornecedor"))

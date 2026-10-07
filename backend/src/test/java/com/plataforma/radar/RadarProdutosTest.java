@@ -642,15 +642,33 @@ class RadarProdutosTest {
     @SuppressWarnings("unchecked")
     void historicoMostraEstoqueEEscondeDeOutraEmpresa() {
         UUID id = salvar(empresaA, "{" + base("HIST-1") + ",\"saldo\":\"4\"}");
-        var h = naEmpresa(empresaA, () -> produtos.historico(id, false));
+        var h = naEmpresa(empresaA, () -> produtos.historico(id, "DONO", false));
         var eventos = (List<Map<String, Object>>) h.get("eventos");
         assertTrue(
                 eventos.stream().anyMatch(e -> e.get("titulo").toString().contains("Saldo inicial")),
                 eventos.toString());
+        // Quem não gerencia não vê quem alterou o cadastro.
+        var deAnalista =
+                (List<Map<String, Object>>)
+                        naEmpresa(empresaA, () -> produtos.historico(id, "ANALISTA", false))
+                                .get("eventos");
+        assertTrue(deAnalista.stream().noneMatch(e -> "CADASTRO".equals(e.get("tipo"))));
         var erro =
                 assertThrows(
                         ResponseStatusException.class,
-                        () -> naEmpresa(empresaB, () -> produtos.historico(id, true)));
+                        () -> naEmpresa(empresaB, () -> produtos.historico(id, "DONO", true)));
+        // Outra empresa também não manda para a lixeira nem apaga.
+        for (String acao : List.of("EXCLUIR", "EXCLUIR_DEFINITIVO"))
+            assertThrows(
+                    ResponseStatusException.class,
+                    () ->
+                            naEmpresa(
+                                    empresaB,
+                                    () ->
+                                            produtos.lote(
+                                                    json("{\"acao\":\"" + acao + "\",\"ids\":[\"" + id + "\"]}"),
+                                                    "DONO")),
+                    acao);
         assertEquals(HttpStatus.NOT_FOUND, erro.getStatusCode());
     }
 

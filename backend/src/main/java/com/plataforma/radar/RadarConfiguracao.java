@@ -75,6 +75,12 @@ public class RadarConfiguracao {
                 throw new IllegalStateException(e);
             }
         }
+        // Revalida na leitura: o prefixo entra numa expressão regular e os dígitos num formato.
+        if (!c.get("sku_prefixo").toString().matches("[A-Z0-9-]{0,12}")) c.put("sku_prefixo", "");
+        if (!(c.get("sku_digitos") instanceof Integer d) || d < 1 || d > 10) c.put("sku_digitos", 5);
+        if (!MODOS_SKU.contains(c.get("sku_modo").toString())) c.put("sku_modo", "MANUAL");
+        if (c.get("sku_modo").equals("PREFIXO") && c.get("sku_prefixo").toString().isEmpty())
+            c.put("sku_modo", "MANUAL");
         return c;
     }
 
