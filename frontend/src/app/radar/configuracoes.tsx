@@ -29,7 +29,7 @@ const SELOS: Record<Selo, [string, string]> = {
   pendente: ["não configurado", "gray"],
 };
 
-const ABAS: { id: string; rotulo: string; novo?: boolean }[] = [
+const ABAS: { id: string; rotulo: string }[] = [
   { id: "geral", rotulo: "geral" },
   { id: "cadastros", rotulo: "cadastros" },
   { id: "suprimentos", rotulo: "suprimentos" },
@@ -37,7 +37,7 @@ const ABAS: { id: string; rotulo: string; novo?: boolean }[] = [
   { id: "notas", rotulo: "notas fiscais" },
   { id: "financas", rotulo: "finanças" },
   { id: "ecommerce", rotulo: "e-commerce" },
-  { id: "tributacao", rotulo: "tributação (RTC)", novo: true },
+  { id: "tributacao", rotulo: "tributação (RTC)" },
 ];
 
 const AVISOS: Record<string, { titulo: string; texto: string }> = {
@@ -937,7 +937,6 @@ export default function Configuracoes({ go }: { go: (pagina: string) => void }) 
                 onClick={() => setAba(a.id)}
               >
                 {a.rotulo}
-                {a.novo && <span className="rd-novo">Novo</span>}
               </button>
             ))}
           </div>
