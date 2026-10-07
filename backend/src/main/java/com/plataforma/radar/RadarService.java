@@ -31,6 +31,7 @@ public class RadarService {
     private final RadarClientes clientes;
     private final RadarAnuncios anuncios;
     private final RadarVendedores vendedores;
+    private final RadarEmpresa empresa;
     private static final Set<String> CANAIS =
             Set.of("Mercado Livre", "Shopee", "TikTok Shop", "SHEIN");
 
@@ -43,7 +44,8 @@ public class RadarService {
             RadarProdutos produtos,
             RadarClientes clientes,
             RadarAnuncios anuncios,
-            RadarVendedores vendedores) {
+            RadarVendedores vendedores,
+            RadarEmpresa empresa) {
         this.db = db;
         this.json = json;
         this.cadastros = cadastros;
@@ -53,6 +55,7 @@ public class RadarService {
         this.clientes = clientes;
         this.anuncios = anuncios;
         this.vendedores = vendedores;
+        this.empresa = empresa;
     }
 
     /** Usuário da requisição atual, para registrar quem fez cada movimento. */
@@ -115,6 +118,40 @@ public class RadarService {
     public void alterarSenhaVendedor(UUID vendedorId, String senha, String confirmacao) {
         vendedores.alterarSenha(papel(), vendedorId, senha, confirmacao);
         auditar("vendedor_senha_alterar", vendedorId.toString(), Map.of());
+    }
+
+    /** Cria um usuário do sistema. A auditoria registra quem criou, nunca a senha. */
+    @Transactional
+    public UUID criarUsuario(com.fasterxml.jackson.databind.JsonNode n) {
+        UUID id = empresa.criarUsuario(papel(), n);
+        auditar(
+                "usuario_criar",
+                id.toString(),
+                Map.of("papel", n.path("papel").asText(""), "nome", n.path("nome").asText("")));
+        return id;
+    }
+
+    @Transactional
+    public void alterarSenhaUsuario(UUID usuarioId, String senha, String confirmacao) {
+        empresa.alterarSenha(papel(), usuarioId, senha, confirmacao);
+        auditar("usuario_senha_alterar", usuarioId.toString(), Map.of());
+    }
+
+    @Transactional
+    public void salvarLogo(byte[] dados, String tipo) {
+        empresa.salvarLogo(papel(), dados, tipo);
+        auditar("empresa_logo", "empresa", Map.of("bytes", dados.length));
+    }
+
+    @Transactional
+    public void removerLogo() {
+        empresa.removerLogo(papel());
+        auditar("empresa_logo_remover", "empresa", Map.of());
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> logo() {
+        return empresa.logo();
     }
 
     @Transactional
@@ -320,7 +357,7 @@ public class RadarService {
         String p = papel();
         boolean f = financeiro();
         Map<String, Object> out = new LinkedHashMap<>();
-        out.put("usuario", Map.of("nome", user().nome(), "papel", p));
+        out.put("usuario", Map.of("id", user().usuarioId(), "nome", user().nome(), "papel", p));
         out.put("modo", "LOCAL");
         out.put("financeiroPermitido", f);
         var produtos = rows("radar_produto");
@@ -415,6 +452,7 @@ public class RadarService {
         out.putAll(cadastros.dados(p, f));
         out.putAll(clientes.dados(p));
         out.putAll(vendedores.dados(p));
+        out.putAll(empresa.dados(p));
         out.putAll(promocoes.dados());
         out.putAll(this.produtos.dados());
         normalizarDinheiro(out);
@@ -978,6 +1016,8 @@ public class RadarService {
             default -> {
                 if (RadarCadastros.OPERACOES.contains(op))
                     result.putAll(cadastros.executar(op, n, papel()));
+                else if (RadarEmpresa.OPERACOES.contains(op))
+                    result.putAll(empresa.executar(op, n, papel(), user().usuarioId()));
                 else if (RadarVendedores.OPERACOES.contains(op))
                     result.putAll(vendedores.executar(op, n, papel()));
                 else if (RadarAnuncios.OPERACOES.contains(op))
