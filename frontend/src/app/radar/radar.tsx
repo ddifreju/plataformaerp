@@ -24,6 +24,7 @@ import Clientes from "./cliente";
 import Vendedores from "./vendedor";
 import ProdutosLote from "./produtos-lote";
 import PedidosLote from "./pedidos-lote";
+import Configuracoes from "./configuracoes";
 import { configPedidos } from "./pedidos-filtros";
 import FiltrosGenericos, { filtrar, filtroVazio, type Filtro } from "./filtros-genericos";
 import FiltrosProdutos, {
@@ -89,6 +90,7 @@ const nav = [
   ["studio", "Brand Studio", "✧"],
   ["mercado", "Mercado", "◉"],
   ["ia", "Radar AI", "✳"],
+  ["configuracoes", "Configurações", "⚙"],
   ["integracoes", "Integrações", "⇄"],
   ["auditoria", "Auditoria", "≡"],
   ["guia", "Como usar", "?"],
@@ -118,7 +120,7 @@ const grupos: { id: string; rotulo: string; icone: string; itens: string[] }[] =
   { id: "mercado", rotulo: "Mercado", icone: "◉", itens: ["mercado"] },
   { id: "ia", rotulo: "Radar AI", icone: "✳", itens: ["ia"] },
 ];
-const rodape = ["integracoes", "auditoria", "guia"];
+const rodape = ["configuracoes", "integracoes", "auditoria", "guia"];
 const titles: Record<string, [string, string]> = {
   visao: ["Sua operação, em um só lugar", "Acompanhe o que importa e encontre seu próximo passo."],
   missao: ["O que precisa de você", "Prioridades com contexto, responsáveis e ações."],
@@ -158,6 +160,7 @@ const titles: Record<string, [string, string]> = {
     "Veja o que está disponível e o que depende de homologação.",
   ],
   auditoria: ["Histórico que dá confiança", "Quem fez, o que mudou e quando aconteceu."],
+  configuracoes: ["Configurações", "Ajuste o Radar ao jeito da sua empresa."],
   guia: ["Conheça seu Radar", "Um passeio simples pelo trabalho do dia a dia."],
   clientes: ["Seus clientes", "Quem compra de você, com contato e histórico em um só lugar."],
   fornecedores: [
@@ -1905,6 +1908,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             </section>
           )}
           {page === "guia" && <Guide step={tour} onStep={setTour} go={go} />}
+          {page === "configuracoes" && <Configuracoes />}
           {!data.financeiroPermitido && ["financeiro", "precos", "relatorios"].includes(page) && (
             <Empty text="Seu cargo não tem acesso a dados financeiros." />
           )}
