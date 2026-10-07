@@ -24,6 +24,8 @@ import Clientes from "./cliente";
 import Vendedores from "./vendedor";
 import ProdutosLote from "./produtos-lote";
 import PedidosLote from "./pedidos-lote";
+import { configPedidos } from "./pedidos-filtros";
+import FiltrosGenericos, { filtrar, filtroVazio, type Filtro } from "./filtros-genericos";
 import FiltrosProdutos, {
   filtrarProdutos,
   filtroInicial,
@@ -211,7 +213,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [marcadosProdutos, setMarcadosProdutos] = useState<string[]>([]),
     [marcadosPedidos, setMarcadosPedidos] = useState<string[]>([]),
     // null até a lista de produtos abrir: aí lê o último filtro deste navegador.
-    [filtroProdutosSalvo, setFiltroProdutos] = useState<FiltroProdutos | null>(null);
+    [filtroProdutosSalvo, setFiltroProdutos] = useState<FiltroProdutos | null>(null),
+    [filtroPedidosAtual, setFiltroPedidos] = useState<Filtro | null>(null);
   const refresh = useCallback(async () => {
     const d = await call("");
     setData(d);
@@ -434,6 +437,19 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   };
   const listaProdutos =
     page === "produtos" ? filtrarProdutos(principais, filtroProdutos, contextoFiltro) : [];
+  const cfgPedidos = configPedidos(
+    {
+      produtos: products,
+      clientes: data.clientes ?? [],
+      vendedores: data.vendedores ?? [],
+      categorias: data.categorias,
+      promocoes: data.promocoes ?? [],
+      veFinanceiro: data.financeiroPermitido,
+    },
+    orders,
+  );
+  const filtroPedidos = filtroPedidosAtual ?? filtroVazio(cfgPedidos);
+  const listaPedidos = page === "pedidos" ? filtrar(orders, filtroPedidos, cfgPedidos) : [];
   const liberadas = new Set(
     nav
       .map(([p]) => p)
@@ -934,10 +950,17 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           )}
           {page === "pedidos" && (
             <section className="rd-card">
+              <FiltrosGenericos
+                cfg={cfgPedidos}
+                filtro={filtroPedidos}
+                setFiltro={setFiltroPedidos}
+                base={orders}
+                total={listaPedidos.length}
+              />
               <PedidosLote
                 ativo={can("DONO", "GESTOR")}
                 pedidos={orders}
-                linhas={orders}
+                linhas={listaPedidos}
                 produtos={products}
                 marcados={marcadosPedidos}
                 setMarcados={setMarcadosPedidos}
@@ -955,11 +978,19 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                       "Estado",
                       "Próxima etapa",
                     ]}
-                    rows={orders.map((o) => [
+                    vazio={orders.length ? "Nenhum pedido com essa busca ou filtros." : undefined}
+                    rows={listaPedidos.map((o) => [
                       lote.celula(o),
                       <>
                         <strong>{str(o.numero)}</strong>
                         <small>{str(o.cliente)}</small>
+                        {(o.numero_externo || o.nota_fiscal_numero) && (
+                          <small>
+                            {o.numero_externo ? `Marketplace: ${str(o.numero_externo)}` : ""}
+                            {o.numero_externo && o.nota_fiscal_numero ? " · " : ""}
+                            {o.nota_fiscal_numero ? `NF ${str(o.nota_fiscal_numero)}` : ""}
+                          </small>
+                        )}
                         {Array.isArray(o.marcadores) && o.marcadores.length > 0 && (
                           <span className="rd-marcadores">
                             {(o.marcadores as string[]).map((m) => (

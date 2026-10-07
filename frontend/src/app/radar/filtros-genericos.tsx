@@ -47,7 +47,9 @@ export type Campo =
       chave: string;
       rotulo: string;
       valor: (r: Row) => [number, number, number] | null;
-    };
+    }
+  /** Período de datas (de / até, os dois dias inclusive). */
+  | { tipo: "periodo"; chave: string; rotulo: string; valor: (r: Row) => unknown };
 
 type Medidas = { c: string; l: string; a: string };
 type Valor = string | string[] | boolean | { de: string; ate: string } | Medidas;
@@ -87,8 +89,15 @@ const ativo = (v: Valor | undefined) =>
 
 export function filtrar(lista: Row[], f: Filtro, cfg: Config): Row[] {
   const termo = normal(f.busca.trim());
+  // Números com traço, ponto ou espaço (CEP, telefone, CPF, nota) batem com ou sem eles.
+  const semSinais = (t: string) => t.replace(/[\s.\-/()]/g, "");
+  const termoNumero = /\d/.test(termo) ? semSinais(termo) : "";
+  const acha = (x: unknown) => {
+    const v = normal(x);
+    return v.includes(termo) || (!!termoNumero && semSinais(v).includes(termoNumero));
+  };
   const passa = (r: Row) => {
-    if (termo && !cfg.busca(r).some((x) => normal(x).includes(termo))) return false;
+    if (termo && !cfg.busca(r).some(acha)) return false;
     for (const c of cfg.campos) {
       const v = f.v[c.chave];
       if (!ativo(v)) continue;
@@ -119,6 +128,12 @@ export function filtrar(lista: Row[], f: Filtro, cfg: Config): Row[] {
           .sort((a, b) => b - a);
         const dentro = [...caixa].sort((a, b) => b - a);
         if (produto.some((x, i) => x > dentro[i])) return false;
+      } else if (c.tipo === "periodo") {
+        const { de, ate } = v as { de: string; ate: string };
+        const d = new Date(str(c.valor(r))).getTime();
+        if (!d) return false;
+        if (de && d < new Date(`${de}T00:00:00`).getTime()) return false;
+        if (ate && d > new Date(`${ate}T23:59:59.999`).getTime()) return false;
       }
     }
     return true;
@@ -174,6 +189,16 @@ function chipsDe(f: Filtro, cfg: Config): Chip[] {
         rotulo: `${nome} ${[m.c, m.l, m.a].map((x) => x || "?").join(" × ")} cm`,
         tirar: (x) => sem(x, c.chave, { c: "", l: "", a: "" }),
       });
+    } else if (c.tipo === "periodo") {
+      const { de, ate } = v as { de: string; ate: string };
+      const br = (d: string) => d.split("-").reverse().join("/");
+      out.push({
+        rotulo:
+          de && de === ate
+            ? `${nome}: ${br(de)}`
+            : `${nome}${de ? ` de ${br(de)}` : ""}${ate ? ` até ${br(ate)}` : ""}`,
+        tirar: (x) => sem(x, c.chave, { de: "", ate: "" }),
+      });
     }
   }
   return out;
@@ -222,10 +247,51 @@ function sugestoes(texto: string, cfg: Config, base: Row[]): Sugestao[] {
         aplicar: (f) => limpa({ ...f, v: { ...f.v, [c.chave]: true } }),
       });
   }
+  const combinada = combinar(t, cfg);
+  if (combinada) out.unshift(combinada);
   const vistos = new Set<string>();
   return out
     .filter((s) => !vistos.has(normal(s.rotulo)) && vistos.add(normal(s.rotulo)))
     .slice(0, 8);
+}
+
+/**
+ * Frase com mais de um filtro ("shopee cancelado sem nota"): reconhece cada
+ * pedaço (opções dos campos e atalhos) e oferece aplicar todos de uma vez.
+ * Uma opção conta quando o nome inteiro dela aparece na frase, ou a primeira
+ * palavra dela, se tiver 4 letras ou mais.
+ */
+function combinar(t: string, cfg: Config): Sugestao | null {
+  if (!t.includes(" ")) return null;
+  const partes: { rotulo: string; aplicar: (f: Filtro) => Filtro }[] = [];
+  // Palavra inteira, sem "não"/"sem" logo antes ("não enviado" não é "enviado").
+  const contem = (frase: string, negavel = true) =>
+    new RegExp(
+      `(^|\\s)${negavel ? "(?<!(?:nao|sem)\\s)" : ""}${frase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`,
+    ).test(t);
+  for (const a of cfg.atalhos ?? [])
+    if (a.chaves.some((k) => contem(k, !k.includes(" "))))
+      partes.push({ rotulo: a.rotulo, aplicar: a.aplicar });
+  for (const c of cfg.campos) {
+    if (c.tipo !== "multi") continue;
+    for (const [k, r] of c.opcoes) {
+      const nome = normal(r);
+      const primeira = nome.split(/[\s(]/)[0];
+      if (!k || !(contem(nome) || (primeira.length >= 4 && contem(primeira)))) continue;
+      partes.push({
+        rotulo: `${c.rotulo.toLowerCase()}: ${r.toLowerCase()}`,
+        aplicar: (f) => ({
+          ...f,
+          v: { ...f.v, [c.chave]: [...new Set([...((f.v[c.chave] as string[]) ?? []), k])] },
+        }),
+      });
+    }
+  }
+  if (partes.length < 2) return null;
+  return {
+    rotulo: `Aplicar tudo: ${partes.map((p) => p.rotulo).join(" + ")}`,
+    aplicar: (f) => partes.reduce((acc, p) => p.aplicar(acc), { ...f, busca: "" }),
+  };
 }
 
 type Salvo = { nome: string; filtro: Filtro };
@@ -369,6 +435,29 @@ export default function FiltrosGenericos({
           {c.rotulo}
         </label>
       );
+    if (c.tipo === "periodo") {
+      const p = (v as { de: string; ate: string }) ?? { de: "", ate: "" };
+      return (
+        <div key={c.chave} className="rd-filtro-faixa">
+          <label>
+            {c.rotulo} de
+            <input
+              type="date"
+              value={p.de}
+              onChange={(e) => muda(c.chave, { ...p, de: e.target.value })}
+            />
+          </label>
+          <label>
+            até
+            <input
+              type="date"
+              value={p.ate}
+              onChange={(e) => muda(c.chave, { ...p, ate: e.target.value })}
+            />
+          </label>
+        </div>
+      );
+    }
     if (c.tipo === "cabe") {
       const m = (v as Medidas) ?? { c: "", l: "", a: "" };
       return (
