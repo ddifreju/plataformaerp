@@ -25,6 +25,9 @@ deduzir corretamente taxa de marketplace, frete, imposto, devolução e Ads.
 
 ## Ordem de leitura
 
+0. **`docs/continuidade/00-LEIA-PRIMEIRO.md`** — contexto completo mais
+   recente (outubro/2026): visão, jeito de trabalhar da Juliana, acessos,
+   histórico, próximos passos. Comece por lá.
 1. Este arquivo
 2. `docs/ESTADO.md` — onde o projeto está
 3. `docs/PENDENCIAS.md` — o que está travado por falta de credencial

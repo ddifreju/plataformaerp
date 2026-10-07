@@ -1,5 +1,8 @@
 # Contexto de handoff — para a próxima IA que trabalhar neste projeto
 
+> **Mais recente:** `docs/continuidade/` (outubro/2026). Este arquivo é o
+> handoff de agosto (fases 0 a 3) e continua valendo como história.
+
 Escrito em 14/08/2026 pela sessão de Claude Code que executou as Fases 0 a 3.
 Isto complementa (não substitui) a ordem de leitura do `LEIA-PRIMEIRO.md`.
 Leia primeiro os documentos do projeto; este arquivo traz o que NÃO está neles.
