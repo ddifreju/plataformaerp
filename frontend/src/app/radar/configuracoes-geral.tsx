@@ -562,8 +562,13 @@ function UsuarioModal({
         </div>
         {edicao.tipo === "novo" && (
           <p className="rd-note">
-            Passe o e-mail e a senha inicial para a pessoa por um canal seguro. Ela pode trocar a
-            senha depois.
+            Passe o e-mail e a senha inicial para a pessoa por um canal seguro.
+          </p>
+        )}
+        {edicao.tipo === "senha" && (
+          <p className="rd-note">
+            Quem já está conectado continua conectado até sair. Se a conta pode ter sido usada por
+            outra pessoa, desative o acesso em Editar: isso derruba na hora.
           </p>
         )}
         <div className="rd-modal-foot">

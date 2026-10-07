@@ -210,6 +210,112 @@ class RadarEmpresaTest {
         assertEquals("", RadarEmpresa.tipo("<svg>nao</svg>".getBytes()));
     }
 
+    @Test
+    void soADonaCriaUsuarioTrocaSenhaEMexeNoLogo() throws SQLException {
+        UUID e = BancoRadarDeTeste.novaEmpresa();
+        UUID alvo = criar(e, "Alvo", "ESTOQUE");
+        byte[] png = {(byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10, 0, 0};
+        for (String papel : List.of("GESTOR", "FINANCEIRO", "ANALISTA")) {
+            List<Runnable> acoes =
+                    List.of(
+                            () ->
+                                    empresa.criarUsuario(
+                                            papel,
+                                            json(
+                                                    "{\"nome\":\"X\",\"email\":\"x@radar.test\","
+                                                            + "\"papel\":\"DONO\",\"senha\":\"senhaBoa1\","
+                                                            + "\"confirmacao\":\"senhaBoa1\"}")),
+                            () -> empresa.alterarSenha(papel, alvo, "senhaBoa1", "senhaBoa1"),
+                            () -> empresa.salvarLogo(papel, png, "image/png"),
+                            () -> empresa.removerLogo(papel));
+            for (Runnable acao : acoes) {
+                var erro =
+                        assertThrows(
+                                ResponseStatusException.class,
+                                () ->
+                                        naEmpresa(
+                                                e,
+                                                () -> {
+                                                    acao.run();
+                                                    return null;
+                                                }));
+                assertEquals(HttpStatus.FORBIDDEN, erro.getStatusCode(), papel);
+            }
+        }
+    }
+
+    @Test
+    void naoTrocaSenhaNemVeLogoDeOutraEmpresa() throws SQLException {
+        UUID a = BancoRadarDeTeste.novaEmpresa();
+        UUID b = BancoRadarDeTeste.novaEmpresa();
+        UUID deA = criar(a, "Ana", "GESTOR");
+        byte[] png = {(byte) 0x89, 'P', 'N', 'G', 13, 10, 26, 10, 0, 0};
+        naEmpresa(
+                a,
+                () -> {
+                    empresa.salvarLogo("DONO", png, "image/png");
+                    return null;
+                });
+        var senha =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        b,
+                                        () -> {
+                                            empresa.alterarSenha(
+                                                    "DONO", deA, "senhaBoa1", "senhaBoa1");
+                                            return null;
+                                        }));
+        assertEquals(HttpStatus.NOT_FOUND, senha.getStatusCode());
+        var logo = assertThrows(ResponseStatusException.class, () -> naEmpresa(b, empresa::logo));
+        assertEquals(HttpStatus.NOT_FOUND, logo.getStatusCode());
+        assertEquals("image/png", naEmpresa(a, empresa::logo).get("logo_tipo"));
+    }
+
+    @Test
+    void recusaLogoForjadoOuGrandeDemais() throws SQLException {
+        UUID e = BancoRadarDeTeste.novaEmpresa();
+        byte[] svg = "<svg onload=alert(1)>".getBytes();
+        byte[] grande = new byte[RadarEmpresa.MAX_BYTES_LOGO + 1];
+        grande[0] = (byte) 0x89;
+        grande[1] = 'P';
+        grande[2] = 'N';
+        grande[3] = 'G';
+        for (byte[] d : List.of(svg, grande))
+            assertThrows(
+                    ResponseStatusException.class,
+                    () ->
+                            naEmpresa(
+                                    e,
+                                    () -> {
+                                        empresa.salvarLogo("DONO", d, "image/png");
+                                        return null;
+                                    }));
+    }
+
+    @Test
+    void editarSemDizerSeOAcessoFicaAtivoNaoReativa() throws SQLException {
+        UUID e = BancoRadarDeTeste.novaEmpresa();
+        UUID dona = criar(e, "Dona", "DONO");
+        UUID u = criar(e, "Saiu", "ESTOQUE");
+        editar(e, dona, u, "Saiu", "ESTOQUE", false);
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                e,
+                                () ->
+                                        empresa.executar(
+                                                "usuario_salvar",
+                                                json(
+                                                        "{\"id\":\""
+                                                                + u
+                                                                + "\",\"nome\":\"Saiu\",\"papel\":\"ESTOQUE\"}"),
+                                                "DONO",
+                                                dona)));
+    }
+
     private static void salvar(UUID e, String corpo) {
         naEmpresa(
                 e,

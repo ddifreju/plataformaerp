@@ -150,7 +150,9 @@ public class RadarEmpresa {
         if (nome == null) erro("Preencha o nome.");
         String novoPapel = n.path("papel").asText("").trim().toUpperCase();
         if (!PAPEIS.contains(novoPapel)) erro("Cargo inválido.");
-        boolean ativo = n.path("ativo").asBoolean(true);
+        // Sem padrão de propósito: um corpo sem "ativo" não pode religar quem foi desligado.
+        if (!n.path("ativo").isBoolean()) erro("Informe se o acesso fica ativo.");
+        boolean ativo = n.path("ativo").asBoolean();
         if (id.equals(ator)) {
             if (!novoPapel.equals(atual.get("papel")))
                 erro("Você não pode mudar o seu próprio cargo.");
