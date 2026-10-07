@@ -171,25 +171,62 @@ const ITENS: Record<string, Item[]> = {
       chaves: "impressora impressao direta",
     },
     {
-      id: "multiempresa",
-      titulo: "Multiempresa",
-      descricao: "Mais de uma empresa (CNPJ) na mesma conta, com troca rápida entre elas.",
-      grupo: "Outras configurações",
-      chaves: "filial cnpj empresas",
+      id: "grupo_empresas",
+      titulo: "Empresas do grupo",
+      descricao:
+        "Junte as contas das suas empresas (cada uma com o seu CNPJ e a sua assinatura) em um grupo só.",
+      grupo: "Grupo de empresas",
+      chaves: "multiempresa filial cnpj empresas grupo holding vincular",
+      selo: "sugestao",
+    },
+    {
+      id: "grupo_troca",
+      titulo: "Trocar de empresa sem sair",
+      descricao: "Um login só para entrar em qualquer empresa do grupo, com troca em um clique.",
+      grupo: "Grupo de empresas",
+      chaves: "multiempresa trocar empresa login unico",
+      selo: "sugestao",
+    },
+    {
+      id: "grupo_painel",
+      titulo: "Painel do grupo",
+      descricao:
+        "Faturamento, lucro, estoque e valor de todas as empresas juntas, e de cada uma separada.",
+      grupo: "Grupo de empresas",
+      chaves: "multiempresa dashboard consolidado lucro faturamento grupo",
+      selo: "sugestao",
+    },
+    {
+      id: "grupo_estoque",
+      titulo: "Estoque do grupo",
+      descricao:
+        "Ver o estoque de todas as empresas em um lugar e transferir produto de uma para outra (com a nota de transferência).",
+      grupo: "Grupo de empresas",
+      chaves: "multiempresa estoque compartilhado transferencia unificado",
+      selo: "sugestao",
     },
     {
       id: "token",
       titulo: "Token API",
-      descricao: "Chaves de acesso para outros sistemas conversarem com o Radar.",
-      grupo: "Outras configurações",
+      descricao: "Chaves de acesso para lojas, sistemas e parceiros conversarem com o Radar.",
+      grupo: "API e parcerias",
       chaves: "api chave integracao token",
     },
     {
       id: "api",
       titulo: "Configurações de API",
       descricao: "Limites, permissões e avisos automáticos (webhooks) da API.",
-      grupo: "Outras configurações",
+      grupo: "API e parcerias",
       chaves: "webhook api integracao",
+    },
+    {
+      id: "parceiros",
+      titulo: "Apps e parceiros",
+      descricao:
+        "Aplicativos de parceiros que se conectam ao Radar: você escolhe quais podem entrar e o que podem ver.",
+      grupo: "API e parcerias",
+      chaves: "parceria app aplicativo loja de apps marketplace de apps",
+      selo: "sugestao",
     },
   ],
   cadastros: [
@@ -344,12 +381,6 @@ const ITENS: Record<string, Item[]> = {
     },
   ],
   vendas: [
-    {
-      id: "pdv",
-      titulo: "Configurações do PDV",
-      descricao: "Venda no balcão: caixa, formas de pagamento e cupom.",
-      chaves: "pdv balcao caixa",
-    },
     {
       id: "propostas",
       titulo: "Configurações das propostas comerciais",
@@ -528,14 +559,6 @@ const ITENS: Record<string, Item[]> = {
       grupo: "Notas fiscais de venda",
       chaves: "nfe serie numeracao",
       selo: "cnpj",
-    },
-    {
-      id: "nfce",
-      titulo: "Configuração da nota para consumidor final (NFC-e)",
-      descricao: "Cupom eletrônico para vendas no balcão (PDV): série e código de segurança.",
-      grupo: "Notas fiscais de venda",
-      chaves: "nfce cupom pdv csc",
-      selo: "pendente",
     },
     {
       id: "difal",
@@ -757,12 +780,6 @@ const ITENS: Record<string, Item[]> = {
       pagina: "integracoes",
     },
     {
-      id: "ec_token",
-      titulo: "Token API",
-      descricao: "Chaves de acesso para lojas e sistemas externos.",
-      chaves: "token api",
-    },
-    {
       id: "preco_canal",
       titulo: "Regras de preço por canal",
       descricao:
@@ -792,7 +809,7 @@ const ITENS: Record<string, Item[]> = {
       id: "rtc_tributos",
       titulo: "Configuração dos tributos e códigos de classificação",
       descricao: "Classificação tributária de cada produto para CBS e IBS.",
-      grupo: "NF-e e NFC-e",
+      grupo: "NF-e",
       chaves: "cbs ibs classificacao tributaria reforma",
       selo: "pendente",
     },
@@ -800,7 +817,7 @@ const ITENS: Record<string, Item[]> = {
       id: "rtc_calculo",
       titulo: "Habilitar cálculo de tributos da Reforma Tributária",
       descricao: "Calcular e destacar CBS e IBS nas notas, conforme a fase da reforma.",
-      grupo: "NF-e e NFC-e",
+      grupo: "NF-e",
       chaves: "cbs ibs calculo reforma",
       selo: "pendente",
     },
@@ -808,7 +825,7 @@ const ITENS: Record<string, Item[]> = {
       id: "rtc_regras",
       titulo: "Cadastro de regras tributárias",
       descricao: "Regras por produto, cliente e estado, para cada nota sair com o imposto certo.",
-      grupo: "NF-e e NFC-e",
+      grupo: "NF-e",
       chaves: "regra tributaria",
       selo: "pendente",
     },
