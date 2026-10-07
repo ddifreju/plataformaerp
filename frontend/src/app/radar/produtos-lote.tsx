@@ -20,6 +20,8 @@ type Props = {
   veCusto: boolean;
   disponivel: (p: Row) => number;
   executar: (corpo: Record<string, unknown>) => Promise<boolean>;
+  /** Clona o produto (com imagens) e abre a cópia. */
+  clonar?: (id: string) => void;
   ativo: boolean;
   children: (k: {
     cabecalho: ReactNode;
@@ -86,11 +88,10 @@ const OPCOES: Record<string, [string, string][]> = {
     "G",
     "M",
     "M2",
-    "CM",
+    "M3",
     "L",
     "ML",
     "RL",
-    "PCT",
   ].map((u): [string, string] => [u, u]),
   CONDICAO: [
     ["NOVO", "Novo"],
@@ -159,6 +160,7 @@ export default function ProdutosLote({
   veCusto,
   disponivel,
   executar,
+  clonar,
   ativo,
   children,
 }: Props) {
@@ -384,7 +386,7 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
     INATIVAR: "Inativar produtos",
     ATIVAR: "Ativar produtos",
     EXCLUIR_ANEXOS: "Excluir anexos dos produtos",
-    EXCLUIR: "Excluir produtos",
+    EXCLUIR: "Mover para a lixeira",
   };
 
   const campoValor = () => {
@@ -515,6 +517,12 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
               )}
             <li className="rd-menu-sep" />
             {item("✎ Editar dados", () => abrir("EDITAR", [menuLinha.id]))}
+            {clonar &&
+              item("⧉ Clonar produto", () => {
+                const id = menuLinha.id;
+                setMenuLinha(null);
+                clonar(id);
+              })}
             {item("🏷 Imprimir etiqueta", () => etiquetas([menuLinha.id]))}
             {item("# Alterar tags", () => abrir("TAGS", [menuLinha.id]))}
             <li className="rd-menu-sep" />
@@ -526,7 +534,9 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             {item("🗑 Excluir anexos", () =>
               abrir("EXCLUIR_ANEXOS", [menuLinha.id]),
             )}
-            {item("🗑 Excluir produto", () => abrir("EXCLUIR", [menuLinha.id]))}
+            {item("🗑 Mover para a lixeira", () =>
+              abrir("EXCLUIR", [menuLinha.id]),
+            )}
           </ul>
         </>
       )}
@@ -621,7 +631,7 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
                 {item("🗑 Excluir anexos dos produtos", () =>
                   abrir("EXCLUIR_ANEXOS"),
                 )}
-                {item("🗑 Excluir produto", () => abrir("EXCLUIR"))}
+                {item("🗑 Mover para a lixeira", () => abrir("EXCLUIR"))}
               </ul>
             )}
           </div>
@@ -738,9 +748,9 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             )}
             {acao === "EXCLUIR" && (
               <p>
-                Excluir {alvo.length} produto(s)? Não dá para desfazer. Produto
-                com pedido, anúncio, estoque ou que faz parte de kit não é
-                excluído: inative em vez disso.
+                Mover {alvo.length} produto(s) para a lixeira? Eles saem da
+                venda e das listas, mas pedidos e histórico continuam. Dá para
+                restaurar quando quiser, em &quot;Lixeira&quot;.
               </p>
             )}
             <div className="rd-modal-foot">
@@ -753,9 +763,11 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
                 }
                 onClick={confirmar}
               >
-                {acao === "EXCLUIR" || acao === "EXCLUIR_ANEXOS"
-                  ? "Excluir"
-                  : "Confirmar"}
+                {acao === "EXCLUIR"
+                  ? "Mover para a lixeira"
+                  : acao === "EXCLUIR_ANEXOS"
+                    ? "Excluir"
+                    : "Confirmar"}
               </button>
             </div>
           </section>

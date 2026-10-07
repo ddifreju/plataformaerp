@@ -147,6 +147,46 @@ construída contra mock até a credencial chegar (ver "Como usar", no fim).
       consentimento com data, origem e texto aceito — não um booleano no
       cliente. Depende de definir o fluxo comercial.
 
+## Página de Produtos (combinado com a Juliana em 07/10/2026)
+
+O Bloco 1 foi entregue: rascunho, SKU automático, valores padrão, lixeira com
+restaurar, clonar e aba Histórico. Ficam na fila:
+
+- [ ] **Bloco 2: variações e kits.**
+      - Tipo de variação aprendido: o que a pessoa digitar entra sozinho na
+        lista de Configurações.
+      - Transformações com confirmação, mostrando variações e anúncios
+        afetados:
+        - variação ↔ simples;
+        - simples → variação, num pai novo ou num pai existente;
+        - variação → produto independente.
+      - Editar a variação sozinha, escolhendo quais campos o pai repassa.
+      - Custo do kit recalculado quando o custo de um componente muda.
+      - Preço sugerido do kit: soma dos componentes menos um desconto.
+      - Kit com variações (cada variação é um kit).
+      - Envio do kit como kit para o marketplace (junto com as integrações).
+- [ ] **Bloco 3: organização.**
+      - Cadastro de marcas com detector de repetidas e unificação.
+      - Unificar produtos duplicados, mantendo o histórico.
+      - Localização no estoque.
+      - Sugestão de NCM pela tabela oficial e de CEST pelo NCM.
+      - CEST em lote por NCM.
+- [ ] **Bloco 4: planilha completa.**
+      - Importar todos os campos, com variações pelo SKU do pai, kits e
+        imagens por link.
+      - Prévia antes de confirmar e botão de desfazer.
+      - Exportar, editar no Excel e subir de volta.
+- [ ] **Fabricado, matéria-prima, lote e validade: entram juntos.**
+      - Público: artesanato, impressão 3D e cosméticos próprios.
+      - Estrutura de produção: o custo vem da matéria-prima, não do
+        fornecedor.
+      - Esse custo entra na calculadora e no painel de quem produz.
+      - Lote e validade na entrada, na saída (vence primeiro, sai primeiro) e
+        na NF-e.
+- [ ] **Bloqueio de pendências no envio.** Ligar `RadarProdutos.pendencias()`
+      no envio ao marketplace e na emissão de NF-e, quando essas funções
+      existirem. Hoje o cadastro salva incompleto e só marca `incompleto`.
+
 ## Como usar
 
 Enquanto uma credencial não existe, o gerente constrói contra **mock**:

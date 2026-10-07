@@ -39,6 +39,7 @@ import Embalagens from "./embalagens";
 
 type Data = {
   usuario: { id: string; nome: string; papel: string };
+  configuracoes?: Record<string, Record<string, unknown>>;
   empresa?: Row;
   usuarios?: Row[];
   financeiroPermitido: boolean;
@@ -225,6 +226,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [marcadosPedidos, setMarcadosPedidos] = useState<string[]>([]),
     // null até a lista de produtos abrir: aí lê o último filtro deste navegador.
     [filtroProdutosSalvo, setFiltroProdutos] = useState<FiltroProdutos | null>(null),
+    [verLixeira, setVerLixeira] = useState(false),
     [filtroPedidosAtual, setFiltroPedidos] = useState<Filtro | null>(null);
   const refresh = useCallback(async () => {
     const d = await call("");
@@ -291,9 +293,13 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   const prod = (id: unknown) => products.find((x) => x.id === id);
   // Produto com variações (pai) não é vendido nem estocado: as variações são.
   // Kit é vendido, mas o estoque fica nos componentes.
-  const principais = products.filter((p) => !p.pai_id);
-  const vendaveis = products.filter((p) => p.tipo !== "VARIACAO" && p.permite_venda !== false);
-  const estocaveis = products.filter((p) => p.tipo !== "VARIACAO" && p.tipo !== "KIT");
+  // Produtos na lixeira continuam em `products` (pedidos e anúncios antigos mostram o nome),
+  // mas saem das listas, das escolhas e do cadastro.
+  const cadastrados = products.filter((p) => !p.excluido_em);
+  const naLixeira = products.filter((p) => p.excluido_em && !p.pai_id);
+  const principais = cadastrados.filter((p) => !p.pai_id);
+  const vendaveis = cadastrados.filter((p) => p.tipo !== "VARIACAO" && p.permite_venda !== false);
+  const estocaveis = cadastrados.filter((p) => p.tipo !== "VARIACAO" && p.tipo !== "KIT");
   const prodOptions = vendaveis.map((p) => ({ value: str(p.id), label: `${p.sku} · ${p.nome}` }));
   const estoqueOptions = estocaveis.map((p) => ({
     value: str(p.id),
@@ -438,7 +444,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   if (!data) return <Login onLogin={refresh} />;
   const filtroProdutos = filtroProdutosSalvo ?? filtroInicial();
   const contextoFiltro = {
-    produtos: products,
+    produtos: cadastrados,
     anuncios: listings,
     categorias: data.categorias,
     fornecedores: data.fornecedores ?? [],
@@ -821,8 +827,9 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               key={`${editando.id ?? "novo"}-${editando.versao}`}
               produto={editando.id ? (products.find((p) => p.id === editando.id) ?? null) : null}
               abaInicial={editando.aba}
+              config={data.configuracoes?.produtos}
               dados={{
-                produtos: products,
+                produtos: cadastrados,
                 categorias: data.categorias,
                 embalagens: data.embalagens,
                 fornecedores: data.fornecedores,
@@ -842,7 +849,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           )}
           {page === "produtos" && !editando && can("DONO", "GESTOR") && (
             <Pendencias
-              produtos={products}
+              produtos={cadastrados}
               imagens={data.imagens}
               categorias={data.categorias}
               fornecedores={data.fornecedores ?? []}
@@ -852,10 +859,23 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               marcarParaLote={setMarcadosProdutos}
             />
           )}
-          {page === "produtos" && !editando && (
+          {page === "produtos" && !editando && verLixeira && (
+            <Lixeira
+              itens={naLixeira}
+              podeEditar={can("DONO", "GESTOR")}
+              executar={command}
+              voltar={() => setVerLixeira(false)}
+            />
+          )}
+          {page === "produtos" && !editando && !verLixeira && (
             <section className="rd-card">
               <div className="rd-card-head">
                 <h2>{principais.length} produtos</h2>
+                {naLixeira.length > 0 && (
+                  <button type="button" className="text" onClick={() => setVerLixeira(true)}>
+                    🗑 Lixeira ({naLixeira.length})
+                  </button>
+                )}
               </div>
               <FiltrosProdutos
                 filtro={filtroProdutos}
@@ -866,7 +886,15 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               />
               <ProdutosLote
                 ativo={can("DONO", "GESTOR")}
-                produtos={products}
+                produtos={cadastrados}
+                clonar={
+                  can("DONO", "GESTOR")
+                    ? async (id) => {
+                        const r = await commandResult({ op: "produto_clonar", id, imagens: true });
+                        if (r) setEditando({ id: str(r.id), aba: "geral", versao: Date.now() });
+                      }
+                    : undefined
+                }
                 linhas={listaProdutos}
                 marcados={marcadosProdutos}
                 setMarcados={setMarcadosProdutos}
@@ -1937,6 +1965,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               usuarios={data.usuarios ?? []}
               papel={data.usuario.papel}
               euId={data.usuario.id}
+              configuracoes={data.configuracoes ?? {}}
               executar={commandResult}
               atualizar={refresh}
               avisar={setNotice}
@@ -2775,5 +2804,96 @@ function Guide({
         <Badge tone="amber">Prévia funcional local</Badge>
       </section>
     </>
+  );
+}
+
+/** Produtos na lixeira: restaurar (volta inativo) ou apagar de vez o que não tem histórico. */
+function Lixeira({
+  itens,
+  podeEditar,
+  executar,
+  voltar,
+}: {
+  itens: Row[];
+  podeEditar: boolean;
+  executar: (corpo: Record<string, unknown>) => Promise<boolean>;
+  voltar: () => void;
+}) {
+  const [apagar, setApagar] = useState<Row | null>(null);
+  return (
+    <section className="rd-card">
+      <div className="rd-card-head">
+        <h2>Lixeira · {itens.length} produto(s)</h2>
+        <button type="button" onClick={voltar}>
+          ← Voltar para produtos
+        </button>
+      </div>
+      <p className="rd-note">
+        Produtos excluídos ficam aqui, fora da venda e das listas. Pedidos, estoque e histórico
+        continuam ligados a eles. Restaurar devolve o produto inativo.
+      </p>
+      <Table
+        headers={["Produto", "SKU", "Excluído em", ""]}
+        vazio="A lixeira está vazia."
+        rows={itens.map((p) => [
+          str(p.nome),
+          str(p.sku),
+          new Date(str(p.excluido_em)).toLocaleString("pt-BR"),
+          podeEditar ? (
+            <div className="rd-row-actions">
+              <button
+                onClick={() => executar({ op: "produtos_lote", acao: "RESTAURAR", ids: [p.id] })}
+              >
+                ↺ Restaurar
+              </button>
+              <button className="perigo" onClick={() => setApagar(p)}>
+                Apagar de vez
+              </button>
+            </div>
+          ) : (
+            ""
+          ),
+        ])}
+      />
+      {apagar && (
+        <div className="rd-modal-backdrop" onClick={() => setApagar(null)}>
+          <section
+            className="rd-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Apagar de vez"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="rd-card-head">
+              <h2>Apagar de vez</h2>
+              <button aria-label="Fechar" onClick={() => setApagar(null)}>
+                ×
+              </button>
+            </div>
+            <p>
+              Apagar <strong>{str(apagar.nome)}</strong> para sempre? Não dá para desfazer. Só é
+              possível se o produto nunca teve pedido, estoque, anúncio nem fez parte de kit; se
+              tiver, ele fica na lixeira sem atrapalhar nada.
+            </p>
+            <div className="rd-modal-foot">
+              <button onClick={() => setApagar(null)}>Cancelar</button>
+              <button
+                className="perigo"
+                onClick={async () => {
+                  await executar({
+                    op: "produtos_lote",
+                    acao: "EXCLUIR_DEFINITIVO",
+                    ids: [apagar.id],
+                  });
+                  setApagar(null);
+                }}
+              >
+                Apagar de vez
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </section>
   );
 }

@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 @Service
 public class RadarProdutos {
 
-    static final Set<String> OPERACOES = Set.of("produto_salvar");
+    static final Set<String> OPERACOES = Set.of("produto_salvar", "produto_clonar");
 
     private static final int MAX_LOTE = 500;
 
@@ -76,7 +76,7 @@ public class RadarProdutos {
     static final int MAX_IMAGENS = 12;
     static final int MAX_BYTES_IMAGEM = 2 * 1024 * 1024;
     private static final Set<String> TIPOS_IMAGEM = Set.of("image/jpeg", "image/png", "image/webp");
-    private static final Set<String> UNIDADES =
+    static final Set<String> UNIDADES =
             Set.of(
                     "UN", "PC", "KG", "G", "L", "ML", "M", "M2", "M3", "CX", "PAR", "KIT", "JG",
                     "RL");
@@ -126,23 +126,29 @@ public class RadarProdutos {
         Map<String, Object> antes = null;
         if (!novo) {
             antes = linhaParaAtualizar(id);
+            if (antes.get("excluido_em") != null)
+                erro("Este produto está na lixeira. Restaure antes de editar.");
             if (antes.get("pai_id") != null) erro("Edite a variação pelo produto principal.");
             if (!antes.get("tipo").equals(tipo))
                 erro("O tipo do produto não muda depois de criado. Cadastre um novo produto.");
         }
 
         Map<String, Object> c = colunasComuns(n);
-        exigirParaNotaEAnuncio(n, c);
         c.put("tipo", tipo);
-        c.put("sku", texto(n, "sku", 80));
+        // Rascunho: para salvar bastam nome e SKU. O que a nota e os marketplaces exigem vira
+        // pendência (coluna incompleto) e só bloqueia na hora de enviar ou faturar.
+        if (n.path("nome").asText("").isBlank()) erro("Dê um nome ao produto.");
         c.put("nome", texto(n, "nome", 250));
-        c.put("preco", valor(n, "preco"));
+        String sku = opcional(n, "sku", 80);
+        if (sku == null && !novo) sku = (String) antes.get("sku");
+        c.put("sku", sku == null ? proximoSku() : sku);
+        c.put("preco", valorOuZero(n, "preco"));
         c.put("categoria_id", categoria(n));
         c.put("embalagem_id", embalagem(n));
         c.put("tipos_variacao", tipo.equals("VARIACAO") ? tiposVariacao(n) : "[]");
 
         List<Object[]> componentes = tipo.equals("KIT") ? componentes(n, id) : List.of();
-        c.put("custo", tipo.equals("KIT") ? custoDoKit(componentes) : valor(n, "custo"));
+        c.put("custo", tipo.equals("KIT") ? custoDoKit(componentes) : valorOuZero(n, "custo"));
         skuLivre((String) c.get("sku"), id);
 
         if (novo) {
@@ -162,10 +168,20 @@ public class RadarProdutos {
         if (tipo.equals("KIT")) gravarKit(id, componentes);
         if (tipo.equals("VARIACAO")) salvarVariacoes(id, c, n);
         gravarFornecedores(id, n);
+        List<String> faltando = marcarPendencias(id);
 
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("id", id);
-        r.put("mensagem", novo ? "Produto cadastrado." : "Produto atualizado.");
+        r.put("sku", c.get("sku"));
+        r.put("pendencias", faltando);
+        r.put(
+                "mensagem",
+                (novo ? "Produto cadastrado" : "Produto atualizado")
+                        + (faltando.isEmpty()
+                                ? "."
+                                : " como rascunho. Para anunciar e emitir nota, falta: "
+                                        + String.join(", ", faltando)
+                                        + "."));
         if (antes != null)
             r.put(
                     "antes",
@@ -179,39 +195,106 @@ public class RadarProdutos {
     /**
      * O que a NF-e (código, descrição, NCM, origem, unidade, valor, GTIN ou "SEM GTIN") e os
      * marketplaces (título, descrição, marca, categoria, condição, preço, peso e medidas do pacote)
-     * exigem. Sem isso o produto não é salvo pela tela; junta tudo que falta numa mensagem só.
-     * Imagem não entra aqui: só dá para enviar depois de salvar, e a falta dela aparece nos
-     * requisitos por canal e em "necessitam atenção" nos anúncios.
+     * exigem, a partir da linha gravada. Lista vazia = pronto. Quem envia para marketplace ou emite
+     * nota chama isto e recusa se faltar algo; salvar o cadastro não recusa (rascunho). Imagem não
+     * entra: cada canal tem a sua regra, conferida no "Pronto para anunciar?".
      */
-    private void exigirParaNotaEAnuncio(JsonNode n, Map<String, Object> c) {
+    static List<String> pendencias(Map<String, Object> p) {
         List<String> faltando = new ArrayList<>();
-        if (n.path("nome").asText("").isBlank()) faltando.add("Nome");
-        if (n.path("sku").asText("").isBlank()) faltando.add("Código (SKU)");
-        if (c.get("origem") == null) faltando.add("Origem (ICMS)");
-        if (c.get("ncm").toString().isEmpty()) faltando.add("NCM");
-        if (c.get("gtin") == null && c.get("motivo_sem_gtin") == null)
+        if (vazio(p.get("sku"))) faltando.add("Código (SKU)");
+        if (p.get("origem") == null) faltando.add("Origem (ICMS)");
+        if (vazio(p.get("ncm"))) faltando.add("NCM");
+        if (vazio(p.get("gtin")) && vazio(p.get("motivo_sem_gtin")))
             faltando.add("Código de barras ou motivo de não ter");
-        if (n.path("preco").asText("").isBlank()
-                || new BigDecimal(n.path("preco").asText("0").trim().replace(",", ".")).signum()
-                        <= 0) faltando.add("Preço de venda");
-        if (c.get("marca").toString().isBlank()) faltando.add("Marca");
-        if (n.path("categoria_id").asText("").isBlank()
-                && n.path("categoria_nome").asText("").isBlank()) faltando.add("Categoria");
-        if (c.get("descricao").toString().isBlank()) faltando.add("Descrição");
-        if (c.get("peso_bruto_kg") == null) faltando.add("Peso bruto");
+        if (!(p.get("preco") instanceof BigDecimal preco) || preco.signum() <= 0)
+            faltando.add("Preço de venda");
+        if (vazio(p.get("marca"))) faltando.add("Marca");
+        if (p.get("categoria_id") == null) faltando.add("Categoria");
+        if (vazio(p.get("descricao"))) faltando.add("Descrição");
+        if (p.get("peso_bruto_kg") == null) faltando.add("Peso bruto");
         boolean medidas =
-                c.get("largura_cm") != null
-                        && c.get("altura_cm") != null
-                        && c.get("comprimento_cm") != null;
-        boolean embalagem =
-                !n.path("embalagem_id").asText("").isBlank() || n.path("embalagem_nova").isObject();
-        if (!medidas && !embalagem)
+                p.get("largura_cm") != null
+                        && p.get("altura_cm") != null
+                        && p.get("comprimento_cm") != null;
+        if (!medidas && p.get("embalagem_id") == null)
             faltando.add("Medidas (largura, altura e comprimento) ou embalagem");
-        if (!faltando.isEmpty())
+        return faltando;
+    }
+
+    private static boolean vazio(Object v) {
+        return v == null || v.toString().isBlank();
+    }
+
+    /**
+     * Grava em incompleto se o produto e cada variação estão prontos para nota e marketplace.
+     * Devolve o que falta no produto principal ou, se ele estiver pronto, na primeira variação
+     * com falta.
+     */
+    private List<String> marcarPendencias(UUID id) {
+        List<String> doProduto = new ArrayList<>();
+        for (var linha :
+                db.queryForList(
+                        "select * from radar_produto where tenant_id=? and (id=? or pai_id=?)"
+                                + " order by pai_id nulls first",
+                        tenant(),
+                        id,
+                        id)) {
+            List<String> f = pendencias(linha);
+            db.update(
+                    "update radar_produto set incompleto=? where tenant_id=? and id=?",
+                    !f.isEmpty(),
+                    tenant(),
+                    linha.get("id"));
+            if (doProduto.isEmpty() && !f.isEmpty())
+                doProduto =
+                        linha.get("pai_id") == null
+                                ? f
+                                : f.stream().map(x -> x + " (variação " + linha.get("sku") + ")").toList();
+        }
+        return doProduto;
+    }
+
+    /** Recalcula a coluna incompleto depois de mudanças fora do formulário (lote, importação). */
+    void recalcularPendencias(List<UUID> ids) {
+        if (ids.isEmpty()) return;
+        for (var linha :
+                db.queryForList(
+                        "select * from radar_produto where tenant_id=? and id = any(?)",
+                        tenant(),
+                        ids.toArray(UUID[]::new)))
+            db.update(
+                    "update radar_produto set incompleto=? where tenant_id=? and id=?",
+                    !pendencias(linha).isEmpty(),
+                    tenant(),
+                    linha.get("id"));
+    }
+
+    /** SKU automático conforme Configurações do cadastro de produtos. Manual: SKU obrigatório. */
+    private String proximoSku() {
+        var cfg = RadarConfiguracao.produtos(db, json);
+        String modo = (String) cfg.get("sku_modo");
+        if (modo.equals("MANUAL"))
             erro(
-                    "Preencha o que a nota fiscal e os marketplaces exigem: "
-                            + String.join(", ", faltando)
-                            + ".");
+                    "Informe o código (SKU). Para o Radar gerar sozinho, ligue o SKU automático em"
+                            + " Configurações → cadastros.");
+        String prefixo = modo.equals("PREFIXO") ? (String) cfg.get("sku_prefixo") : "";
+        int digitos = (Integer) cfg.get("sku_digitos");
+        // O prefixo só tem letras, números e hífen (validado ao salvar a configuração).
+        Long ultimo =
+                db.queryForObject(
+                        "select max(substring(sku from ?)::numeric) from radar_produto where"
+                                + " tenant_id=? and sku ~ ?",
+                        Long.class,
+                        "^" + prefixo + "([0-9]{1,18})$",
+                        tenant(),
+                        "^" + prefixo + "[0-9]{1,18}$");
+        long proximo = (ultimo == null ? 0 : ultimo) + 1;
+        return prefixo + String.format("%0" + digitos + "d", proximo);
+    }
+
+    private static BigDecimal valorOuZero(JsonNode n, String campo) {
+        BigDecimal v = valorOpcional(n, campo);
+        return v == null ? BigDecimal.ZERO.setScale(2) : v;
     }
 
     /** Imagem enviada pelo formulário. Recusa formato, tamanho ou quantidade fora do limite. */
@@ -492,25 +575,25 @@ public class RadarProdutos {
             c.put("pai_id", paiId);
             c.put("atributos_variacao", paraJson(atributos));
             c.put("nome", pai.get("nome") + " - " + String.join(" / ", atributos.values()));
-            c.put("sku", texto(v, "sku", 80));
+            String skuVariacao = opcional(v, "sku", 80);
+            c.put("sku", skuVariacao == null ? skuDaVariacao(pai, atributos, id) : skuVariacao);
             c.put(
                     "preco",
                     v.path("preco").asText("").isBlank() ? pai.get("preco") : valor(v, "preco"));
             c.put(
                     "custo",
                     v.path("custo").asText("").isBlank() ? pai.get("custo") : valor(v, "custo"));
-            c.put("preco_promocional", valorOpcional(v, "preco_promocional"));
+            // A grade não tem promocional próprio: sem o campo, vale o do produto principal.
+            c.put(
+                    "preco_promocional",
+                    v.has("preco_promocional")
+                            ? valorOpcional(v, "preco_promocional")
+                            : pai.get("preco_promocional"));
             String gtin = opcional(v, "gtin", 14);
             if (gtin != null && !gtinValido(gtin))
                 erro("GTIN inválido na variação " + c.get("sku") + ".");
             c.put("gtin", gtin);
             c.put("motivo_sem_gtin", gtin == null ? pai.get("motivo_sem_gtin") : null);
-            if (gtin == null && pai.get("motivo_sem_gtin") == null)
-                erro(
-                        "Variação "
-                                + String.join(" / ", atributos.values())
-                                + ": informe o código de barras ou, no produto, o motivo de não"
-                                + " ter.");
             c.put("permite_venda", v.path("permite_venda").asBoolean(true));
             skuLivre((String) c.get("sku"), id);
             if (nova) {
@@ -537,6 +620,33 @@ public class RadarProdutos {
         }
     }
 
+    /** SKU da variação sem SKU informado: SKU do pai + valores (ex.: CAM-01-AZUL-P). */
+    private String skuDaVariacao(Map<String, Object> pai, Map<String, String> atributos, UUID id) {
+        StringBuilder b = new StringBuilder((String) pai.get("sku"));
+        for (String valor : atributos.values()) {
+            String limpo =
+                    java.text.Normalizer.normalize(valor, java.text.Normalizer.Form.NFD)
+                            .replaceAll("[^A-Za-z0-9]", "")
+                            .toUpperCase();
+            b.append('-').append(limpo, 0, Math.min(12, limpo.length()));
+        }
+        String base = b.length() > 76 ? b.substring(0, 76) : b.toString();
+        String sku = base;
+        for (int i = 2; skuEmUso(sku, id); i++) sku = base + "-" + i;
+        return sku;
+    }
+
+    private boolean skuEmUso(String sku, UUID id) {
+        Integer k =
+                db.queryForObject(
+                        "select count(*) from radar_produto where tenant_id=? and sku=? and id<>?",
+                        Integer.class,
+                        tenant(),
+                        sku,
+                        id);
+        return k != null && k > 0;
+    }
+
     // ---- kit ---------------------------------------------------------------------------------
 
     private List<Object[]> componentes(JsonNode n, UUID kitId) {
@@ -551,7 +661,8 @@ public class RadarProdutos {
             if (!vistos.add(componente)) erro("Produto repetido no kit.");
             var linhas =
                     db.queryForList(
-                            "select tipo, custo from radar_produto where tenant_id=? and id=?",
+                            "select tipo, custo from radar_produto where tenant_id=? and id=?"
+                                    + " and excluido_em is null",
                             tenant(),
                             componente);
             if (linhas.isEmpty()) erro("Produto do kit não encontrado.");
@@ -656,10 +767,266 @@ public class RadarProdutos {
         db.update(
                 "update radar_produto set "
                         + sets
-                        // Salvo pela tela, o produto criado por anúncio importado deixa de
-                        // ser incompleto.
-                        + ",incompleto=false,atualizado_em=now() where tenant_id=? and id=?",
+                        + ",atualizado_em=now() where tenant_id=? and id=?",
                 valores.toArray());
+    }
+
+    // ---- clonar e histórico -------------------------------------------------------------------
+
+    /** Colunas que não passam para a cópia: identidade, saldo e datas. */
+    private static final Set<String> NAO_CLONA =
+            Set.of(
+                    "id", "tenant_id", "criado_em", "atualizado_em", "excluido_em", "fisico",
+                    "reservado", "incompleto", "pai_id");
+
+    /**
+     * Copia o produto (e as variações, a composição do kit e os fornecedores) com SKU novo e
+     * estoque zero. Imagens só se pedir. Pedidos, anúncios e histórico ficam no original.
+     */
+    Map<String, Object> clonar(JsonNode n, String papel) {
+        permitir(papel, "DONO", "GESTOR");
+        UUID origem = id(n, "id");
+        var p = linhaParaAtualizar(origem);
+        if (p.get("excluido_em") != null) erro("Este produto está na lixeira. Restaure antes.");
+        if (p.get("pai_id") != null) erro("Clone pelo produto principal.");
+        UUID novo = UUID.randomUUID();
+        String sku = opcional(n, "sku", 80);
+        if (sku == null) {
+            String modo = (String) RadarConfiguracao.produtos(db, json).get("sku_modo");
+            sku = modo.equals("MANUAL") ? livre(p.get("sku") + "-COPIA", novo) : proximoSku();
+        } else skuLivre(sku, novo);
+        Map<String, Object> c = copia(p);
+        c.put("sku", sku);
+        String nome = p.get("nome") + " (cópia)";
+        c.put("nome", nome.length() > 250 ? nome.substring(0, 250) : nome);
+        c.put("origem_cadastro", "MANUAL");
+        c.put("fisico", 0);
+        inserir(novo, c);
+
+        String skuAntigo = (String) p.get("sku");
+        for (var v :
+                db.queryForList(
+                        "select * from radar_produto where tenant_id=? and pai_id=? order by sku",
+                        tenant(),
+                        origem)) {
+            UUID idVariacao = UUID.randomUUID();
+            String skuV = (String) v.get("sku");
+            skuV =
+                    skuV.startsWith(skuAntigo)
+                            ? sku + skuV.substring(skuAntigo.length())
+                            : skuV + "-COPIA";
+            if (skuV.length() > 80) skuV = skuV.substring(0, 80);
+            Map<String, Object> cv = copia(v);
+            cv.put("sku", livre(skuV, idVariacao));
+            cv.put("pai_id", novo);
+            cv.put("nome", c.get("nome") + v.get("nome").toString().substring(
+                    Math.min(v.get("nome").toString().length(), p.get("nome").toString().length())));
+            cv.put("origem_cadastro", "MANUAL");
+            cv.put("fisico", 0);
+            inserir(idVariacao, cv);
+            if (n.path("imagens").asBoolean(false)) copiarImagens((UUID) v.get("id"), idVariacao);
+        }
+        db.update(
+                "insert into radar_kit_item(tenant_id,kit_id,componente_id,quantidade) select"
+                        + " tenant_id,?,componente_id,quantidade from radar_kit_item where"
+                        + " tenant_id=? and kit_id=?",
+                novo,
+                tenant(),
+                origem);
+        db.update(
+                "insert into radar_produto_fornecedor(tenant_id,produto_id,fornecedor_id,"
+                        + "codigo_no_fornecedor) select tenant_id,?,fornecedor_id,"
+                        + "codigo_no_fornecedor from radar_produto_fornecedor where tenant_id=?"
+                        + " and produto_id=?",
+                novo,
+                tenant(),
+                origem);
+        if (n.path("imagens").asBoolean(false)) copiarImagens(origem, novo);
+        marcarPendencias(novo);
+        return Map.of(
+                "id", novo, "sku", sku, "mensagem", "Cópia criada com o SKU " + sku + ", estoque zero.");
+    }
+
+    private Map<String, Object> copia(Map<String, Object> linha) {
+        Map<String, Object> c = new LinkedHashMap<>();
+        // As chaves vêm das colunas da própria tabela (select *), não do pedido.
+        linha.forEach(
+                (k, v) -> {
+                    if (!NAO_CLONA.contains(k))
+                        c.put(k, JSONB.contains(k) && v != null ? v.toString() : v);
+                });
+        return c;
+    }
+
+    private String livre(String base, UUID id) {
+        String sku = base.length() > 76 ? base.substring(0, 76) : base;
+        String tentativa = sku;
+        for (int i = 2; skuEmUso(tentativa, id); i++) tentativa = sku + "-" + i;
+        return tentativa;
+    }
+
+    private void copiarImagens(UUID de, UUID para) {
+        db.update(
+                "insert into radar_produto_imagem(id,tenant_id,produto_id,ordem,tipo_conteudo,"
+                        + "dados) select gen_random_uuid(),tenant_id,?,ordem,tipo_conteudo,dados"
+                        + " from radar_produto_imagem where tenant_id=? and produto_id=?",
+                para,
+                tenant(),
+                de);
+    }
+
+    /**
+     * Linha do tempo do produto (e das variações): estoque, pedidos, compras planejadas e
+     * alterações do cadastro, com quem fez. Custo só para quem vê o financeiro.
+     */
+    Map<String, Object> historico(UUID id, boolean veCusto) {
+        var linhas =
+                db.queryForList(
+                        "select id from radar_produto where tenant_id=? and id=?", tenant(), id);
+        if (linhas.isEmpty())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Produto não encontrado.");
+        List<Map<String, Object>> eventos = new ArrayList<>();
+        for (var m :
+                db.queryForList(
+                        "select m.criado_em, m.tipo, m.fisico_delta, m.reserva_delta, m.motivo,"
+                                + " p.sku, u.nome ator from radar_movimento m join radar_produto"
+                                + " p on p.tenant_id=m.tenant_id and p.id=m.produto_id left join"
+                                + " usuario u on u.tenant_id=m.tenant_id and u.id=m.ator where"
+                                + " m.tenant_id=? and (p.id=? or p.pai_id=?) order by m.criado_em"
+                                + " desc limit 300",
+                        tenant(),
+                        id,
+                        id)) {
+            int fisico = ((Number) m.get("fisico_delta")).intValue();
+            int reserva = ((Number) m.get("reserva_delta")).intValue();
+            String qtd =
+                    fisico != 0
+                            ? (fisico > 0 ? "+" : "") + fisico + " no estoque"
+                            : (reserva > 0 ? "+" : "") + reserva + " reservado";
+            eventos.add(
+                    evento(
+                            m.get("criado_em"),
+                            "ESTOQUE",
+                            rotuloMovimento((String) m.get("tipo")) + " · " + qtd,
+                            m.get("motivo") + " (" + m.get("sku") + ")",
+                            m.get("ator")));
+        }
+        for (var v :
+                db.queryForList(
+                        "select v.criado_em, v.numero, v.canal, v.quantidade, v.preco, v.estado,"
+                                + " p.sku from radar_pedido v join radar_produto p on"
+                                + " p.tenant_id=v.tenant_id and p.id=v.produto_id where"
+                                + " v.tenant_id=? and (p.id=? or p.pai_id=?) order by v.criado_em"
+                                + " desc limit 300",
+                        tenant(),
+                        id,
+                        id))
+            eventos.add(
+                    evento(
+                            v.get("criado_em"),
+                            "VENDA",
+                            "Pedido " + v.get("numero") + " · " + v.get("canal"),
+                            v.get("quantidade")
+                                    + " × R$ "
+                                    + v.get("preco")
+                                    + " · "
+                                    + v.get("estado").toString().toLowerCase()
+                                    + " ("
+                                    + v.get("sku")
+                                    + ")",
+                            null));
+        for (var r :
+                db.queryForList(
+                        "select r.criado_em, r.dados->>'quantidade' quantidade,"
+                                + " r.dados->>'custo_unitario' custo, r.dados->>'recebida_em'"
+                                + " recebida from radar_registro r where r.tenant_id=? and"
+                                + " r.tipo='COMPRA' and r.dados->>'produto_id' in (select"
+                                + " id::text from radar_produto where tenant_id=? and (id=? or"
+                                + " pai_id=?)) order by r.criado_em desc limit 100",
+                        tenant(),
+                        tenant(),
+                        id,
+                        id))
+            eventos.add(
+                    evento(
+                            r.get("criado_em"),
+                            "COMPRA",
+                            r.get("recebida") == null ? "Compra planejada" : "Compra recebida",
+                            r.get("quantidade")
+                                    + " un."
+                                    + (veCusto ? " a R$ " + r.get("custo") + " cada" : ""),
+                            null));
+        for (var a :
+                db.queryForList(
+                        "select a.criado_em, a.operacao, a.detalhes->'resultado'->'antes' antes,"
+                                + " a.detalhes->'parametros'->>'acao' acao, u.nome ator from"
+                                + " radar_auditoria a left join usuario u on"
+                                + " u.tenant_id=a.tenant_id and u.id=a.ator where a.tenant_id=?"
+                                + " and (a.recurso=? or a.detalhes->'parametros'->'ids' @>"
+                                + " jsonb_build_array(?::text))"
+                                + " order by a.criado_em desc limit 300",
+                        tenant(),
+                        id.toString(),
+                        id.toString())) {
+            String detalhe = "";
+            if (a.get("antes") != null) {
+                try {
+                    JsonNode antes = json.readTree(a.get("antes").toString());
+                    detalhe =
+                            "Antes: "
+                                    + antes.path("nome").asText()
+                                    + " · preço R$ "
+                                    + antes.path("preco").asText()
+                                    + (veCusto ? " · custo R$ " + antes.path("custo").asText() : "");
+                } catch (Exception e) {
+                    detalhe = "";
+                }
+            }
+            eventos.add(
+                    evento(
+                            a.get("criado_em"),
+                            "CADASTRO",
+                            rotuloOperacao((String) a.get("operacao"), (String) a.get("acao")),
+                            detalhe,
+                            a.get("ator")));
+        }
+        eventos.sort(
+                (x, y) -> y.get("quando").toString().compareTo(x.get("quando").toString()));
+        return Map.of("eventos", eventos.size() > 500 ? eventos.subList(0, 500) : eventos);
+    }
+
+    private static Map<String, Object> evento(
+            Object quando, String tipo, String titulo, String detalhe, Object quem) {
+        Map<String, Object> e = new LinkedHashMap<>();
+        e.put("quando", quando instanceof java.sql.Timestamp t ? t.toInstant().toString() : quando.toString());
+        e.put("tipo", tipo);
+        e.put("titulo", titulo);
+        e.put("detalhe", detalhe);
+        e.put("quem", quem);
+        return e;
+    }
+
+    private static String rotuloMovimento(String tipo) {
+        return switch (tipo) {
+            case "ABERTURA" -> "Saldo inicial";
+            case "AJUSTE" -> "Ajuste de estoque";
+            case "COMPRA" -> "Entrada de compra";
+            case "RESERVA" -> "Reserva de pedido";
+            case "SAIDA", "EXPEDICAO" -> "Saída de pedido";
+            default -> tipo.charAt(0) + tipo.substring(1).toLowerCase().replace('_', ' ');
+        };
+    }
+
+    private static String rotuloOperacao(String op, String acao) {
+        return switch (op) {
+            case "produto_salvar" -> "Cadastro salvo";
+            case "produto_clonar" -> "Produto clonado";
+            case "imagem_adicionar" -> "Imagem adicionada";
+            case "imagem_remover" -> "Imagem removida";
+            case "imagem_principal" -> "Imagem principal trocada";
+            case "produtos_lote" -> "Ação em lote: " + (acao == null ? "" : acao.toLowerCase().replace('_', ' '));
+            default -> op.replace('_', ' ');
+        };
     }
 
     // ---- lote --------------------------------------------------------------------------------
@@ -691,20 +1058,34 @@ public class RadarProdutos {
                         arr);
         if (existentes == null || existentes != marcados.size())
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Produto não encontrado.");
+        String acao = n.path("acao").asText("");
+        // Restaurar e apagar de vez valem para o que está na lixeira; o resto, para o que não está.
+        boolean daLixeira = Set.of("RESTAURAR", "EXCLUIR_DEFINITIVO").contains(acao);
         List<UUID> alvo =
                 db.queryForList(
                         "select id from radar_produto where tenant_id=? and (id = any(?) or pai_id"
-                                + " = any(?))",
+                                + " = any(?)) and (excluido_em is not null) = ?",
                         UUID.class,
                         tenant(),
                         arr,
-                        arr);
-        String acao = n.path("acao").asText("");
+                        arr,
+                        daLixeira);
+        if (alvo.isEmpty())
+            erro(
+                    daLixeira
+                            ? "Nenhum dos produtos escolhidos está na lixeira."
+                            : "Os produtos escolhidos estão na lixeira. Restaure antes.");
         return switch (acao) {
-            case "EDITAR" -> editarEmMassa(n, alvo);
+            case "EDITAR" -> {
+                var r = editarEmMassa(n, alvo);
+                recalcularPendencias(alvo);
+                yield r;
+            }
             case "PREENCHER" -> {
                 if (marcados.size() != 1) erro("Preencha um produto por vez.");
-                yield preencher(n, marcados.getFirst(), alvo);
+                var r = preencher(n, marcados.getFirst(), alvo);
+                recalcularPendencias(alvo);
+                yield r;
             }
             case "TAGS" -> alterarTags(n, alvo);
             case "INATIVAR", "ATIVAR" -> {
@@ -732,7 +1113,23 @@ public class RadarProdutos {
                                 alvo.toArray(UUID[]::new));
                 yield Map.of("mensagem", k + " imagem(ns) removida(s) dos produtos.");
             }
-            case "EXCLUIR" -> excluirProdutos(alvo);
+            case "EXCLUIR" -> paraLixeira(alvo);
+            case "RESTAURAR" -> {
+                int k =
+                        db.update(
+                                "update radar_produto set excluido_em=null,atualizado_em=now()"
+                                        + " where tenant_id=? and id = any(?)",
+                                tenant(),
+                                alvo.toArray(UUID[]::new));
+                yield Map.of(
+                        "alterados",
+                        k,
+                        "mensagem",
+                        k
+                                + " produto(s) restaurado(s). Voltam inativos: libere para venda"
+                                + " quando quiser.");
+            }
+            case "EXCLUIR_DEFINITIVO" -> excluirDeVez(alvo);
             default -> {
                 erro("Ação em lote não reconhecida.");
                 yield Map.of();
@@ -992,7 +1389,59 @@ public class RadarProdutos {
      * de kit mantêm o produto (o número precisa continuar rastreável). Para esses, a saída é
      * inativar.
      */
-    private Map<String, Object> excluirProdutos(List<UUID> alvo) {
+    /**
+     * Manda para a lixeira: sai da venda e das listas, mas pedidos, estoque e histórico continuam
+     * apontando para ele. Não exclui componente de kit ativo (o kit ficaria sem estoque) nem
+     * produto com anúncio no ar.
+     */
+    private Map<String, Object> paraLixeira(List<UUID> alvo) {
+        UUID[] ids = alvo.toArray(UUID[]::new);
+        List<String> emKit =
+                db.queryForList(
+                        "select distinct p.sku from radar_produto p join radar_kit_item k on"
+                                + " k.tenant_id=p.tenant_id and k.componente_id=p.id join"
+                                + " radar_produto kit on kit.tenant_id=k.tenant_id and"
+                                + " kit.id=k.kit_id where p.tenant_id=? and p.id = any(?) and"
+                                + " kit.excluido_em is null and not (kit.id = any(?)) order by"
+                                + " p.sku",
+                        String.class,
+                        tenant(),
+                        ids,
+                        ids);
+        if (!emKit.isEmpty())
+            erro(
+                    "Estes produtos fazem parte de um kit ativo: "
+                            + String.join(", ", emKit)
+                            + ". Tire do kit ou exclua o kit junto.");
+        List<String> noAr =
+                db.queryForList(
+                        "select distinct p.sku from radar_produto p join radar_anuncio a on"
+                                + " a.tenant_id=p.tenant_id and a.produto_id=p.id where"
+                                + " p.tenant_id=? and p.id = any(?) and a.situacao_ecommerce"
+                                + " in ('ATIVO','PAUSADO') order by p.sku",
+                        String.class,
+                        tenant(),
+                        ids);
+        if (!noAr.isEmpty())
+            erro(
+                    "Estes produtos têm anúncio no marketplace: "
+                            + String.join(", ", noAr)
+                            + ". Encerre os anúncios antes de excluir.");
+        int k =
+                db.update(
+                        "update radar_produto set excluido_em=now(),permite_venda=false,"
+                                + "atualizado_em=now() where tenant_id=? and id = any(?)",
+                        tenant(),
+                        ids);
+        return Map.of(
+                "alterados",
+                k,
+                "mensagem",
+                k + " produto(s) na lixeira. Dá para restaurar quando quiser.");
+    }
+
+    /** Apaga de vez, da lixeira, só o que não tem histórico nenhum. */
+    private Map<String, Object> excluirDeVez(List<UUID> alvo) {
         UUID[] ids = alvo.toArray(UUID[]::new);
         List<String> presos =
                 db.queryForList(
@@ -1011,9 +1460,10 @@ public class RadarProdutos {
                         ids);
         if (!presos.isEmpty())
             erro(
-                    "Não dá para excluir produto com histórico (pedido, anúncio, estoque ou kit): "
+                    "Não dá para apagar de vez produto com histórico (pedido, anúncio, estoque ou"
+                            + " kit): "
                             + String.join(", ", presos)
-                            + ". Inative esses produtos em vez de excluir.");
+                            + ". Ele pode ficar na lixeira para sempre, sem atrapalhar.");
         for (String tabela : List.of("radar_produto_imagem", "radar_produto_fornecedor"))
             db.update(
                     "delete from " + tabela + " where tenant_id=? and produto_id = any(?)",
@@ -1028,7 +1478,7 @@ public class RadarProdutos {
                 tenant(),
                 ids);
         db.update("delete from radar_produto where tenant_id=? and id = any(?)", tenant(), ids);
-        return Map.of("mensagem", alvo.size() + " produto(s) excluído(s).");
+        return Map.of("mensagem", alvo.size() + " produto(s) apagado(s) de vez.");
     }
 
     private Map<String, Object> linhaParaAtualizar(UUID id) {

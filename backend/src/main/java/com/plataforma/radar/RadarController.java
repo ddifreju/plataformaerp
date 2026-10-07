@@ -117,6 +117,11 @@ public class RadarController {
                 .body((byte[]) l.get("logo"));
     }
 
+    @GetMapping("/produtos/{id}/historico")
+    public Map<String, Object> historicoProduto(@PathVariable UUID id) {
+        return service.historicoProduto(id);
+    }
+
     @GetMapping("/vendedores/{id}")
     public Map<String, Object> vendedor(@PathVariable UUID id) {
         return service.vendedor(id);

@@ -32,6 +32,7 @@ public class RadarService {
     private final RadarAnuncios anuncios;
     private final RadarVendedores vendedores;
     private final RadarEmpresa empresa;
+    private final RadarConfiguracao configuracao;
     private static final Set<String> CANAIS =
             Set.of("Mercado Livre", "Shopee", "TikTok Shop", "SHEIN");
 
@@ -45,7 +46,8 @@ public class RadarService {
             RadarClientes clientes,
             RadarAnuncios anuncios,
             RadarVendedores vendedores,
-            RadarEmpresa empresa) {
+            RadarEmpresa empresa,
+            RadarConfiguracao configuracao) {
         this.db = db;
         this.json = json;
         this.cadastros = cadastros;
@@ -56,6 +58,7 @@ public class RadarService {
         this.anuncios = anuncios;
         this.vendedores = vendedores;
         this.empresa = empresa;
+        this.configuracao = configuracao;
     }
 
     /** Usuário da requisição atual, para registrar quem fez cada movimento. */
@@ -118,6 +121,12 @@ public class RadarService {
     public void alterarSenhaVendedor(UUID vendedorId, String senha, String confirmacao) {
         vendedores.alterarSenha(papel(), vendedorId, senha, confirmacao);
         auditar("vendedor_senha_alterar", vendedorId.toString(), Map.of());
+    }
+
+    /** Linha do tempo do produto. Leitura: não entra na auditoria. */
+    @Transactional(readOnly = true)
+    public Map<String, Object> historicoProduto(UUID produtoId) {
+        return produtos.historico(produtoId, financeiro());
     }
 
     /** Cria um usuário do sistema. A auditoria registra quem criou, nunca a senha. */
@@ -360,7 +369,12 @@ public class RadarService {
         out.put("usuario", Map.of("id", user().usuarioId(), "nome", user().nome(), "papel", p));
         out.put("modo", "LOCAL");
         out.put("financeiroPermitido", f);
-        var produtos = rows("radar_produto");
+        // Sem o limite de 1.000 das outras listas: a lista de produtos precisa estar inteira.
+        var produtos =
+                db.queryForList(
+                        "select * from radar_produto where tenant_id=? order by criado_em desc"
+                                + " limit 50000",
+                        tenant());
         if (!f) produtos.forEach(x -> x.remove("custo"));
         out.put("produtos", produtos);
         out.put("anuncios", rows("radar_anuncio"));
@@ -453,6 +467,7 @@ public class RadarService {
         out.putAll(clientes.dados(p));
         out.putAll(vendedores.dados(p));
         out.putAll(empresa.dados(p));
+        out.putAll(configuracao.dados());
         out.putAll(promocoes.dados());
         out.putAll(this.produtos.dados());
         normalizarDinheiro(out);
@@ -668,6 +683,7 @@ public class RadarService {
                 permitir("DONO", "GESTOR", "MARKETING");
                 UUID pid = id(n, "produto_id");
                 var p = um("radar_produto", pid);
+                if (p.get("excluido_em") != null) erro("Este produto está na lixeira.");
                 if (bd(p.get("preco")).signum() <= 0)
                     erro("Cadastre um preço positivo no produto.");
                 int criados = 0;
@@ -725,6 +741,7 @@ public class RadarService {
                     erro("Importe entre 1 e 3.000 linhas.");
                 var ids = new ArrayList<UUID>();
                 for (JsonNode item : itens) ids.add(produto(item));
+                produtos.recalcularPendencias(ids);
                 result.put("importados", ids.size());
                 result.put(
                         "mensagem",
@@ -754,7 +771,10 @@ public class RadarService {
                 if (n.path("produto_id").asText("").isBlank())
                     erro("Escolha o produto do anúncio pelo nome ou SKU.");
                 UUID pid = id(n, "produto_id");
-                if ("VARIACAO".equals(um("radar_produto", pid).get("tipo")))
+                var produtoDoAnuncio = um("radar_produto", pid);
+                if (produtoDoAnuncio.get("excluido_em") != null)
+                    erro("Este produto está na lixeira.");
+                if ("VARIACAO".equals(produtoDoAnuncio.get("tipo")))
                     erro("Escolha a variação vendida (cor, tamanho…), não o produto pai.");
                 BigDecimal preco = valor(n, "preco");
                 if (preco.signum() == 0) erro("Preço deve ser maior que zero.");
@@ -1026,8 +1046,11 @@ public class RadarService {
                 else if (RadarClientes.OPERACOES.contains(op))
                     result.putAll(clientes.salvar(n, papel()));
                 else if (op.equals("produtos_lote")) result.putAll(produtos.lote(n, papel()));
+                else if (op.equals("produto_clonar")) result.putAll(produtos.clonar(n, papel()));
                 else if (RadarProdutos.OPERACOES.contains(op))
                     result.putAll(produtos.salvar(n, papel()));
+                else if (RadarConfiguracao.OPERACOES.contains(op))
+                    result.putAll(configuracao.salvar(n, papel()));
                 else if (RadarPromocoes.OPERACOES.contains(op))
                     result.putAll(promocoes.executar(op, n, papel()));
                 else erro("Operação não reconhecida.");
@@ -1487,6 +1510,8 @@ public class RadarService {
 
     /** Kit e produto com variações não têm saldo próprio. */
     private void exigirEstoqueProprio(Map<String, Object> p) {
+        if (p.get("excluido_em") != null)
+            erro("Este produto está na lixeira. Restaure antes de mexer no estoque.");
         if ("KIT".equals(p.get("tipo")))
             erro("O estoque do kit vem dos componentes. Ajuste os produtos que o compõem.");
         if ("VARIACAO".equals(p.get("tipo")))
