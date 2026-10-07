@@ -52,7 +52,16 @@ export function Empty({
     </div>
   );
 }
-export function Table({ headers, rows }: { headers: ReactNode[]; rows: ReactNode[][] }) {
+export function Table({
+  headers,
+  rows,
+  vazio,
+}: {
+  headers: ReactNode[];
+  rows: ReactNode[][];
+  /** Texto quando não há linhas (ex.: filtro sem resultado). */
+  vazio?: string;
+}) {
   return rows.length ? (
     <div className="rd-table-wrap">
       <table>
@@ -75,6 +84,6 @@ export function Table({ headers, rows }: { headers: ReactNode[]; rows: ReactNode
       </table>
     </div>
   ) : (
-    <Empty />
+    <Empty text={vazio} />
   );
 }

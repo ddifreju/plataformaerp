@@ -131,7 +131,7 @@ public class RadarClientes {
         var clientes =
                 db.queryForList(
                         "select c.id, c.codigo, c.nome, c.fantasia, c.tipo_pessoa, c.documento,"
-                            + " c.email, c.telefone, c.celular, c.cidade, c.uf, c.status_crm,"
+                            + " c.email, c.telefone, c.celular, c.cep, c.cidade, c.uf, c.status_crm,"
                             + " c.origem, c.incompleto, c.ativo, c.lista_preco,"
                             + " c.tipos_contato::text tipos_contato, c.vendedor_id,"
                             + " c.prazo_entrega_dias, c.criado_em, coalesce(h.pedidos,0) pedidos,"
