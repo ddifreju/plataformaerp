@@ -38,7 +38,9 @@ import Categorias from "./categorias";
 import Embalagens from "./embalagens";
 
 type Data = {
-  usuario: { nome: string; papel: string };
+  usuario: { id: string; nome: string; papel: string };
+  empresa?: Row;
+  usuarios?: Row[];
   financeiroPermitido: boolean;
   porCanal: Row[];
   porSku: Row[];
@@ -67,6 +69,12 @@ type Data = {
   imagens: Row[];
 };
 const canais = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
+// "Loja da Ana" vira "LA"; um nome só vira as duas primeiras letras.
+function iniciaisEmpresa(nome: string) {
+  const partes = nome.split(/\s+/).filter((p) => p.length > 2 || /^[A-Z0-9]/.test(p));
+  const letras = partes.length > 1 ? partes[0][0] + partes[1][0] : nome.slice(0, 2);
+  return letras.toUpperCase();
+}
 const nav = [
   ["visao", "Painel", "⌂"],
   ["missao", "Central de ações", "◎"],
@@ -473,6 +481,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       ),
   );
   const rotuloDe = (id: string) => nav.find((x) => x[0] === id)?.[1] ?? id;
+  const nomeEmpresa =
+    str(data.empresa?.nome_fantasia) || str(data.empresa?.razao_social) || "Meu espaço Radar";
   return (
     <div className="radar-app">
       <aside className={`rd-sidebar ${menu ? "open" : ""}`}>
@@ -480,9 +490,10 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           <span className="rd-brand-icon">◉</span>radar<span className="rd-brand-dot">.</span>
         </a>
         <div className="rd-company">
-          <div>CC</div>
+          <div>{iniciaisEmpresa(nomeEmpresa)}</div>
           <span>
-            Meu espaço Radar<small>Operação local</small>
+            {nomeEmpresa}
+            <small>Operação local</small>
           </span>
           <b>⌄</b>
         </div>
@@ -1919,7 +1930,18 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             </section>
           )}
           {page === "guia" && <Guide step={tour} onStep={setTour} go={go} />}
-          {page === "configuracoes" && <Configuracoes go={go} />}
+          {page === "configuracoes" && (
+            <Configuracoes
+              go={go}
+              empresa={data.empresa ?? {}}
+              usuarios={data.usuarios ?? []}
+              papel={data.usuario.papel}
+              euId={data.usuario.id}
+              executar={commandResult}
+              atualizar={refresh}
+              avisar={setNotice}
+            />
+          )}
           {!data.financeiroPermitido && ["financeiro", "precos", "relatorios"].includes(page) && (
             <Empty text="Seu cargo não tem acesso a dados financeiros." />
           )}

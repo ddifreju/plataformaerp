@@ -3075,3 +3075,45 @@ ul.rd-menu-linha li button:disabled {
   padding: 2px 6px;
   color: var(--rd-muted);
 }
+.rd-config-secao {
+  margin: 0 0 14px;
+  font-size: 15px;
+}
+.rd-produto-form > .rd-card + .rd-card {
+  margin-top: 14px;
+}
+.rd-config-logo {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.rd-config-logo img,
+.rd-config-logo-vazio {
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+  border: 1px solid var(--rd-line);
+  border-radius: 12px;
+  background: #fff;
+}
+.rd-config-logo-vazio {
+  display: grid;
+  place-items: center;
+  color: var(--rd-muted);
+  font-size: 13px;
+}
+.rd-config-logo > div {
+  display: grid;
+  gap: 8px;
+}
+.rd-config-cargos {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: var(--rd-muted);
+}
+.rd-config-cargos strong {
+  color: var(--rd-ink, inherit);
+}

@@ -6,8 +6,9 @@
 // ganham a sua tela quando forem detalhados (um por vez).
 
 import { useState } from "react";
+import { DadosEmpresa, UsuariosSistema } from "./configuracoes-geral";
 import { normal } from "./produtos-filtros";
-import { Badge } from "./ui";
+import { Badge, type Row } from "./ui";
 
 type Selo = "funciona" | "sugestao" | "cnpj" | "pendente";
 
@@ -20,6 +21,8 @@ type Item = {
   selo?: Selo;
   /** Página do Radar que já faz isso: o item leva para lá. */
   pagina?: string;
+  /** Tela que abre aqui mesmo, dentro de Configurações. */
+  tela?: "empresa" | "usuarios";
 };
 
 const SELOS: Record<Selo, [string, string]> = {
@@ -59,7 +62,9 @@ const ITENS: Record<string, Item[]> = {
       id: "empresa",
       titulo: "Alterar dados da empresa",
       descricao: "Razão social, nome fantasia, CNPJ, inscrições, endereço, logo e contato.",
-      chaves: "cnpj razao social logo endereco inscricao estadual",
+      chaves: "cnpj razao social logo endereco inscricao estadual regime tributario",
+      selo: "funciona",
+      tela: "empresa",
     },
     {
       id: "usuario",
@@ -71,7 +76,9 @@ const ITENS: Record<string, Item[]> = {
       id: "usuarios",
       titulo: "Cadastro de usuários do sistema",
       descricao: "Quem acessa o Radar, com qual cargo e o que cada um pode ver e fazer.",
-      chaves: "permissoes acesso cargo equipe login",
+      chaves: "permissoes acesso cargo equipe login funcionario senha",
+      selo: "funciona",
+      tela: "usuarios",
     },
     {
       id: "email",
@@ -856,7 +863,20 @@ const ITENS: Record<string, Item[]> = {
   ],
 };
 
-export default function Configuracoes({ go }: { go: (pagina: string) => void }) {
+type Props = {
+  go: (pagina: string) => void;
+  empresa: Row;
+  usuarios: Row[];
+  papel: string;
+  euId: string;
+  executar: (corpo: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
+  atualizar: () => Promise<void>;
+  avisar: (mensagem: string) => void;
+};
+
+export default function Configuracoes(props: Props) {
+  const { go } = props;
+  const [tela, setTela] = useState<Item["tela"]>(undefined);
   const [aba, setAba] = useState("geral");
   const [busca, setBusca] = useState("");
   const [aberto, setAberto] = useState<Item | null>(null);
@@ -877,13 +897,39 @@ export default function Configuracoes({ go }: { go: (pagina: string) => void }) 
   const rotuloAba = (id: string) => ABAS.find((a) => a.id === id)?.rotulo ?? id;
   const aviso = !termo && !avisosFechados.includes(aba) ? AVISOS[aba] : undefined;
 
+  function abrir(i: Item) {
+    if (i.pagina) go(i.pagina);
+    else if (i.tela === "usuarios" && props.papel !== "DONO")
+      setAberto({ ...i, descricao: "Só a dona da conta cadastra e altera usuários." });
+    else if (i.tela) setTela(i.tela);
+    else setAberto(i);
+  }
+
+  if (tela === "empresa")
+    return (
+      <DadosEmpresa
+        empresa={props.empresa}
+        podeEditar={props.papel === "DONO"}
+        executar={props.executar}
+        atualizar={props.atualizar}
+        voltar={() => setTela(undefined)}
+      />
+    );
+  if (tela === "usuarios")
+    return (
+      <UsuariosSistema
+        usuarios={props.usuarios}
+        euId={props.euId}
+        executar={props.executar}
+        atualizar={props.atualizar}
+        avisar={props.avisar}
+        voltar={() => setTela(undefined)}
+      />
+    );
+
   const linha = (i: Item, idAba?: string) => (
     <li key={`${idAba ?? aba}-${i.id}`}>
-      <button
-        type="button"
-        className="rd-config-item"
-        onClick={() => (i.pagina ? go(i.pagina) : setAberto(i))}
-      >
+      <button type="button" className="rd-config-item" onClick={() => abrir(i)}>
         <span>
           <strong>
             {i.titulo}
@@ -984,9 +1030,12 @@ export default function Configuracoes({ go }: { go: (pagina: string) => void }) 
               </button>
             </div>
             <p>{aberto.descricao}</p>
-            <p className="rd-note">
-              Esta configuração ainda está sendo desenhada. Ela entra no ar assim que for detalhada.
-            </p>
+            {!aberto.tela && (
+              <p className="rd-note">
+                Esta configuração ainda está sendo desenhada. Ela entra no ar assim que for
+                detalhada.
+              </p>
+            )}
             <div className="rd-modal-foot">
               <button className="primary" onClick={() => setAberto(null)}>
                 Entendi

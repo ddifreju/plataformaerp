@@ -82,6 +82,41 @@ public class RadarController {
         return Map.of("mensagem", "Senha de acesso alterada.");
     }
 
+    @PostMapping(value = "/usuarios", consumes = "application/json")
+    public Map<String, Object> criarUsuario(@RequestBody JsonNode body) {
+        UUID id = service.criarUsuario(body);
+        return Map.of("id", id, "mensagem", "Usuário criado. Passe o e-mail e a senha para a pessoa.");
+    }
+
+    @PostMapping(value = "/usuarios/{id}/senha", consumes = "application/json")
+    public Map<String, Object> senhaUsuario(@PathVariable UUID id, @RequestBody JsonNode body) {
+        service.alterarSenhaUsuario(
+                id, body.path("senha").asText(null), body.path("confirmacao").asText(null));
+        return Map.of("mensagem", "Senha alterada.");
+    }
+
+    @PostMapping(value = "/empresa/logo", consumes = "multipart/form-data")
+    public Map<String, Object> enviarLogo(@RequestParam("arquivo") MultipartFile arquivo)
+            throws IOException {
+        service.salvarLogo(arquivo.getBytes(), arquivo.getContentType());
+        return Map.of("mensagem", "Logo atualizado.");
+    }
+
+    @DeleteMapping("/empresa/logo")
+    public Map<String, Object> removerLogo() {
+        service.removerLogo();
+        return Map.of("mensagem", "Logo removido.");
+    }
+
+    @GetMapping("/empresa/logo")
+    public ResponseEntity<byte[]> logo() {
+        var l = service.logo();
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType((String) l.get("logo_tipo")))
+                .cacheControl(CacheControl.noCache().cachePrivate())
+                .body((byte[]) l.get("logo"));
+    }
+
     @GetMapping("/vendedores/{id}")
     public Map<String, Object> vendedor(@PathVariable UUID id) {
         return service.vendedor(id);
