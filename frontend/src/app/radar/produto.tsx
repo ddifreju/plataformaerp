@@ -6,7 +6,7 @@
 // O servidor valida e calcula (custo do kit, GTIN, estoque); a tela só
 // organiza o preenchimento e mostra o que falta para anunciar.
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Badge, Empty, Table, cents, centMoney, money, str, type ModalSpec, type Row } from "./ui";
 import { verNaCentral } from "./anuncios";
 
@@ -25,7 +25,7 @@ type LinhaGrade = {
 
 const CANAIS = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 
-const ORIGENS: [string, string][] = [
+export const ORIGENS: [string, string][] = [
   ["0", "0 - Nacional, exceto as indicadas nos códigos 3, 4, 5 e 8"],
   ["1", "1 - Estrangeira, importação direta"],
   ["2", "2 - Estrangeira, adquirida no mercado interno"],
@@ -37,7 +37,7 @@ const ORIGENS: [string, string][] = [
   ["8", "8 - Nacional, conteúdo de importação acima de 70%"],
 ];
 
-const UNIDADES: [string, string][] = [
+export const UNIDADES: [string, string][] = [
   ["UN", "Unidade"],
   ["PC", "Peça"],
   ["CX", "Caixa"],
@@ -88,6 +88,7 @@ const ABAS = [
   ["anuncios", "Anúncios e SEO"],
   ["fornecedores", "Fornecedores"],
   ["observacoes", "Observações"],
+  ["historico", "Histórico"],
 ] as const;
 
 export type Aba = (typeof ABAS)[number][0];
@@ -115,6 +116,8 @@ type Props = {
   // Chamado após salvar: o pai recarrega a tela com o produto atualizado.
   aoSalvar: (id: string, aba: Aba) => void;
   abaInicial?: Aba;
+  /** Configurações do cadastro de produtos (SKU automático e valores padrão). */
+  config?: Record<string, unknown>;
 };
 
 const CAMPOS_TEXTO = [
@@ -164,7 +167,7 @@ const CAMPOS_TEXTO = [
   "observacoes_internas",
 ];
 
-function valoresIniciais(p: Row | null): Valores {
+function valoresIniciais(p: Row | null, cfg: Record<string, unknown> = {}): Valores {
   const v: Valores = {
     tipo: str(p?.tipo) || "SIMPLES",
     controla_estoque: p ? p.controla_estoque !== false : true,
@@ -174,11 +177,13 @@ function valoresIniciais(p: Row | null): Valores {
   };
   for (const c of CAMPOS_TEXTO) v[c] = p?.[c] == null ? "" : str(p[c]);
   if (!p) {
-    v.unidade = "UN";
+    // Valores padrão de Configurações → cadastros → Configurações do cadastro de produtos.
+    v.unidade = str(cfg.unidade_padrao) || "UN";
+    v.ncm = str(cfg.ncm_padrao);
     v.condicao = "NOVO";
     v.formato_embalagem = "PACOTE_CAIXA";
     v.volumes = "1";
-    v.origem = "0";
+    v.origem = str(cfg.origem_padrao) || "0";
     v.minimo = "5";
   }
   return v;
@@ -215,7 +220,7 @@ function Campo({
   rotulo: string;
   dica?: string;
   largo?: boolean;
-  // Exigido pela nota fiscal ou pelos marketplaces: sem ele o produto não salva.
+  // Exigido pela nota fiscal ou pelos marketplaces: sem ele o produto fica como rascunho.
   obrigatorio?: boolean;
   children: ReactNode;
 }) {
@@ -242,12 +247,15 @@ export default function ProdutoForm({
   voltar,
   aoSalvar,
   abaInicial = "geral",
+  config = {},
 }: Props) {
   const novo = !produto;
   const id = produto ? str(produto.id) : null;
+  const skuAutomatico = str(config.sku_modo || "MANUAL") !== "MANUAL";
   const [aba, setAba] = useState<Aba>(abaInicial);
   const [markupTexto, setMarkupTexto] = useState("");
-  const [v, setV] = useState<Valores>(() => valoresIniciais(produto));
+  const [clonando, setClonando] = useState<{ imagens: boolean } | null>(null);
+  const [v, setV] = useState<Valores>(() => valoresIniciais(produto, config));
   const [categoriaTexto, setCategoriaTexto] = useState(() =>
     str(dados.categorias.find((c) => c.id === produto?.categoria_id)?.nome),
   );
@@ -365,7 +373,8 @@ export default function ProdutoForm({
         return (
           existente ?? {
             atributos: a,
-            sku: [str(v.sku), ...tipos.map((t) => slug(a[t]))].filter(Boolean).join("-"),
+            // Sem SKU no principal (SKU automático), o Radar gera o da variação ao salvar.
+            sku: str(v.sku) ? [str(v.sku), ...tipos.map((t) => slug(a[t]))].join("-") : "",
             preco: "",
             custo: "",
             gtin: "",
@@ -409,12 +418,11 @@ export default function ProdutoForm({
     return base;
   }
 
-  // Mesma regra do servidor (nota fiscal + marketplaces), para levar direto à aba.
+  // Mesma regra do servidor (nota fiscal + marketplaces). Não impede salvar: o produto fica
+  // como rascunho e a lista leva direto à aba de cada pendência.
   function faltando(): [string, Aba][] {
     const f: [string, Aba][] = [];
     const vazio = (k: string) => !str(v[k]).trim();
-    if (vazio("nome")) f.push(["Nome", "geral"]);
-    if (vazio("sku")) f.push(["Código (SKU)", "geral"]);
     if (vazio("gtin") && vazio("motivo_sem_gtin"))
       f.push(["Código de barras ou motivo de não ter", "geral"]);
     if (vazio("marca")) f.push(["Marca", "geral"]);
@@ -432,12 +440,16 @@ export default function ProdutoForm({
 
   async function salvar() {
     setErro("");
-    const f = faltando();
-    if (f.length) {
+    if (!str(v.nome).trim()) {
+      setErro("Dê um nome ao produto para salvar.");
+      setAba("geral");
+      return;
+    }
+    if (!skuAutomatico && !str(v.sku).trim()) {
       setErro(
-        `Preencha o que a nota fiscal e os marketplaces exigem: ${f.map((x) => x[0]).join(", ")}.`,
+        "Informe o código (SKU). Para o Radar gerar sozinho, ligue o SKU automático em Configurações → cadastros.",
       );
-      setAba(f[0][1]);
+      setAba("geral");
       return;
     }
     setSalvando(true);
@@ -548,8 +560,15 @@ export default function ProdutoForm({
         <Campo rotulo="Nome do produto" obrigatorio largo>
           {entrada("nome", { maxLength: 250 })}
         </Campo>
-        <Campo rotulo="Código (SKU)" obrigatorio>
-          {entrada("sku", { maxLength: 80 })}
+        <Campo
+          rotulo="Código (SKU)"
+          obrigatorio={!skuAutomatico}
+          dica={skuAutomatico && !str(v.sku) ? "Em branco, o Radar gera ao salvar." : undefined}
+        >
+          {entrada("sku", {
+            maxLength: 80,
+            placeholder: skuAutomatico ? "Automático" : undefined,
+          })}
         </Campo>
         <Campo
           rotulo="Código de barras (GTIN/EAN)"
@@ -1462,7 +1481,20 @@ export default function ProdutoForm({
         />
       </Campo>
     ),
+    historico: id ? (
+      <Historico id={id} />
+    ) : (
+      <p className="rd-note">Salve o produto para começar o histórico.</p>
+    ),
   };
+  const pendentes = faltando();
+
+  async function clonar() {
+    if (!id || !clonando) return;
+    const r = await executar({ op: "produto_clonar", id, imagens: clonando.imagens });
+    setClonando(null);
+    if (r) aoSalvar(str(r.id), "geral");
+  }
 
   return (
     <div className="rd-produto-form">
@@ -1474,6 +1506,11 @@ export default function ProdutoForm({
           {str(v.nome) || (novo ? "Novo produto" : "Produto")}
           {str(v.sku) && <small> · {str(v.sku)}</small>}
         </span>
+        {!novo && (
+          <button type="button" onClick={() => setClonando({ imagens: true })}>
+            ⧉ Clonar
+          </button>
+        )}
         <button type="button" className="primary" disabled={salvando} onClick={salvar}>
           {salvando ? "Salvando…" : "Salvar produto"}
         </button>
@@ -1481,6 +1518,57 @@ export default function ProdutoForm({
       {erro && (
         <div className="rd-error" role="alert">
           {erro}
+        </div>
+      )}
+      {pendentes.length > 0 && (
+        <div className="rd-pendencias-produto" role="note">
+          <strong>Rascunho.</strong> Dá para salvar assim; para anunciar e emitir nota, falta:{" "}
+          {pendentes.map(([rotulo, destino], i) => (
+            <span key={rotulo}>
+              {i > 0 && ", "}
+              <button type="button" className="text" onClick={() => setAba(destino)}>
+                {rotulo}
+              </button>
+            </span>
+          ))}
+          .
+        </div>
+      )}
+      {clonando && (
+        <div className="rd-modal-backdrop" onClick={() => setClonando(null)}>
+          <section
+            className="rd-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Clonar produto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="rd-card-head">
+              <h2>Clonar produto</h2>
+              <button aria-label="Fechar" onClick={() => setClonando(null)}>
+                ×
+              </button>
+            </div>
+            <p>
+              Cria uma cópia de <strong>{str(v.nome)}</strong> com SKU novo e estoque zero.
+              Variações, composição do kit e fornecedores vêm junto. Pedidos, anúncios e histórico
+              ficam no original.
+            </p>
+            <label className="rd-check">
+              <input
+                type="checkbox"
+                checked={clonando.imagens}
+                onChange={(e) => setClonando({ imagens: e.target.checked })}
+              />
+              Copiar as imagens também
+            </label>
+            <div className="rd-modal-foot">
+              <button onClick={() => setClonando(null)}>Cancelar</button>
+              <button className="primary" onClick={clonar}>
+                Clonar
+              </button>
+            </div>
+          </section>
         </div>
       )}
       <div className="rd-tabs" role="tablist" aria-label="Seções do cadastro do produto">
@@ -1549,6 +1637,82 @@ function ParesEditor({
       <button type="button" onClick={() => mudar([...pares, { nome: "", valor: "" }])}>
         + Adicionar
       </button>
+    </div>
+  );
+}
+
+type Evento = {
+  quando: string;
+  tipo: string;
+  titulo: string;
+  detalhe: string;
+  quem: string | null;
+};
+
+const TIPOS_EVENTO: Record<string, [string, string]> = {
+  ESTOQUE: ["Estoque", "blue"],
+  VENDA: ["Venda", "green"],
+  COMPRA: ["Compra", "amber"],
+  CADASTRO: ["Cadastro", "gray"],
+};
+
+/** Linha do tempo do produto: estoque, vendas, compras e alterações, com quem fez. */
+function Historico({ id }: { id: string }) {
+  const [eventos, setEventos] = useState<Evento[] | null>(null);
+  const [erro, setErro] = useState("");
+  const [filtro, setFiltro] = useState("");
+
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/radar/produtos/${id}/historico`, { credentials: "include" })
+      .then(async (r) => ({ ok: r.ok, corpo: await r.json().catch(() => ({})) }))
+      .then(({ ok, corpo }) => {
+        if (!vivo) return;
+        if (!ok) setErro(str(corpo.mensagem) || "Não foi possível carregar o histórico.");
+        else setEventos((corpo.eventos ?? []) as Evento[]);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [id]);
+
+  if (erro) return <div className="rd-error">{erro}</div>;
+  if (!eventos) return <p className="rd-note">Carregando o histórico…</p>;
+  const visiveis = filtro ? eventos.filter((e) => e.tipo === filtro) : eventos;
+  return (
+    <div className="rd-historico">
+      <div className="rd-opcoes" role="group" aria-label="Filtrar histórico">
+        {[["", "Tudo"], ...Object.entries(TIPOS_EVENTO).map(([k, [r]]) => [k, r])].map(([k, r]) => (
+          <label key={k} className={filtro === k ? "ativo" : ""}>
+            <input
+              type="radio"
+              name="historico-filtro"
+              checked={filtro === k}
+              onChange={() => setFiltro(k)}
+            />
+            {r}
+          </label>
+        ))}
+      </div>
+      {visiveis.length === 0 ? (
+        <p className="rd-note">Nada registrado ainda.</p>
+      ) : (
+        <ol className="rd-linha-tempo">
+          {visiveis.map((e, i) => (
+            <li key={i}>
+              <time>{new Date(e.quando).toLocaleString("pt-BR")}</time>
+              <div>
+                <Badge tone={TIPOS_EVENTO[e.tipo]?.[1]}>
+                  {TIPOS_EVENTO[e.tipo]?.[0] ?? e.tipo}
+                </Badge>{" "}
+                <strong>{e.titulo}</strong>
+                {e.detalhe && <small>{e.detalhe}</small>}
+                {e.quem && <small>por {e.quem}</small>}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }

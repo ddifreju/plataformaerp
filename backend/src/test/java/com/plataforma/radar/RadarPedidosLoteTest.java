@@ -48,7 +48,8 @@ class RadarPedidosLoteTest {
                         new RadarClientes(db, json),
                         new RadarAnuncios(db),
                         new RadarVendedores(db, json, new BCryptPasswordEncoder(12)),
-                        new RadarEmpresa(db, new BCryptPasswordEncoder(12)));
+                        new RadarEmpresa(db, new BCryptPasswordEncoder(12)),
+                        new RadarConfiguracao(db, json));
     }
 
     @AfterEach

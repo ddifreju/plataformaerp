@@ -66,6 +66,7 @@ public class RadarAnuncios {
     private Map<String, Object> relacionar(JsonNode n) {
         UUID produto = id(n, "produto_id");
         var p = produto(produto);
+        if (p.get("excluido_em") != null) erro("Este produto está na lixeira.");
         if ("VARIACAO".equals(p.get("tipo")))
             erro("Vincule à variação vendida (cor, tamanho…), não ao produto pai.");
         List<UUID> ids = ids(n.path("ids"));
@@ -468,7 +469,7 @@ public class RadarAnuncios {
     private Map<String, Object> produto(UUID id) {
         var linhas =
                 db.queryForList(
-                        "select sku, tipo from radar_produto where tenant_id=? and id=?",
+                        "select sku, tipo, excluido_em from radar_produto where tenant_id=? and id=?",
                         tenant(),
                         id);
         if (linhas.isEmpty()) erro("Produto não encontrado.");

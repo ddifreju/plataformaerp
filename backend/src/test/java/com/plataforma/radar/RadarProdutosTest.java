@@ -311,47 +311,6 @@ class RadarProdutosTest {
     // ---- apoio -----------------------------------------------------------------------------
 
     @Test
-    void semDadosDeNotaEAnuncioNaoSalvaEListaOQueFalta() {
-        var erro =
-                assertThrows(
-                        ResponseStatusException.class,
-                        () ->
-                                salvar(
-                                        empresaA,
-                                        "{\"tipo\":\"SIMPLES\",\"sku\":\"FALTA-1\",\"nome\":\"X\","
-                                                + "\"preco\":\"10.00\",\"custo\":\"1.00\"}"));
-        for (String campo :
-                List.of(
-                        "Origem",
-                        "NCM",
-                        "Código de barras",
-                        "Marca",
-                        "Categoria",
-                        "Descrição",
-                        "Peso bruto",
-                        "Medidas")) assertTrue(erro.getReason().contains(campo), campo);
-    }
-
-    @Test
-    void embalagemValeNoLugarDasMedidas() {
-        String semMedidas =
-                base("EMB-1")
-                        .replace(
-                                ",\"largura_cm\":\"10\",\"altura_cm\":\"10\",\"comprimento_cm\":\"10\"",
-                                "");
-        assertThrows(ResponseStatusException.class, () -> salvar(empresaA, "{" + semMedidas + "}"));
-        UUID id =
-                salvar(
-                        empresaA,
-                        "{"
-                                + semMedidas
-                                + ",\"embalagem_nova\":{\"nome\":\"Caixa"
-                                + " EMB-1\",\"largura_cm\":\"20\","
-                                + "\"altura_cm\":\"10\",\"comprimento_cm\":\"30\"}}");
-        assertNotNull(id);
-    }
-
-    @Test
     void loteReajustaPrecoEmPercentualComArredondamentoEAlcancaVariacoes() {
         UUID simples = salvar(empresaA, "{" + base("LOTE-P1") + "}");
         naEmpresa(
@@ -419,45 +378,6 @@ class RadarProdutosTest {
     }
 
     @Test
-    void loteExcluiSoProdutoSemHistoricoEOutraEmpresaNaoAlcanca() {
-        UUID novo = salvar(empresaA, "{" + base("LOTE-X1") + "}");
-        UUID comEstoque = salvar(empresaA, "{" + base("LOTE-X2") + ",\"saldo\":\"3\"}");
-        var preso =
-                assertThrows(
-                        ResponseStatusException.class,
-                        () ->
-                                lote(
-                                        "{\"acao\":\"EXCLUIR\",\"ids\":[\""
-                                                + novo
-                                                + "\",\""
-                                                + comEstoque
-                                                + "\"]}"));
-        assertTrue(preso.getReason().contains("LOTE-X2"));
-        assertThrows(
-                ResponseStatusException.class,
-                () ->
-                        naEmpresa(
-                                empresaB,
-                                () ->
-                                        produtos.lote(
-                                                json(
-                                                        "{\"acao\":\"EXCLUIR\",\"ids\":[\""
-                                                                + novo
-                                                                + "\"]}"),
-                                                "DONO")));
-        lote("{\"acao\":\"EXCLUIR\",\"ids\":[\"" + novo + "\"]}");
-        assertEquals(
-                0L,
-                naEmpresa(
-                        empresaA,
-                        () ->
-                                db.queryForObject(
-                                        "select count(*) from radar_produto where id=?",
-                                        Long.class,
-                                        novo)));
-    }
-
-    @Test
     void preencherCompletaUmProdutoPorVez() {
         UUID a = salvar(empresaA, "{" + base("PREENCHE-1") + "}");
         UUID b = salvar(empresaA, "{" + base("PREENCHE-2") + "}");
@@ -488,6 +408,268 @@ class RadarProdutosTest {
                                         + "\",\""
                                         + b
                                         + "\"]}"));
+    }
+
+    @Test
+    void semDadosDeNotaEAnuncioSalvaComoRascunhoEListaOQueFalta() {
+        var r =
+                naEmpresa(
+                        empresaA,
+                        () ->
+                                produtos.salvar(
+                                        json(
+                                                "{\"tipo\":\"SIMPLES\",\"sku\":\"FALTA-1\",\"nome\":\"X\"}"),
+                                        "DONO"));
+        String msg = (String) r.get("mensagem");
+        assertTrue(msg.contains("rascunho"), msg);
+        for (String campo :
+                List.of(
+                        "Origem",
+                        "NCM",
+                        "Código de barras",
+                        "Preço",
+                        "Marca",
+                        "Categoria",
+                        "Descrição",
+                        "Peso bruto",
+                        "Medidas")) assertTrue(msg.contains(campo), campo);
+        UUID id = (UUID) r.get("id");
+        assertEquals(true, linha(empresaA, "select incompleto from radar_produto where id=?", id).get("incompleto"));
+        // Completo, deixa de ser rascunho.
+        salvar(empresaA, "{\"id\":\"" + id + "\"," + base("FALTA-1") + "}");
+        assertEquals(false, linha(empresaA, "select incompleto from radar_produto where id=?", id).get("incompleto"));
+        // Sem nome não salva.
+        assertThrows(
+                ResponseStatusException.class,
+                () -> salvar(empresaA, "{\"tipo\":\"SIMPLES\",\"sku\":\"SEM-NOME\"}"));
+    }
+
+    @Test
+    void embalagemValeNoLugarDasMedidas() {
+        String semMedidas =
+                base("EMB-1")
+                        .replace(
+                                ",\"largura_cm\":\"10\",\"altura_cm\":\"10\",\"comprimento_cm\":\"10\"",
+                                "");
+        UUID rascunho = salvar(empresaA, "{" + semMedidas + "}");
+        assertEquals(true, linha(empresaA, "select incompleto from radar_produto where id=?", rascunho).get("incompleto"));
+        UUID id =
+                salvar(
+                        empresaA,
+                        "{"
+                                + semMedidas.replace("EMB-1", "EMB-2")
+                                + ",\"embalagem_nova\":{\"nome\":\"Caixa"
+                                + " EMB-2\",\"largura_cm\":\"20\","
+                                + "\"altura_cm\":\"10\",\"comprimento_cm\":\"30\"}}");
+        assertEquals(false, linha(empresaA, "select incompleto from radar_produto where id=?", id).get("incompleto"));
+    }
+
+    @Test
+    void skuAutomaticoSegueAConfiguracao() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        String semSku = "{\"tipo\":\"SIMPLES\",\"nome\":\"Sem SKU\"}";
+        // Manual (padrão): SKU obrigatório.
+        assertThrows(ResponseStatusException.class, () -> salvar(empresa, semSku));
+        var cfg = new RadarConfiguracao(db, BancoRadarDeTeste.JSON);
+        naEmpresa(
+                empresa,
+                () ->
+                        cfg.salvar(
+                                json(
+                                        "{\"chave\":\"produtos\",\"valor\":{\"sku_modo\":\"PREFIXO\","
+                                                + "\"sku_prefixo\":\"cam-\",\"sku_digitos\":4}}"),
+                                "GESTOR"));
+        UUID a = salvar(empresa, semSku);
+        UUID b = salvar(empresa, semSku);
+        assertEquals("CAM-0001", linha(empresa, "select sku from radar_produto where id=?", a).get("sku"));
+        assertEquals("CAM-0002", linha(empresa, "select sku from radar_produto where id=?", b).get("sku"));
+        // Outra empresa não enxerga a configuração.
+        assertThrows(ResponseStatusException.class, () -> salvar(empresaB, semSku));
+        for (String ruim :
+                List.of(
+                        "{\"sku_modo\":\"PREFIXO\",\"sku_prefixo\":\"\"}",
+                        "{\"sku_modo\":\"OUTRO\"}",
+                        "{\"sku_prefixo\":\"A B\"}",
+                        "{\"unidade_padrao\":\"XX\"}",
+                        "{\"ncm_padrao\":\"123\"}"))
+            assertThrows(
+                    ResponseStatusException.class,
+                    () ->
+                            naEmpresa(
+                                    empresa,
+                                    () ->
+                                            cfg.salvar(
+                                                    json("{\"chave\":\"produtos\",\"valor\":" + ruim + "}"),
+                                                    "DONO")),
+                    ruim);
+        var proibido =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresa,
+                                        () ->
+                                                cfg.salvar(
+                                                        json("{\"chave\":\"produtos\",\"valor\":{}}"),
+                                                        "ESTOQUE")));
+        assertEquals(HttpStatus.FORBIDDEN, proibido.getStatusCode());
+    }
+
+    @Test
+    void variacaoHerdaOPromocionalDoPrincipal() {
+        UUID pai =
+                salvar(
+                        empresaA,
+                        "{"
+                                + base("PROMO-V", "VARIACAO")
+                                + ",\"preco_promocional\":\"39.90\",\"tipos_variacao\":[\"Cor\"],"
+                                + "\"variacoes\":[{\"atributos\":{\"Cor\":\"Azul\"}}]}");
+        var v =
+                linha(
+                        empresaA,
+                        "select sku, preco_promocional from radar_produto where pai_id=?",
+                        pai);
+        assertEquals(0, new BigDecimal("39.90").compareTo((BigDecimal) v.get("preco_promocional")));
+        // Sem SKU na grade, o Radar gera a partir do SKU do principal.
+        assertEquals("PROMO-V-AZUL", v.get("sku"));
+    }
+
+    @Test
+    void excluirMandaParaALixeiraERestaurarDevolveInativo() {
+        UUID novo = salvar(empresaA, "{" + base("LIX-1") + "}");
+        UUID comEstoque = salvar(empresaA, "{" + base("LIX-2") + ",\"saldo\":\"3\"}");
+        lote("{\"acao\":\"EXCLUIR\",\"ids\":[\"" + novo + "\",\"" + comEstoque + "\"]}");
+        var p = linha(empresaA, "select excluido_em, permite_venda from radar_produto where id=?", comEstoque);
+        assertNotNull(p.get("excluido_em"));
+        assertEquals(false, p.get("permite_venda"));
+        // Na lixeira não se edita, não se clona nem mexe em lote comum.
+        assertThrows(
+                ResponseStatusException.class,
+                () -> salvar(empresaA, "{\"id\":\"" + comEstoque + "\"," + base("LIX-2") + "}"));
+        assertThrows(
+                ResponseStatusException.class,
+                () -> lote("{\"acao\":\"INATIVAR\",\"ids\":[\"" + comEstoque + "\"]}"));
+        // Apagar de vez: só o que não tem histórico.
+        var preso =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> lote("{\"acao\":\"EXCLUIR_DEFINITIVO\",\"ids\":[\"" + comEstoque + "\"]}"));
+        assertTrue(preso.getReason().contains("LIX-2"));
+        lote("{\"acao\":\"EXCLUIR_DEFINITIVO\",\"ids\":[\"" + novo + "\"]}");
+        assertEquals(
+                0L,
+                naEmpresa(
+                        empresaA,
+                        () -> db.queryForObject("select count(*) from radar_produto where id=?", Long.class, novo)));
+        // Outra empresa não alcança.
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                empresaB,
+                                () ->
+                                        produtos.lote(
+                                                json("{\"acao\":\"RESTAURAR\",\"ids\":[\"" + comEstoque + "\"]}"),
+                                                "DONO")));
+        lote("{\"acao\":\"RESTAURAR\",\"ids\":[\"" + comEstoque + "\"]}");
+        p = linha(empresaA, "select excluido_em, permite_venda from radar_produto where id=?", comEstoque);
+        assertEquals(null, p.get("excluido_em"));
+        assertEquals(false, p.get("permite_venda"));
+    }
+
+    @Test
+    void naoExcluiComponenteDeKitAtivo() {
+        UUID componente = salvar(empresaA, "{" + base("LIX-COMP") + "}");
+        UUID kit =
+                salvar(
+                        empresaA,
+                        "{"
+                                + base("LIX-KIT", "KIT")
+                                + ",\"kit\":[{\"componente_id\":\""
+                                + componente
+                                + "\",\"quantidade\":2}]}");
+        var erro =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> lote("{\"acao\":\"EXCLUIR\",\"ids\":[\"" + componente + "\"]}"));
+        assertTrue(erro.getReason().contains("kit"));
+        // Junto com o kit, pode.
+        lote("{\"acao\":\"EXCLUIR\",\"ids\":[\"" + componente + "\",\"" + kit + "\"]}");
+    }
+
+    @Test
+    void clonarCopiaVariacoesKitEFornecedoresComEstoqueZero() {
+        UUID pai =
+                salvar(
+                        empresaA,
+                        "{"
+                                + base("CLONE", "VARIACAO")
+                                + ",\"tipos_variacao\":[\"Cor\"],\"variacoes\":["
+                                + "{\"sku\":\"CLONE-AZ\",\"atributos\":{\"Cor\":\"Azul\"},\"saldo\":\"5\"},"
+                                + "{\"sku\":\"CLONE-VD\",\"atributos\":{\"Cor\":\"Verde\"}}]}");
+        var r =
+                naEmpresa(
+                        empresaA,
+                        () -> produtos.clonar(json("{\"id\":\"" + pai + "\"}"), "GESTOR"));
+        UUID copia = (UUID) r.get("id");
+        assertEquals("CLONE-COPIA", r.get("sku"));
+        var filhas =
+                naEmpresa(
+                        empresaA,
+                        () ->
+                                db.queryForList(
+                                        "select sku, fisico, nome from radar_produto where pai_id=? order by sku",
+                                        copia));
+        assertEquals(2, filhas.size());
+        assertEquals("CLONE-COPIA-AZ", filhas.get(0).get("sku"));
+        assertEquals(0, ((Number) filhas.get(0).get("fisico")).intValue());
+        assertTrue(filhas.get(0).get("nome").toString().startsWith("Produto CLONE (cópia)"));
+        // Clonar de novo não repete SKU.
+        var r2 = naEmpresa(empresaA, () -> produtos.clonar(json("{\"id\":\"" + pai + "\"}"), "DONO"));
+        assertEquals("CLONE-COPIA-2", r2.get("sku"));
+        // Outra empresa não clona.
+        assertThrows(
+                ResponseStatusException.class,
+                () -> naEmpresa(empresaB, () -> produtos.clonar(json("{\"id\":\"" + pai + "\"}"), "DONO")));
+        var proibido =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> naEmpresa(empresaA, () -> produtos.clonar(json("{\"id\":\"" + pai + "\"}"), "ESTOQUE")));
+        assertEquals(HttpStatus.FORBIDDEN, proibido.getStatusCode());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void historicoMostraEstoqueEEscondeDeOutraEmpresa() {
+        UUID id = salvar(empresaA, "{" + base("HIST-1") + ",\"saldo\":\"4\"}");
+        var h = naEmpresa(empresaA, () -> produtos.historico(id, "DONO", false));
+        var eventos = (List<Map<String, Object>>) h.get("eventos");
+        assertTrue(
+                eventos.stream().anyMatch(e -> e.get("titulo").toString().contains("Saldo inicial")),
+                eventos.toString());
+        // Quem não gerencia não vê quem alterou o cadastro.
+        var deAnalista =
+                (List<Map<String, Object>>)
+                        naEmpresa(empresaA, () -> produtos.historico(id, "ANALISTA", false))
+                                .get("eventos");
+        assertTrue(deAnalista.stream().noneMatch(e -> "CADASTRO".equals(e.get("tipo"))));
+        var erro =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> naEmpresa(empresaB, () -> produtos.historico(id, "DONO", true)));
+        // Outra empresa também não manda para a lixeira nem apaga.
+        for (String acao : List.of("EXCLUIR", "EXCLUIR_DEFINITIVO"))
+            assertThrows(
+                    ResponseStatusException.class,
+                    () ->
+                            naEmpresa(
+                                    empresaB,
+                                    () ->
+                                            produtos.lote(
+                                                    json("{\"acao\":\"" + acao + "\",\"ids\":[\"" + id + "\"]}"),
+                                                    "DONO")),
+                    acao);
+        assertEquals(HttpStatus.NOT_FOUND, erro.getStatusCode());
     }
 
     private static void lote(String corpo) {

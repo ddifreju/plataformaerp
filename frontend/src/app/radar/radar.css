@@ -3117,3 +3117,66 @@ ul.rd-menu-linha li button:disabled {
 .rd-config-cargos strong {
   color: var(--rd-ink, inherit);
 }
+.rd-pendencias-produto {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  font-size: 14px;
+}
+.radar-app .rd-pendencias-produto button.text {
+  padding: 0;
+  text-decoration: underline;
+}
+.rd-opcoes-grandes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.rd-opcoes-grandes label {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--rd-line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.rd-opcoes-grandes label.ativo {
+  border-color: var(--rd-blue);
+  background: #eff6ff;
+}
+.rd-opcoes-grandes input {
+  position: absolute;
+  opacity: 0;
+}
+.rd-opcoes-grandes small {
+  color: var(--rd-muted);
+}
+.rd-linha-tempo {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+.rd-linha-tempo li {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--rd-line);
+}
+.rd-linha-tempo time {
+  color: var(--rd-muted);
+  font-size: 13px;
+}
+.rd-linha-tempo small {
+  display: block;
+  color: var(--rd-muted);
+}
+@media (max-width: 640px) {
+  .rd-linha-tempo li {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}

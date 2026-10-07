@@ -6,6 +6,7 @@
 // ganham a sua tela quando forem detalhados (um por vez).
 
 import { useState } from "react";
+import { ConfigProdutos } from "./configuracoes-cadastros";
 import { DadosEmpresa, UsuariosSistema } from "./configuracoes-geral";
 import { normal } from "./produtos-filtros";
 import { Badge, type Row } from "./ui";
@@ -22,7 +23,7 @@ type Item = {
   /** Página do Radar que já faz isso: o item leva para lá. */
   pagina?: string;
   /** Tela que abre aqui mesmo, dentro de Configurações. */
-  tela?: "empresa" | "usuarios";
+  tela?: "empresa" | "usuarios" | "produtos";
 };
 
 const SELOS: Record<Selo, [string, string]> = {
@@ -247,8 +248,10 @@ const ITENS: Record<string, Item[]> = {
     {
       id: "produtos",
       titulo: "Configurações do cadastro de produtos",
-      descricao: "Campos obrigatórios para nota e marketplaces, SKU automático e valores padrão.",
-      chaves: "produto cadastro sku obrigatorio",
+      descricao: "SKU automático, valores padrão de produto novo e salvar como rascunho.",
+      chaves: "produto cadastro sku automatico obrigatorio unidade ncm origem padrao rascunho",
+      selo: "funciona",
+      tela: "produtos",
     },
     {
       id: "variacoes",
@@ -869,6 +872,7 @@ type Props = {
   usuarios: Row[];
   papel: string;
   euId: string;
+  configuracoes: Record<string, Record<string, unknown>>;
   executar: (corpo: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
   atualizar: () => Promise<void>;
   avisar: (mensagem: string) => void;
@@ -912,6 +916,15 @@ export default function Configuracoes(props: Props) {
         podeEditar={props.papel === "DONO"}
         executar={props.executar}
         atualizar={props.atualizar}
+        voltar={() => setTela(undefined)}
+      />
+    );
+  if (tela === "produtos")
+    return (
+      <ConfigProdutos
+        config={props.configuracoes.produtos ?? {}}
+        podeEditar={["DONO", "GESTOR"].includes(props.papel)}
+        executar={props.executar}
         voltar={() => setTela(undefined)}
       />
     );
