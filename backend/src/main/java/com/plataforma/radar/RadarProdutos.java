@@ -1243,6 +1243,10 @@ public class RadarProdutos {
                 "select id from radar_produto where tenant_id=? and id = any(?) for update",
                 tenant(),
                 alvo.toArray(UUID[]::new));
+        // Com as variações, o lote não passa de 20 mil linhas; e cada comando tem tempo máximo.
+        if (alvo.size() > 20_000)
+            erro("Contando as variações, são mais de 20.000 produtos. Faça em partes menores.");
+        db.execute("set local statement_timeout = '30s'");
         if (alvo.isEmpty())
             erro(
                     daLixeira
@@ -1683,14 +1687,19 @@ public class RadarProdutos {
             if (x.get("pai_id") != null) ficam.add((UUID) x.get("pai_id"));
         }
         // Componente de um kit que fica na lixeira também fica (o kit ainda aponta para ele).
+        // Se o componente for uma variação, o produto principal dela também fica.
         if (!ficam.isEmpty())
-            ficam.addAll(
+            for (var c :
                     db.queryForList(
-                            "select componente_id from radar_kit_item where tenant_id=? and"
-                                    + " kit_id = any(?)",
-                            UUID.class,
+                            "select k.componente_id, p.pai_id from radar_kit_item k join"
+                                    + " radar_produto p on p.tenant_id=k.tenant_id and"
+                                    + " p.id=k.componente_id where k.tenant_id=? and k.kit_id ="
+                                    + " any(?)",
                             tenant(),
-                            ficam.toArray(UUID[]::new)));
+                            ficam.toArray(UUID[]::new))) {
+                ficam.add((UUID) c.get("componente_id"));
+                if (c.get("pai_id") != null) ficam.add((UUID) c.get("pai_id"));
+            }
         List<UUID> apagar = alvo.stream().filter(id -> !ficam.contains(id)).toList();
         String naLixeira =
                 presos.stream().map(x -> (String) x.get("sku")).collect(Collectors.joining(", "));

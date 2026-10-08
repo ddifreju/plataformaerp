@@ -125,7 +125,7 @@ public class RadarAnuncios {
                 permitir(papel, "DONO", "GESTOR");
                 yield removerLoja(n);
             }
-            case "anunciar" -> anunciar(n);
+            case "anunciar" -> anunciar(n, papel);
             case "anuncios_sincronizar" -> sincronizar(n, papel);
             case "anuncio_relacionar" -> relacionar(n);
             case "anuncios_precos" -> proporPrecos(n);
@@ -390,7 +390,7 @@ public class RadarAnuncios {
         r.put("propostas", propostas);
         // Nada mudou nem foi para aprovação: a tela mostra o aviso sem o ✓ de sucesso.
         r.put("nada", alterados == 0 && propostas == 0);
-        r.put("mantidos", abaixoDoCusto);
+        if (aprova) r.put("mantidos", abaixoDoCusto);
         r.put("mensagem", msg.toString());
         return r;
     }
@@ -779,7 +779,9 @@ public class RadarAnuncios {
      * e título dentro das regras do marketplace e categoria ligada à do marketplace. Um erro
      * cancela o lote inteiro (o comando é uma transação só).
      */
-    private Map<String, Object> anunciar(JsonNode n) {
+    private Map<String, Object> anunciar(JsonNode n, String papel) {
+        // Quem não vê custo não fica sabendo que o motivo é o custo (senão descobriria o custo).
+        boolean veCusto = Set.of("DONO", "GESTOR", "FINANCEIRO").contains(papel);
         JsonNode itens = n.path("itens");
         if (!itens.isArray() || itens.isEmpty() || itens.size() > MAX_LOTE)
             erro("Escolha entre 1 e " + MAX_LOTE + " anúncios.");
@@ -853,7 +855,11 @@ public class RadarAnuncios {
                                 + reais(regra.precoMax()));
             // Mesma política da aprovação de preço: anúncio pronto não sobe abaixo do custo.
             if (preco != null && preco.compareTo((BigDecimal) p.get("custo")) < 0)
-                problemas.add("preço abaixo do custo do produto (política local: bloqueado)");
+                problemas.add(
+                        veCusto
+                                ? "preço abaixo do custo do produto (política local: bloqueado)"
+                                : "preço não permitido pela política de preço; fale com o dono ou o"
+                                        + " gestor");
 
             // Quantidade livre, por decisão da lojista: não é limitada pelo estoque físico. Mas
             // anúncio com zero não está pronto para vender em marketplace nenhum.
