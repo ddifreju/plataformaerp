@@ -33,8 +33,7 @@ public class RadarService {
     private final RadarVendedores vendedores;
     private final RadarEmpresa empresa;
     private final RadarConfiguracao configuracao;
-    private static final Set<String> CANAIS =
-            Set.of("Mercado Livre", "Shopee", "TikTok Shop", "SHEIN");
+    private static final Set<String> CANAIS = RadarAnuncios.CANAIS;
 
     public RadarService(
             JdbcTemplate db,
@@ -376,8 +375,11 @@ public class RadarService {
                                 + " limit 50000",
                         tenant());
         if (!f) produtos.forEach(x -> x.remove("custo"));
+        // O que falta no cadastro vai pronto para a coluna "Cadastro" da lista (mesma regra da nota).
+        produtos.forEach(x -> x.put("pendencias", RadarProdutos.pendencias(x)));
         out.put("produtos", produtos);
         out.put("anuncios", rows("radar_anuncio"));
+        out.put("lojas", anuncios.lojas());
         var pedidos = rows("radar_pedido");
         if (!f)
             pedidos.forEach(
@@ -678,36 +680,6 @@ public class RadarService {
                                 antes.get("custo").toString(),
                                 "preco",
                                 antes.get("preco").toString()));
-            }
-            case "anuncios_lote" -> {
-                permitir("DONO", "GESTOR", "MARKETING");
-                UUID pid = id(n, "produto_id");
-                var p = um("radar_produto", pid);
-                if (p.get("excluido_em") != null) erro("Este produto está na lixeira.");
-                if (bd(p.get("preco")).signum() <= 0)
-                    erro("Cadastre um preço positivo no produto.");
-                int criados = 0;
-                for (String c : CANAIS) {
-                    criados +=
-                            db.update(
-                                    "insert into"
-                                        + " radar_anuncio(id,tenant_id,produto_id,canal,titulo,preco)"
-                                        + " select ?,?,?,?,?,? where not exists (select 1 from"
-                                        + " radar_anuncio where tenant_id=? and produto_id=? and"
-                                        + " canal=?)",
-                                    UUID.randomUUID(),
-                                    tenant(),
-                                    pid,
-                                    c,
-                                    p.get("nome"),
-                                    p.get("preco"),
-                                    tenant(),
-                                    pid,
-                                    c);
-                }
-                result.put(
-                        "mensagem",
-                        criados + " rascunhos criados para os canais. Nenhuma publicação externa.");
             }
             case "anuncios_estado_lote" -> {
                 permitir("DONO", "GESTOR", "MARKETING");

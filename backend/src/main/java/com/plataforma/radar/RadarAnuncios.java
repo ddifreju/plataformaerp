@@ -3,6 +3,7 @@ package com.plataforma.radar;
 import static com.plataforma.radar.RadarEntrada.erro;
 import static com.plataforma.radar.RadarEntrada.gtinValido;
 import static com.plataforma.radar.RadarEntrada.id;
+import static com.plataforma.radar.RadarEntrada.inteiroOpcional;
 import static com.plataforma.radar.RadarEntrada.opcional;
 import static com.plataforma.radar.RadarEntrada.permitir;
 import static com.plataforma.radar.RadarEntrada.texto;
@@ -35,9 +36,57 @@ import java.util.UUID;
 public class RadarAnuncios {
 
     static final Set<String> OPERACOES =
-            Set.of("anuncio_relacionar", "anuncios_precos", "anuncios_acao_lote");
+            Set.of(
+                    "anuncio_relacionar",
+                    "anuncios_precos",
+                    "anuncios_acao_lote",
+                    "loja_salvar",
+                    "loja_remover",
+                    "anunciar");
 
-    static final Set<String> CANAIS = Set.of("Mercado Livre", "Shopee", "TikTok Shop", "SHEIN");
+    /** Marketplaces em que o Radar sabe anunciar. Lista única: as outras classes usam esta. */
+    static final Set<String> CANAIS = Set.of("Mercado Livre", "Shopee", "TikTok Shop", "AliExpress");
+
+    /**
+     * Regras de anúncio de cada marketplace, conferidas nas fontes oficiais em 07/10/2026
+     * (docs/integracoes/regras-de-anuncio.md). Nulo = sem número oficial: não se inventa limite.
+     * As mesmas regras estão em frontend/src/app/radar/canais.ts (a tela confere antes; aqui é a
+     * trava). Limites que mudam por categoria ou loja são conferidos com o marketplace quando a
+     * loja estiver conectada.
+     */
+    record Regra(
+            int tituloMin,
+            Integer tituloMax,
+            int imagensMin,
+            Integer descricaoMinPalavras,
+            Integer descricaoMax,
+            BigDecimal precoMin,
+            BigDecimal precoMax,
+            Integer estoqueMin,
+            Integer estoqueMax) {}
+
+    private static final Regra LIVRE = new Regra(1, null, 1, null, null, null, null, null, null);
+
+    static final Map<String, Regra> REGRAS =
+            Map.of(
+                    // Estoque 0 só é aceito no Fulfillment: anúncio comum precisa de pelo menos 1.
+                    "Mercado Livre", new Regra(1, 60, 1, null, 50000, null, null, 1, null),
+                    // Os limites da Shopee são por loja: sem número público.
+                    "Shopee", LIVRE,
+                    // Política BR: 25 a 200 letras (a API aceita 300); vale a mais restrita.
+                    "TikTok Shop",
+                            new Regra(
+                                    25,
+                                    200,
+                                    1,
+                                    30,
+                                    10000,
+                                    new BigDecimal("0.50"),
+                                    new BigDecimal("10000.00"),
+                                    1,
+                                    99999),
+                    "AliExpress", new Regra(1, 128, 1, null, null, null, null, null, null));
+
     private static final Set<String> SITUACOES =
             Set.of("NAO_PUBLICADO", "ATIVO", "PAUSADO", "REJEITADO", "ENCERRADO");
     private static final int MAX_LOTE = 1000;
@@ -52,6 +101,15 @@ public class RadarAnuncios {
     Map<String, Object> executar(String op, JsonNode n, String papel) {
         permitir(papel, "DONO", "GESTOR", "MARKETING");
         return switch (op) {
+            case "loja_salvar" -> {
+                permitir(papel, "DONO", "GESTOR");
+                yield salvarLoja(n);
+            }
+            case "loja_remover" -> {
+                permitir(papel, "DONO", "GESTOR");
+                yield removerLoja(n);
+            }
+            case "anunciar" -> anunciar(n);
             case "anuncio_relacionar" -> relacionar(n);
             case "anuncios_precos" -> proporPrecos(n);
             case "anuncios_acao_lote" -> lote(n);
@@ -462,8 +520,232 @@ public class RadarAnuncios {
             case "Mercado Livre" -> "ML";
             case "Shopee" -> "SHP";
             case "TikTok Shop" -> "TTS";
-            default -> "SHN";
+            case "AliExpress" -> "ALI";
+            default -> "MKT";
         };
+    }
+
+    /** Lojas ativas da empresa, para a tela: Integrações e o passo a passo de anunciar. */
+    List<Map<String, Object>> lojas() {
+        return db.queryForList(
+                "select id, marketplace, nome, conectada_em from radar_loja where tenant_id=? and"
+                        + " excluida_em is null order by marketplace, lower(nome)",
+                tenant());
+    }
+
+    /**
+     * Cria ou renomeia uma loja. Sem conexão real (depende do CNPJ), a loja fica "aguardando
+     * conexão": serve para preparar os anúncios, que sobem quando ela for conectada.
+     */
+    private Map<String, Object> salvarLoja(JsonNode n) {
+        String nome = texto(n, "nome", 60);
+        boolean nova = n.path("id").asText("").isBlank();
+        UUID id = nova ? UUID.randomUUID() : id(n, "id");
+        Integer repetido =
+                db.queryForObject(
+                        "select count(*) from radar_loja where tenant_id=? and lower(nome)=lower(?)"
+                                + " and excluida_em is null and id<>?",
+                        Integer.class,
+                        tenant(),
+                        nome,
+                        id);
+        if (repetido != null && repetido > 0)
+            erro("Já existe uma loja chamada " + nome + ". Escolha outro nome.");
+        if (nova) {
+            String marketplace = texto(n, "marketplace", 40);
+            if (!CANAIS.contains(marketplace)) erro("Marketplace não suportado.");
+            db.update(
+                    "insert into radar_loja(id,tenant_id,marketplace,nome) values(?,?,?,?)",
+                    id,
+                    tenant(),
+                    marketplace,
+                    nome);
+        } else {
+            loja(id);
+            db.update(
+                    "update radar_loja set nome=? where tenant_id=? and id=?", nome, tenant(), id);
+        }
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("id", id);
+        r.put("mensagem", "Loja " + nome + " salva.");
+        return r;
+    }
+
+    /** Remove a loja da lista. Os anúncios dela continuam no histórico, apontando para ela. */
+    private Map<String, Object> removerLoja(JsonNode n) {
+        UUID id = id(n, "id");
+        var loja = loja(id);
+        db.update(
+                "update radar_loja set excluida_em=now() where tenant_id=? and id=?", tenant(), id);
+        // Anúncio pronto de loja removida não pode subir quando houver conector: volta a rascunho.
+        int voltaram =
+                db.update(
+                        "update radar_anuncio set estado='RASCUNHO',versao=versao+1,"
+                                + "atualizado_em=now() where tenant_id=? and loja_id=? and"
+                                + " estado='PRONTO'",
+                        tenant(),
+                        id);
+        return Map.of(
+                "mensagem",
+                "Loja "
+                        + loja.get("nome")
+                        + " removida."
+                        + (voltaram > 0
+                                ? " " + voltaram + " anúncio(s) pronto(s) dela voltaram a rascunho."
+                                : ""));
+    }
+
+    private Map<String, Object> loja(UUID id) {
+        var linhas =
+                db.queryForList(
+                        "select id, marketplace, nome from radar_loja where tenant_id=? and id=?"
+                                + " and excluida_em is null",
+                        tenant(),
+                        id);
+        if (linhas.isEmpty())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Loja não encontrada.");
+        return linhas.getFirst();
+    }
+
+    /**
+     * Anunciar pelo passo a passo da tela: um anúncio por produto e loja, já conferido, no estado
+     * PRONTO. Nada sai do Radar: o anúncio sobe quando a loja for conectada. A conferência repete
+     * aqui o que a tela mostrou: cadastro completo (as mesmas pendências que travam a nota), imagens
+     * e título dentro das regras do marketplace e categoria ligada à do marketplace. Um erro
+     * cancela o lote inteiro (o comando é uma transação só).
+     */
+    private Map<String, Object> anunciar(JsonNode n) {
+        JsonNode itens = n.path("itens");
+        if (!itens.isArray() || itens.isEmpty() || itens.size() > MAX_LOTE)
+            erro("Escolha entre 1 e " + MAX_LOTE + " anúncios.");
+        for (JsonNode item : itens) {
+            var loja = loja(id(item, "loja_id"));
+            String marketplace = (String) loja.get("marketplace");
+            Regra regra = REGRAS.get(marketplace);
+            UUID pid = id(item, "produto_id");
+            var linhas =
+                    db.queryForList(
+                            "select * from radar_produto where tenant_id=? and id=?",
+                            tenant(),
+                            pid);
+            if (linhas.isEmpty())
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Produto não encontrado.");
+            var p = linhas.getFirst();
+            String sku = (String) p.get("sku");
+            if (p.get("excluido_em") != null) erro(sku + ": o produto está na lixeira.");
+            if ("VARIACAO".equals(p.get("tipo")))
+                erro(sku + ": anuncie as variações (cor, tamanho…), não o produto pai.");
+
+            String titulo = opcional(item, "titulo", 250);
+            int letras = titulo == null ? 0 : titulo.length();
+            if (letras < regra.tituloMin()
+                    || (regra.tituloMax() != null && letras > regra.tituloMax()))
+                erro(
+                        sku
+                                + ": o título no "
+                                + marketplace
+                                + " precisa ter de "
+                                + regra.tituloMin()
+                                + " a "
+                                + (regra.tituloMax() == null ? 250 : regra.tituloMax())
+                                + " letras (tem "
+                                + letras
+                                + ").");
+            BigDecimal preco = valor(item, "preco");
+            if (preco.signum() <= 0) erro(sku + ": o preço precisa ser maior que zero.");
+            // Mesma política da aprovação de preço: anúncio pronto não sobe abaixo do custo.
+            if (preco.compareTo((BigDecimal) p.get("custo")) < 0)
+                erro(sku + ": preço abaixo do custo do produto. Política local: bloqueado.");
+            if ((regra.precoMin() != null && preco.compareTo(regra.precoMin()) < 0)
+                    || (regra.precoMax() != null && preco.compareTo(regra.precoMax()) > 0))
+                erro(
+                        sku
+                                + ": o preço no "
+                                + marketplace
+                                + " vai de R$ "
+                                + regra.precoMin()
+                                + " a R$ "
+                                + regra.precoMax()
+                                + ".");
+            // Quantidade livre, por decisão da lojista: não é limitada pelo estoque físico,
+            // só pelo que o marketplace aceita.
+            Integer estoque = inteiroOpcional(item, "estoque", 0, 9_999_999);
+            if (estoque == null) erro(sku + ": informe a quantidade a anunciar.");
+            if (regra.estoqueMin() != null && estoque < regra.estoqueMin())
+                erro(sku + ": o " + marketplace + " pede pelo menos " + regra.estoqueMin() + ".");
+            if (regra.estoqueMax() != null && estoque > regra.estoqueMax())
+                erro(sku + ": o " + marketplace + " aceita no máximo " + regra.estoqueMax() + ".");
+            String descricao = String.valueOf(p.get("descricao")).strip();
+            if (regra.descricaoMinPalavras() != null
+                    && descricao.split("\\s+").length < regra.descricaoMinPalavras())
+                erro(
+                        sku
+                                + ": o "
+                                + marketplace
+                                + " pede descrição com pelo menos "
+                                + regra.descricaoMinPalavras()
+                                + " palavras.");
+            if (regra.descricaoMax() != null && descricao.length() > regra.descricaoMax())
+                erro(
+                        sku
+                                + ": o "
+                                + marketplace
+                                + " aceita descrição com até "
+                                + regra.descricaoMax()
+                                + " letras.");
+
+            List<String> faltando = RadarProdutos.pendencias(p);
+            if (!faltando.isEmpty())
+                erro(sku + ": complete o cadastro antes (falta " + String.join(", ", faltando) + ").");
+            // A variação mostra também as fotos do produto pai.
+            UUID pai = p.get("pai_id") == null ? pid : (UUID) p.get("pai_id");
+            Integer imagens =
+                    db.queryForObject(
+                            "select count(*) from radar_produto_imagem where tenant_id=? and"
+                                    + " produto_id in (?,?)",
+                            Integer.class,
+                            tenant(),
+                            pid,
+                            pai);
+            if (imagens == null || imagens < regra.imagensMin())
+                erro(
+                        sku
+                                + ": o "
+                                + marketplace
+                                + " pede pelo menos "
+                                + regra.imagensMin()
+                                + " imagem(ns).");
+            Integer ligada =
+                    db.queryForObject(
+                            "select count(*) from radar_categoria_canal where tenant_id=? and"
+                                    + " canal=? and categoria_id=?",
+                            Integer.class,
+                            tenant(),
+                            marketplace,
+                            p.get("categoria_id"));
+            if (ligada == null || ligada == 0)
+                erro(sku + ": ligue a categoria do produto a uma categoria do " + marketplace + ".");
+            // Quantos anúncios o lojista quiser do mesmo produto na mesma loja (decisão dela:
+            // teste de título, estratégia de ads, mais catálogo).
+            db.update(
+                    "insert into radar_anuncio(id,tenant_id,produto_id,canal,loja_id,titulo,preco,"
+                            + "estoque,estado) values(?,?,?,?,?,?,?,?,'PRONTO')",
+                    UUID.randomUUID(),
+                    tenant(),
+                    pid,
+                    marketplace,
+                    loja.get("id"),
+                    titulo,
+                    preco,
+                    estoque);
+        }
+        return Map.of(
+                "criados",
+                itens.size(),
+                "mensagem",
+                itens.size()
+                        + " anúncio(s) conferido(s) e pronto(s) para publicar. Eles sobem quando a"
+                        + " loja for conectada.");
     }
 
     private Map<String, Object> produto(UUID id) {

@@ -23,7 +23,7 @@
    genérico já trata (lookbehind "não/sem"); mantenha isso em filtros novos.
 9. **CEP e números com separador:** a busca compara só os dígitos. Já está
    no componente.
-10. **"Essa não é a plataforma":** a Juliana abriu `/login` (tela antiga) e
+10. **"Essa não é a plataforma":** a Jéssica abriu `/login` (tela antiga) e
     achou que tinha perdido o sistema. A plataforma é **`/radar`**. Sempre
     mande o link com `/radar`.
 11. **Oracle Cloud** recusou o cadastro 3 vezes. Não insista sem ela pedir;

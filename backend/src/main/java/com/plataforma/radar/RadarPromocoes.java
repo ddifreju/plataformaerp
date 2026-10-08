@@ -33,8 +33,7 @@ public class RadarPromocoes {
     static final Set<String> OPERACOES =
             Set.of("promocao", "promocao_atualizar", "promocao_encerrar");
 
-    private static final Set<String> CANAIS =
-            Set.of("Mercado Livre", "Shopee", "TikTok Shop", "SHEIN");
+    private static final Set<String> CANAIS = RadarAnuncios.CANAIS;
 
     private final JdbcTemplate db;
 

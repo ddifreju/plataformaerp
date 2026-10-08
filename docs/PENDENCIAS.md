@@ -183,6 +183,19 @@ restaurar, clonar e aba Histórico. Ficam na fila:
       - Esse custo entra na calculadora e no painel de quem produz.
       - Lote e validade na entrada, na saída (vence primeiro, sai primeiro) e
         na NF-e.
+- [x] **Quem apaga produto de vez e muda a configuração de SKU** (respondido
+      pela Jéssica em 07/10/2026): de fábrica, dono e gestor (como já está).
+- [ ] **Permissões liberadas pelo gestor.** A Jéssica quer que o dono e o
+      gestor possam liberar ações para outras pessoas (ex.: um
+      "administrativo" poder apagar produto de vez). Hoje a permissão é fixa
+      por cargo no código. Proposta enviada a ela; aguardando o escopo.
+- [x] **Anunciar por loja** (07/10/2026, decisão 0036): lojas do cliente em
+      Integrações, passo a passo com conferência e coluna "Cadastro" com o que
+      falta. Marketplaces: Mercado Livre, Shopee, TikTok Shop e AliExpress.
+- [ ] **Anunciar sem recusa, com a conexão real** (pedido forte da Jéssica):
+      limites por categoria e loja vindos do marketplace, lista de categorias
+      para escolher, teste do anúncio antes de enviar e erro traduzido em
+      instrução. Detalhes na decisão 0036.
 - [ ] **Bloqueio de pendências no envio.** Ligar `RadarProdutos.pendencias()`
       no envio ao marketplace e na emissão de NF-e, quando essas funções
       existirem. Hoje o cadastro salva incompleto e só marca `incompleto`.

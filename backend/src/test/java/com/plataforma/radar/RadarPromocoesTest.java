@@ -74,7 +74,7 @@ class RadarPromocoesTest {
     @Test
     void promocaoDeOutroProdutoOuCanalERecusada() {
         UUID deOutroProduto = criar(empresaA, "PERCENTUAL", "10", outroProdutoA, null, HOJE, HOJE);
-        UUID deOutroCanal = criar(empresaA, "PERCENTUAL", "10", null, "SHEIN", HOJE, HOJE);
+        UUID deOutroCanal = criar(empresaA, "PERCENTUAL", "10", null, "AliExpress", HOJE, HOJE);
         assertRecusado(empresaA, deOutroProduto, produtoA, "Shopee", "outro produto");
         assertRecusado(empresaA, deOutroCanal, produtoA, "Shopee", "outro canal");
     }

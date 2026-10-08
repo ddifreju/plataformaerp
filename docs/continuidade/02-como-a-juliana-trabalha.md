@@ -1,4 +1,4 @@
-# Como a Juliana trabalha
+# Como a Jéssica trabalha
 
 Aprendido em semanas de trabalho junto. Seguir isso é metade do trabalho.
 
@@ -16,7 +16,7 @@ Aprendido em semanas de trabalho junto. Seguir isso é metade do trabalho.
   passo, com o caminho no menu) e o que vem depois. Termine com uma pergunta
   ou proposta objetiva de próximo passo.
 - Ela pede: **"me dá um ok quando terminar"**. Ao terminar, comece a
-  resposta com "Ok, Juliana — está no ar".
+  resposta com "Ok, Jéssica — está no ar".
 - **Sem jargão.** Explique em linguagem de lojista. Exemplo: "o cliente é
   reconhecido pelo CPF/CNPJ", e não "chave natural".
 

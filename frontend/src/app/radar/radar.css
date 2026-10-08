@@ -3180,3 +3180,214 @@ ul.rd-menu-linha li button:disabled {
     gap: 2px;
   }
 }
+
+/* Coluna "Cadastro" da lista de produtos */
+.rd-cadastro-ok {
+  color: #047857;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.rd-cadastro-falta {
+  color: #b45309;
+  font-size: 0.82rem;
+  line-height: 1.3;
+  display: inline-block;
+  max-width: 220px;
+}
+
+/* Minhas lojas (Integrações) */
+.rd-lojas {
+  margin-bottom: 18px;
+}
+.rd-lojas-lista {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+  display: grid;
+  gap: 8px;
+}
+.rd-lojas-lista li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.rd-lojas-lista li > div {
+  display: grid;
+  flex: 1;
+  min-width: 160px;
+}
+.rd-lojas-lista small {
+  color: #6b7280;
+}
+.rd-lojas-acoes,
+.rd-lojas-renomear {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.rd-lojas-renomear {
+  flex: 1;
+}
+.rd-lojas-nova {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.rd-lojas-nova label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+/* Passo a passo "Anunciar" */
+.rd-modal.rd-modal-largo {
+  width: 980px;
+}
+.rd-anunciar-passos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px;
+}
+.rd-anunciar-passos li {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+.rd-anunciar-passos li.atual {
+  background: #1d4ed8;
+  color: white;
+  font-weight: 600;
+}
+.rd-anunciar-passos li.feito {
+  background: #dcfce7;
+  color: #047857;
+}
+.rd-anunciar-lojas {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.rd-anunciar-lojas label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.rd-anunciar-lojas label.ativo {
+  border-color: #1d4ed8;
+  background: #eff6ff;
+}
+.rd-anunciar-lojas label > span {
+  display: grid;
+  flex: 1;
+}
+.rd-anunciar-lojas small {
+  color: #6b7280;
+}
+.rd-anunciar-vazio {
+  text-align: center;
+  padding: 20px;
+}
+.rd-anunciar-vinculo {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1.4fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.rd-anunciar-ajustes {
+  display: grid;
+  gap: 10px;
+}
+.rd-anunciar-par {
+  display: grid;
+  grid-template-columns: 1.3fr 2.4fr 0.8fr 0.8fr;
+  gap: 10px;
+  align-items: start;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.rd-anunciar-par label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.82rem;
+}
+.rd-anunciar-par input {
+  width: 100%;
+  min-width: 0;
+}
+.rd-anunciar-par small,
+.rd-anunciar-par-nome small {
+  color: #6b7280;
+}
+.rd-anunciar-par-nome {
+  display: grid;
+}
+.rd-anunciar-par small.rd-erro-texto {
+  color: #b91c1c;
+  font-weight: 600;
+}
+.rd-anunciar-falta {
+  border: 1px solid #fcd34d;
+  background: #fffbeb;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+@media (max-width: 760px) {
+  .rd-anunciar-vinculo,
+  .rd-anunciar-par {
+    grid-template-columns: 1fr;
+  }
+}
+.rd-anunciar-nova-categoria {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin: 10px 0 16px;
+}
+.rd-anunciar-nova-categoria label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+/* Na conferência do "Anunciar" a foto e o nome já aparecem no topo do bloco do produto. */
+.rd-anunciar-falta .rd-preencher-linha > .rd-product-thumb,
+.rd-anunciar-falta .rd-preencher-nome {
+  display: none;
+}
+.rd-anunciar-falta .rd-preencher-linha {
+  grid-template-columns: minmax(220px, 1fr) 110px;
+  background: white;
+}
+/* Nome do produto e quantidade de anúncios abrem o cadastro */
+.rd-link-produto {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rd-link-produto:hover,
+.rd-link-produto:focus-visible {
+  color: #1d4ed8;
+  text-decoration: underline;
+}

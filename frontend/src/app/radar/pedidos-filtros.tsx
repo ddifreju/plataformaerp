@@ -5,6 +5,7 @@
 // nome/SKU/GTIN do produto. Número do marketplace, nota e rastreio ficam
 // vazios até as integrações e a NF-e existirem.
 
+import { CANAIS } from "./canais";
 import type { Config, Filtro } from "./filtros-genericos";
 import { cents, str, type Row } from "./ui";
 
@@ -24,7 +25,6 @@ export const SITUACOES_PEDIDO: [string, string][] = [
   ["CANCELADO", "Cancelado"],
   ["DEVOLVIDO", "Devolvido"],
 ];
-const CANAIS = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 
 const data = (v: unknown) => new Date(str(v)).getTime() || 0;
 const digitos = (v: unknown) => str(v).replace(/\D/g, "");

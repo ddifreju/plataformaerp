@@ -22,6 +22,8 @@ type Props = {
   executar: (corpo: Record<string, unknown>) => Promise<boolean>;
   /** Clona o produto (com imagens) e abre a cópia. */
   clonar?: (id: string) => void;
+  /** Abre o passo a passo "Anunciar" (sem a função, o cargo não anuncia). */
+  anunciar?: (ids: string[]) => void;
   ativo: boolean;
   children: (k: {
     cabecalho: ReactNode;
@@ -161,6 +163,7 @@ export default function ProdutosLote({
   disponivel,
   executar,
   clonar,
+  anunciar,
   ativo,
   children,
 }: Props) {
@@ -212,8 +215,10 @@ export default function ProdutosLote({
   }
 
   function enviarEcommerce() {
+    const ids = menuLinha ? [menuLinha.id] : marcados;
     fecharMenus();
-    setAviso(SEM_LOJA);
+    if (anunciar) anunciar(ids);
+    else setAviso("Seu cargo não permite anunciar.");
   }
 
   function relatorio(ids: string[] = marcados) {
@@ -585,7 +590,7 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             </button>
             {menu && (
               <ul role="menu" className="rd-menu-cima rd-menu-longo">
-                {emBreve("⇪ Enviar para o e-commerce", SEM_LOJA)}
+                {item("⇪ Enviar para o e-commerce", enviarEcommerce)}
                 {emBreve("$ Enviar preços para o e-commerce", SEM_LOJA)}
                 {emBreve("▦ Enviar estoque ao e-commerce", SEM_LOJA)}
                 {emBreve("▤ Enviar dados fiscais para o e-commerce", SEM_LOJA)}

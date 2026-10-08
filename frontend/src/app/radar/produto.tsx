@@ -6,9 +6,10 @@
 // O servidor valida e calcula (custo do kit, GTIN, estoque); a tela só
 // organiza o preenchimento e mostra o que falta para anunciar.
 
+import { CANAIS, canaisCom, palavras, regraDe } from "./canais";
 import { useEffect, useState, type ReactNode } from "react";
 import { Badge, Empty, Table, cents, centMoney, money, str, type ModalSpec, type Row } from "./ui";
-import { verNaCentral } from "./anuncios";
+import { NO_RADAR, verNaCentral } from "./anuncios";
 
 type Valores = Record<string, string | boolean>;
 type Par = { nome: string; valor: string };
@@ -22,8 +23,6 @@ type LinhaGrade = {
   saldo: string;
   permite_venda: boolean;
 };
-
-const CANAIS = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 
 export const ORIGENS: [string, string][] = [
   ["0", "0 - Nacional, exceto as indicadas nos códigos 3, 4, 5 e 8"],
@@ -85,7 +84,8 @@ const ABAS = [
   ["composicao", "Variações / Kit"],
   ["imagens", "Imagens"],
   ["fiscal", "Fiscal"],
-  ["anuncios", "Anúncios e SEO"],
+  ["anuncios", "Anúncios"],
+  ["seo", "Conferência e SEO"],
   ["fornecedores", "Fornecedores"],
   ["observacoes", "Observações"],
   ["historico", "Histórico"],
@@ -99,6 +99,7 @@ export type DadosProduto = {
   embalagens: Row[];
   fornecedores: Row[];
   anuncios: Row[];
+  lojas: Row[];
   kitItens: Row[];
   produtoFornecedores: Row[];
   imagens: Row[];
@@ -109,6 +110,8 @@ type Props = {
   dados: DadosProduto;
   veCusto: boolean;
   podeAnunciar: boolean;
+  /** Abre o passo a passo "Anunciar" para este produto. */
+  anunciar: (id: string) => void;
   executar: (corpo: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
   recarregar: () => Promise<void>;
   abrirModal: (m: ModalSpec) => void;
@@ -241,6 +244,7 @@ export default function ProdutoForm({
   dados,
   veCusto,
   podeAnunciar,
+  anunciar,
   executar,
   recarregar,
   abrirModal,
@@ -501,36 +505,49 @@ export default function ProdutoForm({
     await recarregar();
   }
 
-  // Requisitos comuns de cada canal. As regras exatas variam por categoria;
-  // a lista evita as recusas mais frequentes.
+  // Conferência por marketplace: o cadastro completo (mesma regra que trava o anúncio e a nota) e
+  // as regras de cada marketplace (canais.ts). O título conferido aqui é o nome do produto; no
+  // "Anunciar" dá para usar outro título em cada loja.
   const totalImagens = imagensDo(id).length;
   const temPacote =
     !!v.embalagem_id || !!embalagemNova || (!!v.largura_cm && !!v.altura_cm && !!v.comprimento_cm);
   const comum: [string, boolean][] = [
-    ["Pelo menos uma imagem", totalImagens > 0],
     ["Preço de venda", cents(v.preco) > 0],
-    ["Descrição", str(v.descricao).trim().length >= 30],
+    ["Descrição", !!str(v.descricao).trim()],
     ["Peso bruto", !!v.peso_bruto_kg],
     ["Medidas da embalagem ou do produto", temPacote],
     ["Código de barras ou motivo para não ter", !!v.gtin || !!v.motivo_sem_gtin],
     ["Marca", !!str(v.marca).trim()],
     ["Categoria", !!categoriaTexto.trim()],
   ];
-  const porCanal: Record<string, [string, boolean][]> = {
-    "Mercado Livre": [
-      ...comum,
-      ["Modelo", !!str(v.modelo).trim()],
-      ["Título com até 60 caracteres", str(v.nome).length > 0 && str(v.nome).length <= 60],
-      ["Garantia informada", !!v.garantia_tipo],
-    ],
-    Shopee: [...comum, ["Descrição com 100 caracteres ou mais", str(v.descricao).length >= 100]],
-    "TikTok Shop": [
-      ...comum,
-      ["Título entre 25 e 255 caracteres", str(v.nome).length >= 25 && str(v.nome).length <= 255],
-      ["Três imagens ou mais (recomendado)", totalImagens >= 3],
-    ],
-    SHEIN: [...comum, ["Três imagens ou mais (recomendado)", totalImagens >= 3]],
-  };
+  const porCanal: Record<string, [string, boolean][]> = Object.fromEntries(
+    CANAIS.map((canal) => {
+      const r = regraDe(canal);
+      const titulo = str(v.nome).trim().length;
+      const lista: [string, boolean][] = [
+        [`Pelo menos ${r.imagensMin} imagem(ns)`, totalImagens >= r.imagensMin],
+        ...comum,
+      ];
+      if (r.tituloMax || r.tituloMin > 1)
+        lista.push([
+          r.tituloMax
+            ? `Título de ${r.tituloMin} a ${r.tituloMax} letras`
+            : `Título com pelo menos ${r.tituloMin} letras`,
+          titulo >= r.tituloMin && (!r.tituloMax || titulo <= r.tituloMax),
+        ]);
+      if (r.descricaoMinPalavras)
+        lista.push([
+          `Descrição com ${r.descricaoMinPalavras} palavras ou mais`,
+          palavras(v.descricao) >= r.descricaoMinPalavras,
+        ]);
+      if (r.descricaoMax)
+        lista.push([
+          `Descrição com até ${r.descricaoMax.toLocaleString("pt-BR")} letras`,
+          str(v.descricao).length <= r.descricaoMax,
+        ]);
+      return [canal, lista];
+    }),
+  );
 
   const conteudo: Record<Aba, ReactNode> = {
     geral: (
@@ -1217,33 +1234,6 @@ export default function ProdutoForm({
     ),
     anuncios: (
       <>
-        <section className="rd-card rd-pronto">
-          <h3>Pronto para anunciar?</h3>
-          <p className="rd-note">
-            Requisitos comuns de cada canal. As regras exatas variam por categoria do marketplace.
-          </p>
-          <div className="rd-pronto-grade">
-            {CANAIS.map((canal) => {
-              const itens = porCanal[canal];
-              const faltam = itens.filter(([, ok]) => !ok);
-              return (
-                <div key={canal}>
-                  <strong>{canal}</strong>
-                  <Badge tone={faltam.length ? "amber" : "green"}>
-                    {faltam.length ? `Faltam ${faltam.length}` : "Completo"}
-                  </Badge>
-                  <ul>
-                    {itens.map(([rotulo, ok]) => (
-                      <li key={rotulo} className={ok ? "ok" : "falta"}>
-                        {ok ? "✓" : "○"} {rotulo}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        </section>
         <h3 className="rd-secao">Anúncios deste produto</h3>
         {avisoCentral && (
           <p className="rd-ok" role="status">
@@ -1274,12 +1264,12 @@ export default function ProdutoForm({
             >
               + Adicionar anúncio
             </button>
-            <button type="button" onClick={() => executar({ op: "anuncios_lote", produto_id: id })}>
-              Preparar rascunho nos 4 canais
+            <button type="button" onClick={() => anunciar(id)}>
+              ⇪ Anunciar nas minhas lojas
             </button>
           </div>
         )}
-        {CANAIS.map((canal) => {
+        {canaisCom(anunciosDoProduto).map((canal) => {
           const doCanal = anunciosDoProduto.filter((a) => a.canal === canal);
           return (
             <div key={canal} className="rd-anuncios-canal">
@@ -1288,7 +1278,7 @@ export default function ProdutoForm({
               </h4>
               {doCanal.length ? (
                 <Table
-                  headers={["Título", "Preço", "Situação", ""]}
+                  headers={["Título", "Loja", "Preço", "Qtd.", "Situação", ""]}
                   rows={doCanal.map((a) => [
                     <div key="t">
                       {str(a.titulo)}
@@ -1299,9 +1289,11 @@ export default function ProdutoForm({
                           : "Criado no Radar"}
                       </small>
                     </div>,
+                    str(dados.lojas.find((l) => l.id === a.loja_id)?.nome) || "—",
                     money(a.preco),
-                    <Badge tone={a.estado === "SIMULADO" ? "green" : "gray"}>
-                      {str(a.estado)}
+                    a.estoque == null ? "—" : str(a.estoque),
+                    <Badge tone={["SIMULADO", "PRONTO"].includes(str(a.estado)) ? "green" : "gray"}>
+                      {NO_RADAR[str(a.estado)] ?? str(a.estado)}
                     </Badge>,
                     <span key="a" className="rd-row-actions">
                       <button
@@ -1370,10 +1362,40 @@ export default function ProdutoForm({
           );
         })}
         <p className="rd-note">
-          Ao enviar este produto para um e-commerce conectado, um anúncio é criado automaticamente.
-          Anúncios também podem ser adicionados à mão, para vincular publicações existentes ou ter
-          mais de um anúncio do mesmo produto.
+          Use “Anunciar nas minhas lojas” para criar anúncios conferidos, quantos quiser, em
+          qualquer loja. “Adicionar anúncio” vincula à mão uma publicação que já existe.
         </p>
+      </>
+    ),
+    seo: (
+      <>
+        <section className="rd-card rd-pronto">
+          <h3>Pronto para anunciar?</h3>
+          <p className="rd-note">
+            Requisitos comuns de cada canal. As regras exatas variam por categoria do marketplace.
+          </p>
+          <div className="rd-pronto-grade">
+            {CANAIS.map((canal) => {
+              const itens = porCanal[canal];
+              const faltam = itens.filter(([, ok]) => !ok);
+              return (
+                <div key={canal}>
+                  <strong>{canal}</strong>
+                  <Badge tone={faltam.length ? "amber" : "green"}>
+                    {faltam.length ? `Faltam ${faltam.length}` : "Completo"}
+                  </Badge>
+                  <ul>
+                    {itens.map(([rotulo, ok]) => (
+                      <li key={rotulo} className={ok ? "ok" : "falta"}>
+                        {ok ? "✓" : "○"} {rotulo}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </section>
         <h3 className="rd-secao">SEO e classificação</h3>
         <div className="rd-form-grid">
           <Campo rotulo="Keywords" dica="Palavras separadas por vírgula" largo>
@@ -1581,6 +1603,9 @@ export default function ProdutoForm({
             onClick={() => setAba(chave)}
           >
             {rotulo}
+            {chave === "anuncios" &&
+              anunciosDoProduto.length > 0 &&
+              ` (${anunciosDoProduto.length})`}
           </button>
         ))}
       </div>

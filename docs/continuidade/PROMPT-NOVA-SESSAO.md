@@ -7,7 +7,7 @@ da sessão nova do Claude Code, aberta na pasta do repositório
 ---
 
 ```
-Oi! Sou a Juliana. Estou continuando o desenvolvimento do Radar, que eu fazia
+Oi! Sou a Jéssica. Estou continuando o desenvolvimento do Radar, que eu fazia
 com o Claude Code na nuvem. Agora vamos rodar local, nesta pasta do
 repositório (plataformaerp).
 

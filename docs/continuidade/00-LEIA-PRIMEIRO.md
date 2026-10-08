@@ -1,10 +1,10 @@
 # Continuidade do Radar — leia primeiro
 
 Escrito em 07/10/2026 pela sessão do Claude Code na nuvem (claude.ai/code)
-que trabalhou com a Juliana de setembro a outubro de 2026. A Juliana vai
+que trabalhou com a Jéssica de setembro a outubro de 2026. A Jéssica vai
 continuar em outra sessão, rodando **local** no computador dela.
 
-Esta pasta junta tudo o que a sessão sabia: o que é o Radar, como a Juliana
+Esta pasta junta tudo o que a sessão sabia: o que é o Radar, como a Jéssica
 trabalha, onde está cada coisa, o que já foi feito e o que vem a seguir. A
 ideia é não perder nada de contexto.
 
@@ -28,7 +28,7 @@ ideia é não perder nada de contexto.
 9. [`08-licoes-e-armadilhas.md`](08-licoes-e-armadilhas.md): erros que já
    aconteceram e como evitar.
 10. [`PROMPT-NOVA-SESSAO.md`](PROMPT-NOVA-SESSAO.md): a mensagem que a
-    Juliana cola na sessão nova.
+    Jéssica cola na sessão nova.
 
 Também valem, e continuam atualizados:
 - `CLAUDE.md` na raiz: as regras inegociáveis, que carregam sozinhas.
@@ -40,7 +40,7 @@ Também valem, e continuam atualizados:
 ## Senhas e chaves
 
 **Não estão nesta pasta, de propósito.** O repositório vai para o GitHub e
-a regra do projeto é "nenhum segredo em código". A Juliana copia
+a regra do projeto é "nenhum segredo em código". A Jéssica copia
 [`ACESSOS-LOCAL.exemplo.md`](ACESSOS-LOCAL.exemplo.md) para
 `ACESSOS-LOCAL.md` na mesma pasta, preenche no computador dela, e o git
 ignora esse arquivo. A sessão local pode ler o arquivo de lá.
@@ -58,7 +58,7 @@ Exceção, porque é pública de propósito: o login de demonstração do Radar,
 - **No ar:** frontend na Vercel (`https://plataformaerp.vercel.app/radar`),
   backend no Render (`radar-api-navega`), banco no Supabase (São Paulo).
 - **Fluxo de trabalho:** a IA implementa, testa local, abre PR, faz o merge e
-  confere no site. A Juliana testa no site e aprova.
+  confere no site. A Jéssica testa no site e aprova.
 - **Já pronto:**
   - cadastros completos (produtos, clientes, fornecedores, vendedores,
     categorias, embalagens) e anúncios por loja;

@@ -1,14 +1,20 @@
 # Próximos passos (em ordem)
 
-## Agora: esperando a Juliana
-1. **Ela vai testar o Bloco 1 de Produtos** no site e aprovar ou pedir
-   ajustes. É o que estava em andamento quando a sessão mudou.
-   - Bloco 1 = rascunho, SKU automático, valores padrão, lixeira, clonar e
-     aba Histórico.
-2. **Pergunta em aberto para ela:** o **gestor** pode apagar produto de vez
-   e mudar a configuração de SKU? Hoje pode. Se ela disser que é só o dono,
-   mude `permitir(...)` em `RadarProdutos.lote` (ação `EXCLUIR_DEFINITIVO`)
-   e em `RadarConfiguracao.salvar`, e ajuste o texto da tela.
+## Agora: esperando a Jéssica
+1. **Testar o "Anunciar" por loja** (decisão 0036): lojas em Integrações,
+   passo a passo com conferência e coluna "Cadastro". Bloco 1 ela já tinha
+   validado.
+2. **Respondido:** dono e gestor apagam produto de vez e mudam o SKU (como
+   está). Ela quer que dono/gestor possam **liberar permissões para outras
+   pessoas**; proposta enviada (tela de permissões por pessoa em
+   Configurações → Usuários, depois do Bloco 2), esperando: quando fazer,
+   criar o cargo "Administrativo" e se o gestor libera o que ele não tem.
+3. **Dados fictícios em todas as áreas** para ela testar (anúncios, vendas,
+   atendimento, promoções, compras, estoque, financeiro; NF-e só se der para
+   simular sem enganar). Pedido dela de 07/10/2026.
+4. **Relatórios:** ela prefere uma área única de relatórios em que o cliente
+   cruza qualquer coisa (financeiro, preço, compras, estoque, atendimento).
+   Proposta enviada; esperando o ok dela.
 
 ## Depois: Produtos, Bloco 2 (variações e kits)
 Regras dela (anotadas no documento de referência que ela mandou):
@@ -58,7 +64,7 @@ Regras dela (anotadas no documento de referência que ela mandou):
 
 ## Depois de Produtos
 - **Página por página**, cada uma junto com as suas configurações: clientes
-  e fornecedores, suprimentos, vendas e pedidos, finanças. A Juliana manda
+  e fornecedores, suprimentos, vendas e pedidos, finanças. A Jéssica manda
   os textos e prints de cada uma.
 - Lote e filtros em Atendimento e Promoções, quando ela mandar os desenhos.
 - **Grupo de empresas, fase 1:** um login para várias empresas

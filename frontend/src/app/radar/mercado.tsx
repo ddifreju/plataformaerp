@@ -6,10 +6,9 @@
 // o que depende de fonte externa aparece como "fonte não conectada", nunca
 // como número estimado apresentado como fato (regra 5 do CLAUDE.md).
 
+import { CANAIS } from "./canais";
 import { useState, type ReactNode } from "react";
 import { Badge, Empty, Table, cents, centMoney, date, str, type ModalSpec, type Row } from "./ui";
-
-const CANAIS = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 
 const ABAS = [
   ["visao", "Visão do mercado"],

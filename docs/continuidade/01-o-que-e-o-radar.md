@@ -1,6 +1,6 @@
 # O que é o Radar
 
-## A visão, nas palavras da Juliana
+## A visão, nas palavras da Jéssica
 
 > "Nós não somos só um SaaS, não somos só um ERP. A gente quer ser um
 > funcionário, um agilizador, um assistente."
@@ -35,7 +35,7 @@ PDV e sem NFC-e, decisão dela de 07/10/2026.
   definitivo da plataforma ainda está "a definir" no `CLAUDE.md`; os
   estudos estão em `docs/marca/`.
 - **Navega:** aparece no nome do serviço do backend no Render
-  (`radar-api-navega`) e é como a Juliana se refere ao negócio. Ela não
+  (`radar-api-navega`) e é como a Jéssica se refere ao negócio. Ela não
   detalhou nesta sessão a relação exata entre Navega e Radar; **pergunte se
   precisar**, não suponha.
 

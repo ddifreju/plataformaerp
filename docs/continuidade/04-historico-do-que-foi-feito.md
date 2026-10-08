@@ -104,7 +104,7 @@ fases 0 a 3 (agosto), descritas em `docs/ESTADO.md`.
     - clonar;
     - aba Histórico.
 
-## Decisões de negócio tomadas pela Juliana nesta sessão
+## Decisões de negócio tomadas pela Jéssica nesta sessão
 - Nada de loja física (sem PDV e sem NFC-e).
 - Grupo de empresas é um diferencial; vale começar pela arquitetura
   (decisão 0035).

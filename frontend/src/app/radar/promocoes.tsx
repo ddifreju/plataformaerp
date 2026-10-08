@@ -4,6 +4,7 @@
 // Promoções: período, alvo (produto e canal) e o efeito na margem antes de
 // valer. O desconto só entra num pedido quando a promoção é escolhida nele.
 
+import { CANAIS } from "./canais";
 import {
   Badge,
   Empty,
@@ -15,8 +16,6 @@ import {
   type ModalSpec,
   type Row,
 } from "./ui";
-
-const CANAIS = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 
 type Props = {
   promocoes: Row[];
