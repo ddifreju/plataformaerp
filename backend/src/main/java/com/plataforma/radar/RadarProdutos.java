@@ -495,7 +495,6 @@ public class RadarProdutos {
         if (promocional != null && promocional.signum() == 0) promocional = null;
         BigDecimal precoVenda = valorOuZero(n, "preco");
         if (promocional != null
-                && precoVenda.signum() > 0
                 && promocional.compareTo(precoVenda) >= 0)
             erro("Preço promocional deve ser menor que o preço de venda.");
         c.put("preco_promocional", promocional);
@@ -692,7 +691,6 @@ public class RadarProdutos {
                             : pai.get("preco_promocional"));
             if (c.get("preco_promocional") instanceof BigDecimal promo
                     && c.get("preco") instanceof BigDecimal precoVar
-                    && precoVar.signum() > 0
                     && promo.compareTo(precoVar) >= 0)
                 erro(
                         "Na variação "
@@ -1314,7 +1312,13 @@ public class RadarProdutos {
                                         + " = any(?)",
                                 tenant(),
                                 alvo.toArray(UUID[]::new));
-                yield Map.of("mensagem", k + " imagem(ns) removida(s) dos produtos.");
+                yield Map.of(
+                        "nada",
+                        k == 0,
+                        "mensagem",
+                        k == 0
+                                ? "Nenhuma imagem para remover nesses produtos."
+                                : k + " imagem(ns) removida(s) dos produtos.");
             }
             case "EXCLUIR" -> paraLixeira(alvo);
             case "RESTAURAR" -> {
@@ -1468,7 +1472,18 @@ public class RadarProdutos {
                             tenant(),
                             ids);
         } else {
-            Object valor = valorDoLote(n, campo, tipo);
+            Object valor;
+            try {
+                valor = valorDoLote(n, campo, tipo);
+            } catch (ResponseStatusException e) {
+                // A mensagem nomeia o campo escolhido, não a caixa "valor" da tela.
+                String nome = RadarEntrada.nomeDoCampo(campo);
+                throw new ResponseStatusException(
+                        e.getStatusCode(),
+                        String.valueOf(e.getReason())
+                                .replace("em valor", "em " + nome)
+                                .replace("valor aceita", nome + " aceita"));
+            }
             if (valor != null) promocionalAcima(campo, "?", valor, ids);
             String filtroKit = campo.equals("custo") ? " and tipo<>'KIT'" : "";
             // campo vem só de CAMPOS_LOTE (chaves fixas), nunca do texto da requisição.
@@ -1483,6 +1498,8 @@ public class RadarProdutos {
                             ids);
         }
         return Map.of(
+                "nada",
+                k == 0,
                 "mensagem",
                 k
                         + " produto(s) atualizado(s)."
@@ -1527,7 +1544,8 @@ public class RadarProdutos {
                 BigDecimal v = valor(n, "valor");
                 if (campo.equals("preco") && v.signum() == 0)
                     erro("Preço deve ser maior que zero.");
-                yield v;
+                // Promocional zero é o mesmo que tirar a promoção.
+                yield campo.equals("preco_promocional") && v.signum() == 0 ? null : v;
             }
             case "TEXTO" -> textoOuVazio(n, "valor", 120);
             case "CATEGORIA" -> {
@@ -1581,7 +1599,8 @@ public class RadarProdutos {
                 switch (campo) {
                     case "preco" ->
                             "preco_promocional is not null and preco_promocional >= " + novo;
-                    case "preco_promocional" -> "preco > 0 and " + novo + " >= preco";
+                    // Sem preço de venda (rascunho) também não cabe promoção.
+                    case "preco_promocional" -> novo + " >= preco";
                     default -> null;
                 };
         if (condicao == null) return;
@@ -1610,22 +1629,32 @@ public class RadarProdutos {
                             "update radar_produto set tags = (select coalesce(jsonb_agg(distinct"
                                     + " t), '[]'::jsonb) from jsonb_array_elements_text(tags ||"
                                     + " ?::jsonb) t), atualizado_em=now() where tenant_id=? and id"
-                                    + " = any(?)";
+                                    + " = any(?) and not (tags @> ?::jsonb)";
                     case "REMOVER" ->
                             "update radar_produto set tags = (select coalesce(jsonb_agg(t),"
                                     + " '[]'::jsonb) from jsonb_array_elements_text(tags) t where"
                                     + " not (to_jsonb(t) <@ ?::jsonb)), atualizado_em=now() where"
-                                    + " tenant_id=? and id = any(?)";
+                                    + " tenant_id=? and id = any(?) and exists (select 1 from"
+                                    + " jsonb_array_elements_text(tags) x where to_jsonb(x) <@"
+                                    + " ?::jsonb)";
                     case "SUBSTITUIR" ->
                             "update radar_produto set tags = ?::jsonb, atualizado_em=now() where"
-                                    + " tenant_id=? and id = any(?)";
+                                    + " tenant_id=? and id = any(?) and tags is distinct from"
+                                    + " ?::jsonb";
                     default -> {
                         erro("Modo de tags inválido.");
                         yield "";
                     }
                 };
-        int k = db.update(sql, tags, tenant(), ids);
-        return Map.of("mensagem", "Tags alteradas em " + k + " produto(s).");
+        // Só conta (e só mexe em) produto que mudou de verdade.
+        int k = db.update(sql, tags, tenant(), ids, tags);
+        return Map.of(
+                "nada",
+                k == 0,
+                "mensagem",
+                k == 0
+                        ? "Nenhum produto mudou: as tags já estavam assim."
+                        : "Tags alteradas em " + k + " produto(s).");
     }
 
     /**

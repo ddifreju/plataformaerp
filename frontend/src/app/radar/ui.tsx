@@ -28,6 +28,14 @@ export function useFecharFora<T extends HTMLElement>(aberto: boolean, fechar: ()
 
 export type Row = Record<string, string | number | boolean | Record<string, unknown>>;
 
+/** Número como se digita no Brasil: "1.234,56" → 1234.56; "1.234" (milhar) → 1234; "20.5" → 20.5. */
+export const numeroBR = (t: string) => {
+  const s = t.trim();
+  if (s.includes(",")) return s.replace(/\./g, "").replace(",", ".");
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) return s.replace(/\./g, "");
+  return s;
+};
+
 // Tamanhos de roupa na ordem de quem veste; o resto em ordem alfabética (com números).
 const TAMANHOS = ["PP", "P", "M", "G", "GG", "XG", "XGG", "EG", "EGG"];
 const compararValor = (a: string, b: string) => {

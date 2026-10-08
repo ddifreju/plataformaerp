@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { TITULO_MAX_RADAR, letras, palavras, regraDe, type Regra } from "./canais";
 import { vinculoDe } from "./categorias";
 import { CHAVE_DA_PENDENCIA, LinhaPreencher, faltasDoCadastro, type Chave } from "./pendencias";
-import { Badge, str, useFecharFora, type Row } from "./ui";
+import { Badge, numeroBR, str, useFecharFora, type Row } from "./ui";
 
 type Props = {
   ids: string[];
@@ -76,7 +76,11 @@ export default function Anunciar(props: Props) {
   const ajusteDe = (p: Row, chave: string): Ajuste =>
     ajustes[chave] ?? {
       titulo: str(p.nome),
-      preco: str(p.preco),
+      // Abre no formato brasileiro (1.000,00), que é como a pessoa vai editar.
+      preco:
+        p.preco == null || str(p.preco) === ""
+          ? ""
+          : Number(p.preco).toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
       estoque: String(Math.max(0, props.disponivel(p))),
     };
   const mudar = (p: Row, chave: string, campo: keyof Ajuste, valor: string) =>
@@ -643,11 +647,3 @@ const limiteTitulo = (r: Regra) =>
     ? `vai de ${r.tituloMin} a ${r.tituloMax}`
     : `vai de ${r.tituloMin} a ${TITULO_MAX_RADAR} (limite do Radar)`;
 const moeda = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-
-/** Número como se digita no Brasil: "1.234,56" → 1234.56; "1.234" (milhar) → 1234; "20.5" → 20.5. */
-const numeroBR = (t: string) => {
-  const s = t.trim();
-  if (s.includes(",")) return s.replace(/\./g, "").replace(",", ".");
-  if (/^\d{1,3}(\.\d{3})+$/.test(s)) return s.replace(/\./g, "");
-  return s;
-};
