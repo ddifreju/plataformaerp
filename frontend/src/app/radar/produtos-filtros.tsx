@@ -96,7 +96,16 @@ const PENDENCIAS: [string, string][] = [
   ["SEM_CATEGORIA", "Sem categoria"],
   ["SEM_GTIN", "Sem GTIN/EAN e sem motivo"],
   ["SEM_PESO", "Sem peso bruto"],
+  ["FISCAL", "Com problema fiscal"],
 ];
+
+const digitos = (v: unknown) => str(v).replace(/\D/g, "");
+/** NCM sem 8 dígitos, sem origem, sem código de barras (nem motivo) ou CEST fora do formato. */
+export const problemaFiscal = (p: Row) =>
+  digitos(p.ncm).length !== 8 ||
+  str(p.origem) === "" ||
+  (!p.gtin && !p.motivo_sem_gtin) ||
+  (!!p.cest && digitos(p.cest).length !== 7);
 
 /** O que os filtros precisam saber além do próprio produto. */
 export type ContextoFiltro = {
@@ -213,6 +222,7 @@ export function filtrarProdutos(lista: Row[], f: FiltroProdutos, c: ContextoFilt
       if (k === "SEM_CATEGORIA" && p.categoria_id) return false;
       if (k === "SEM_GTIN" && (p.gtin || p.motivo_sem_gtin)) return false;
       if (k === "SEM_PESO" && Number(p.peso_bruto_kg ?? 0) > 0) return false;
+      if (k === "FISCAL" && !problemaFiscal(p)) return false;
     }
     return true;
   };

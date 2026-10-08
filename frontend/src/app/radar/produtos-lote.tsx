@@ -6,7 +6,7 @@
 // A tabela é desenhada por quem usa (render prop), recebendo a caixa do
 // cabeçalho e a de cada linha.
 
-import { useState, type ReactNode } from "react";
+import { useImperativeHandle, useState, type ReactNode, type Ref } from "react";
 import { money, str, type Row } from "./ui";
 import type { TipoRapido } from "./acoes-rapidas";
 
@@ -32,10 +32,20 @@ type Props = {
   /** Quem vê custo e quem pode mexer em custo. */
   podeCusto: boolean;
   ativo: boolean;
+  /** Para o "mais ações" do topo da página usar as mesmas funções, com a lista filtrada. */
+  controle?: Ref<ControleLote>;
   children: (k: {
     cabecalho: ReactNode;
     celula: (p: Row) => ReactNode;
   }) => ReactNode;
+};
+
+/** O que o topo da página pede à lista: imprimir, exportar e editar um campo em lote. */
+export type ControleLote = {
+  relatorio: (ids: string[]) => void;
+  exportarProdutos: (ids: string[]) => void;
+  exportarKits: (ids: string[]) => void;
+  editarCampo: (campo: string, modo: string, ids: string[]) => void;
 };
 
 type Acao =
@@ -167,6 +177,7 @@ export default function ProdutosLote({
   podeEnviarEstoque,
   podeCusto,
   ativo,
+  controle,
   children,
 }: Props) {
   const [menu, setMenu] = useState(false);
@@ -215,6 +226,17 @@ export default function ProdutosLote({
     setModo("DEFINIR");
     setAcao(a);
   }
+
+  useImperativeHandle(controle, () => ({
+    relatorio,
+    exportarProdutos,
+    exportarKits,
+    editarCampo: (c, m, ids) => {
+      abrir("EDITAR", ids);
+      setCampo(c);
+      setModo(m);
+    },
+  }));
 
   function enviarEcommerce() {
     const ids = menuLinha ? [menuLinha.id] : marcados;
@@ -328,7 +350,7 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
       (p) => ids.includes(str(p.id)) && p.tipo === "KIT",
     );
     if (!kits.length) {
-      setAviso("Nenhum kit entre os produtos marcados.");
+      setAviso("Nenhum kit entre os produtos escolhidos.");
       return;
     }
     const prod = (id: unknown) => produtos.find((p) => p.id === id);
@@ -724,7 +746,7 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             <p className="rd-note">
               {alvo.length === 1
                 ? `Produto: ${str(produtos.find((p) => str(p.id) === alvo[0])?.nome)}.`
-                : `${alvo.length} produtos marcados.`}{" "}
+                : `${alvo.length} produtos.`}{" "}
               Vale também para as variações.
             </p>
             {acao === "EDITAR" && (

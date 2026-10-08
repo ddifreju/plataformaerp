@@ -2,7 +2,7 @@
 /* eslint-disable react/jsx-key -- Table wraps each supplied cell in a keyed td; these arrays are table data, not rendered sibling lists. */
 
 import { CANAIS as canais, SIGLA } from "./canais";
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import "./radar.css";
 import {
   Badge,
@@ -24,9 +24,10 @@ import type { Fonte } from "./relatorios-montar";
 import ProdutoForm, { type Aba as AbaProduto } from "./produto";
 import ProdutoVer, { type AbaVer } from "./produto-ver";
 import PainelRapido, { type TipoRapido } from "./acoes-rapidas";
+import { COLUNAS, ColunasVisiveis, MaisAcoesProdutos, useColunas } from "./produtos-topo";
 import Clientes from "./cliente";
 import Vendedores from "./vendedor";
-import ProdutosLote from "./produtos-lote";
+import ProdutosLote, { type ControleLote } from "./produtos-lote";
 import PedidosLote from "./pedidos-lote";
 import Configuracoes from "./configuracoes";
 import { configPedidos } from "./pedidos-filtros";
@@ -265,7 +266,12 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [rapido, setRapido] = useState<{ tipo: TipoRapido; ids: string[] } | null>(null),
     // Produtos abertos no passo a passo "Anunciar".
     [anunciando, setAnunciando] = useState<string[] | null>(null),
-    [filtroPedidosAtual, setFiltroPedidos] = useState<Filtro | null>(null);
+    [filtroPedidosAtual, setFiltroPedidos] = useState<Filtro | null>(null),
+    // Colunas visíveis da lista de produtos e a gaveta que escolhe.
+    [colunasProdutos, setColunasProdutos] = useColunas(),
+    [verColunas, setVerColunas] = useState(false);
+  // O "mais ações" do topo usa as funções da lista (imprimir, exportar, editar em lote).
+  const controleLote = useRef<ControleLote>(null);
   const refresh = useCallback(async () => {
     const d = await call("");
     setData(d);
@@ -460,6 +466,12 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   };
   const listaProdutos =
     page === "produtos" ? filtrarProdutos(principais, filtroProdutos, contextoFiltro) : [];
+  // Colunas escolhidas em "Informações visíveis" (custo só para quem vê financeiro).
+  const colunasLista = COLUNAS.filter(
+    ([c]) =>
+      c !== "imagem" && colunasProdutos.includes(c) && (c !== "custo" || data.financeiroPermitido),
+  );
+  const verImagem = colunasProdutos.includes("imagem");
   const cfgPedidos = configPedidos(
     {
       produtos: products,
@@ -627,26 +639,74 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
         </div>
         <main className="rd-content">
           <div className="rd-page-heading">
-            <div>
-              <div className="rd-eyebrow">
-                RADAR ·{" "}
-                {page === "visao"
-                  ? "COMMERCE OPERATING SYSTEM"
-                  : nav.find((x) => x[0] === page)?.[1].toUpperCase()}
-              </div>
-              <h1>{(titles[page] ?? titles.relatorios)[0]}</h1>
-              <p>{(titles[page] ?? titles.relatorios)[1]}</p>
-            </div>
-            <div className="rd-heading-actions">
-              {page === "produtos" && can("DONO", "GESTOR") && (
-                <>
-                  <button onClick={() => go("importar")}>↥ Importar</button>
-                  <button
-                    className="primary"
-                    onClick={() => setEditando({ id: null, aba: "gerais", versao: Date.now() })}
-                  >
-                    + Novo produto
+            {page === "produtos" ? (
+              <div>
+                <nav className="rd-trilha" aria-label="Você está em">
+                  <button type="button" onClick={() => go("visao")}>
+                    início
                   </button>
+                  <span aria-hidden="true">›</span>
+                  <span>cadastros</span>
+                  <span aria-hidden="true">›</span>
+                  <strong>produtos</strong>
+                </nav>
+                <h1>Produtos</h1>
+              </div>
+            ) : (
+              <div>
+                <div className="rd-eyebrow">
+                  RADAR ·{" "}
+                  {page === "visao"
+                    ? "COMMERCE OPERATING SYSTEM"
+                    : nav.find((x) => x[0] === page)?.[1].toUpperCase()}
+                </div>
+                <h1>{(titles[page] ?? titles.relatorios)[0]}</h1>
+                <p>{(titles[page] ?? titles.relatorios)[1]}</p>
+              </div>
+            )}
+            <div className="rd-heading-actions">
+              {page === "produtos" && !editando && !vendo && (
+                <>
+                  {can("DONO", "GESTOR") && (
+                    <button
+                      className="text"
+                      onClick={() => {
+                        setError("");
+                        setRapido({ tipo: "receber", ids: [] });
+                      }}
+                    >
+                      ⇩ receber do e-commerce
+                    </button>
+                  )}
+                  {can("DONO", "GESTOR") && (
+                    <button
+                      className="primary"
+                      onClick={() => setEditando({ id: null, aba: "gerais", versao: Date.now() })}
+                    >
+                      incluir produto
+                    </button>
+                  )}
+                  <MaisAcoesProdutos
+                    controle={controleLote}
+                    ids={() =>
+                      marcadosProdutos.length
+                        ? marcadosProdutos
+                        : listaProdutos.map((p) => str(p.id))
+                    }
+                    podeEditar={can("DONO", "GESTOR")}
+                    podeAnuncios={can("DONO", "GESTOR", "MARKETING")}
+                    receber={() => {
+                      setError("");
+                      setRapido({ tipo: "receber", ids: [] });
+                    }}
+                    problemasFiscais={() =>
+                      setFiltroProdutos({
+                        ...filtroProdutos,
+                        pendencias: [...new Set([...filtroProdutos.pendencias, "FISCAL"])],
+                      })
+                    }
+                    ir={go}
+                  />
                 </>
               )}
               {page === "pedidos" && can("DONO", "GESTOR") && (
@@ -934,11 +994,21 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             <section className="rd-card">
               <div className="rd-card-head">
                 <h2>{principais.length} produtos</h2>
-                {naLixeira.length > 0 && (
-                  <button type="button" className="text" onClick={() => setVerLixeira(true)}>
-                    🗑 Lixeira ({naLixeira.length})
+                <div className="rd-heading-actions">
+                  {naLixeira.length > 0 && (
+                    <button type="button" className="text" onClick={() => setVerLixeira(true)}>
+                      🗑 Lixeira ({naLixeira.length})
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    title="Informações visíveis"
+                    aria-label="Escolher as colunas visíveis"
+                    onClick={() => setVerColunas(true)}
+                  >
+                    ⫶ colunas
                   </button>
-                )}
+                </div>
               </div>
               <FiltrosProdutos
                 filtro={filtroProdutos}
@@ -949,6 +1019,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               />
               <ProdutosLote
                 ativo={can("DONO", "GESTOR")}
+                controle={controleLote}
                 anunciar={
                   can("DONO", "GESTOR", "MARKETING") ? (ids) => setAnunciando(ids) : undefined
                 }
@@ -982,12 +1053,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                     headers={[
                       lote.cabecalho,
                       "Produto",
-                      "SKU",
-                      "Tipo",
-                      "Custo / preço",
-                      "Disponível",
-                      "Anúncios",
-                      "Cadastro",
+                      ...colunasLista.map(([, rotulo]) => rotulo),
                       "Ações",
                     ]}
                     rows={listaProdutos.map((p) => {
@@ -1000,7 +1066,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                       return [
                         lote.celula(p),
                         <div className="rd-product-name">
-                          {capa ? (
+                          {!verImagem ? null : capa ? (
                             // eslint-disable-next-line @next/next/no-img-element -- imagem servida pela API autenticada
                             <img
                               className="rd-product-thumb"
@@ -1019,35 +1085,71 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                             >
                               {str(p.nome)}
                             </button>
-                            <small>{str(p.marca) || "Sem marca"}</small>
+                            {!colunasProdutos.includes("marca") && (
+                              <small>{str(p.marca) || "Sem marca"}</small>
+                            )}
                           </div>
                         </div>,
-                        str(p.sku),
-                        p.tipo === "KIT" ? (
-                          <Badge tone="purple">Kit</Badge>
-                        ) : p.tipo === "VARIACAO" ? (
-                          <Badge tone="blue">{variacoes} variações</Badge>
-                        ) : (
-                          <Badge>Simples</Badge>
-                        ),
-                        <>
-                          {data.financeiroPermitido && <small>{money(p.custo)} / </small>}
-                          {money(p.preco)}
-                        </>,
-                        p.controla_estoque === false ? "Sem controle" : disponivel(p),
-                        qtdAnuncios ? (
-                          <button
-                            type="button"
-                            className="rd-link-produto"
-                            title="Ver os anúncios vinculados"
-                            onClick={() => setVendo({ id: str(p.id), aba: "anuncios" })}
-                          >
-                            {qtdAnuncios}
-                          </button>
-                        ) : (
-                          <span className="rd-dica">0</span>
-                        ),
-                        <Cadastro produto={p} variacoes={products} />,
+                        ...colunasLista.map(([c]) => {
+                          switch (c) {
+                            case "sku":
+                              return str(p.sku);
+                            case "gtin":
+                              return str(p.gtin) || "—";
+                            case "unidade":
+                              return str(p.unidade) || "—";
+                            case "ncm":
+                              return str(p.ncm) || "—";
+                            case "tipo":
+                              return p.tipo === "KIT" ? (
+                                <Badge tone="purple">Kit</Badge>
+                              ) : p.tipo === "VARIACAO" ? (
+                                <Badge tone="blue">{variacoes} variações</Badge>
+                              ) : (
+                                <Badge>Simples</Badge>
+                              );
+                            case "preco":
+                              return money(p.preco);
+                            case "custo":
+                              return money(p.custo);
+                            case "marca":
+                              return str(p.marca) || "—";
+                            case "fornecedor":
+                              return (
+                                (data.produtoFornecedores ?? [])
+                                  .filter((f) => f.produto_id === p.id && f.codigo_no_fornecedor)
+                                  .map((f) => str(f.codigo_no_fornecedor))
+                                  .join(", ") || "—"
+                              );
+                            case "fisico":
+                              return p.controla_estoque === false
+                                ? "Sem controle"
+                                : p.tipo === "KIT"
+                                  ? "—"
+                                  : p.tipo === "VARIACAO"
+                                    ? products
+                                        .filter((f) => f.pai_id === p.id)
+                                        .reduce((t, f) => t + Number(f.fisico), 0)
+                                    : Number(p.fisico);
+                            case "disponivel":
+                              return p.controla_estoque === false ? "Sem controle" : disponivel(p);
+                            case "anuncios":
+                              return qtdAnuncios ? (
+                                <button
+                                  type="button"
+                                  className="rd-link-produto"
+                                  title="Ver os anúncios vinculados"
+                                  onClick={() => setVendo({ id: str(p.id), aba: "anuncios" })}
+                                >
+                                  {qtdAnuncios}
+                                </button>
+                              ) : (
+                                <span className="rd-dica">0</span>
+                              );
+                            default:
+                              return <Cadastro produto={p} variacoes={products} />;
+                          }
+                        }),
                         <div className="rd-row-actions">
                           <button
                             onClick={() =>
@@ -2086,6 +2188,14 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           </footer>
         </main>
       </div>
+      {verColunas && data && (
+        <ColunasVisiveis
+          colunas={colunasProdutos}
+          financeiro={data.financeiroPermitido}
+          aplicar={setColunasProdutos}
+          fechar={() => setVerColunas(false)}
+        />
+      )}
       {rapido && data && (
         <PainelRapido
           key={`${rapido.tipo}-${rapido.ids.join()}`}
@@ -2102,9 +2212,9 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           erro={error}
           disponivel={disponivel}
           executar={command}
-          irParaLojas={() => {
+          ir={(pagina) => {
             setRapido(null);
-            go("integracoes");
+            go(pagina);
           }}
           fechar={() => setRapido(null)}
         />

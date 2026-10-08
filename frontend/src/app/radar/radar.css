@@ -388,6 +388,8 @@
 }
 .rd-heading-actions {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 .rd-heading-actions button {
@@ -3870,4 +3872,86 @@ ul.rd-menu-linha li button:disabled {
 }
 .rd-gaveta .rd-table {
   font-size: 0.88rem;
+}
+
+/* Topo da página de produtos: caminho (início › cadastros › produtos) */
+.rd-trilha {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--rd-muted);
+  margin-bottom: 6px;
+}
+.rd-trilha button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.rd-trilha button:hover {
+  text-decoration: underline;
+}
+.rd-trilha strong {
+  color: var(--rd-ink, #111827);
+  font-weight: 600;
+}
+
+/* "Informações visíveis": lista de colunas com chave liga/desliga */
+.rd-colunas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.rd-colunas li {
+  border-bottom: 1px solid var(--rd-line);
+}
+.rd-colunas label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 4px;
+  cursor: pointer;
+}
+.rd-colunas li:first-child span {
+  color: var(--rd-muted);
+}
+.rd-gaveta input.rd-switch {
+  appearance: none;
+  width: 36px;
+  height: 18px;
+  border-radius: 999px;
+  background: #d1d5db;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.rd-gaveta input.rd-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 0.15s;
+}
+.rd-gaveta input.rd-switch:checked {
+  background: #6d8fe0;
+}
+.rd-gaveta input.rd-switch:checked::after {
+  transform: translateX(18px);
+}
+.rd-gaveta input.rd-switch:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.rd-gaveta input.rd-switch:focus-visible {
+  outline: 2px solid #2f5fd0;
+  outline-offset: 2px;
 }
