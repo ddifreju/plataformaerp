@@ -747,6 +747,42 @@ class RadarAnunciosTest {
                                         "select estoque from radar_anuncio where loja_id=?",
                                         Integer.class,
                                         ml)));
+        // Cargo Estoque: leva o estoque, mas não mexe em preço.
+        BancoRadarDeTeste.executarComoDono("update radar_produto set fisico=9 where id=?", produto);
+        naEmpresa(
+                empresa,
+                () -> anuncios.executar("anuncios_sincronizar", json(String.format(corpo, "ESTOQUE")), "ESTOQUE"));
+        assertEquals(
+                7,
+                naEmpresa(
+                        empresa,
+                        () ->
+                                db.queryForObject(
+                                        "select estoque from radar_anuncio where loja_id=?",
+                                        Integer.class,
+                                        ml)));
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                empresa,
+                                () ->
+                                        anuncios.executar(
+                                                "anuncios_sincronizar",
+                                                json(String.format(corpo, "PRECO")),
+                                                "ESTOQUE")));
+        assertEquals(0, new BigDecimal("120.00").compareTo(precoNaLoja(empresa, produto, ml)));
+        // Nem outra operação de anúncio, mesmo dizendo "ESTOQUE".
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                empresa,
+                                () ->
+                                        anuncios.executar(
+                                                "anuncios_precos",
+                                                json(String.format(corpo, "ESTOQUE")),
+                                                "ESTOQUE")));
         // Marketing: vira proposta para aprovação, o preço não muda.
         BancoRadarDeTeste.executarComoDono("update radar_produto set preco=130 where id=?", produto);
         var r =

@@ -879,6 +879,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               financeiro={data.financeiroPermitido}
               podeEditar={can("DONO", "GESTOR")}
               podeAnunciar={can("DONO", "GESTOR", "MARKETING")}
+              podeEnviarEstoque={can("DONO", "GESTOR", "MARKETING", "ESTOQUE")}
               disponivel={disponivel}
               editar={(aba) => setEditando({ id: vendo.id, aba, versao: Date.now() })}
               anunciar={() => setAnunciando([vendo.id])}
@@ -955,6 +956,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   setError("");
                   setRapido({ tipo, ids });
                 }}
+                podeEnviarEstoque={can("DONO", "GESTOR", "MARKETING", "ESTOQUE")}
                 podeCusto={data.financeiroPermitido && can("DONO", "GESTOR")}
                 produtos={cadastrados}
                 clonar={

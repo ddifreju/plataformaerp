@@ -109,7 +109,12 @@ public class RadarAnuncios {
     }
 
     Map<String, Object> executar(String op, JsonNode n, String papel) {
-        permitir(papel, "DONO", "GESTOR", "MARKETING");
+        // O cargo Estoque só leva a quantidade disponível para os anúncios (decisão da Jéssica).
+        boolean estoqueNaLoja =
+                papel.equals("ESTOQUE")
+                        && op.equals("anuncios_sincronizar")
+                        && n.path("campo").asText("").equals("ESTOQUE");
+        if (!estoqueNaLoja) permitir(papel, "DONO", "GESTOR", "MARKETING");
         return switch (op) {
             case "loja_salvar" -> {
                 permitir(papel, "DONO", "GESTOR");
@@ -258,6 +263,8 @@ public class RadarAnuncios {
     private Map<String, Object> sincronizar(JsonNode n, String papel) {
         String campo = n.path("campo").asText("");
         if (!Set.of("PRECO", "ESTOQUE").contains(campo)) erro("Escolha preço ou estoque.");
+        if (papel.equals("ESTOQUE") && !campo.equals("ESTOQUE"))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "O cargo Estoque só envia estoque.");
         List<UUID> produtos = ids(n.path("produto_ids"));
         JsonNode lojasJson = n.path("loja_ids");
         if (!lojasJson.isArray() || lojasJson.isEmpty()) erro("Escolha uma ou mais lojas.");
