@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -817,6 +818,49 @@ public class RadarProdutos {
      * Copia o produto (e as variações, a composição do kit e os fornecedores) com SKU novo e
      * estoque zero. Imagens só se pedir. Pedidos, anúncios e histórico ficam no original.
      */
+    /**
+     * "Iniciar histórico de custos": grava o custo de hoje como ponto de partida dos produtos (e
+     * variações) que ainda não têm histórico. Daí em diante o gatilho da V035 registra cada
+     * mudança. Produto sem custo fica de fora (não há o que registrar).
+     */
+    Map<String, Object> iniciarCustos(JsonNode n, String papel) {
+        permitir(papel, "DONO", "GESTOR", "FINANCEIRO");
+        JsonNode lista = n.path("ids");
+        if (!lista.isArray() || lista.isEmpty() || lista.size() > 5000)
+            erro("Escolha entre 1 e 5000 produtos.");
+        List<UUID> ids = new ArrayList<>();
+        for (JsonNode i : lista) {
+            try {
+                ids.add(UUID.fromString(i.asText()));
+            } catch (IllegalArgumentException e) {
+                erro("Identificador inválido.");
+            }
+        }
+        UUID[] arr = ids.toArray(UUID[]::new);
+        int iniciados =
+                db.update(
+                        "insert into radar_custo_historico(tenant_id,produto_id,depois,motivo,"
+                                + "usuario_id) select p.tenant_id,p.id,p.custo,'Início do"
+                                + " histórico',? from radar_produto p where p.tenant_id=? and"
+                                + " (p.id = any(?) or p.pai_id = any(?)) and p.custo is not null"
+                                + " and p.excluido_em is null and not exists (select 1 from"
+                                + " radar_custo_historico h where h.tenant_id=p.tenant_id and"
+                                + " h.produto_id=p.id)",
+                        RadarService.usuarioAtual(),
+                        tenant(),
+                        arr,
+                        arr);
+        return Map.of(
+                "iniciados",
+                iniciados,
+                "mensagem",
+                iniciados == 0
+                        ? "Esses produtos já têm histórico de custos (ou estão sem custo)."
+                        : iniciados
+                                + " produto(s) com o histórico de custos iniciado. Cada mudança de"
+                                + " custo fica registrada daqui em diante.");
+    }
+
     Map<String, Object> clonar(JsonNode n, String papel) {
         permitir(papel, "DONO", "GESTOR");
         UUID origem = id(n, "id");
@@ -996,6 +1040,27 @@ public class RadarProdutos {
                                     + " un."
                                     + (veCusto ? " a R$ " + r.get("custo") + " cada" : ""),
                             null));
+        for (var c :
+                !veCusto
+                        ? List.<Map<String, Object>>of()
+                        : db.queryForList(
+                                "select h.criado_em, h.antes, h.depois, h.motivo, p.sku, u.nome"
+                                        + " ator from radar_custo_historico h join radar_produto p"
+                                        + " on p.tenant_id=h.tenant_id and p.id=h.produto_id left"
+                                        + " join usuario u on u.tenant_id=h.tenant_id and"
+                                        + " u.id=h.usuario_id where h.tenant_id=? and (p.id=? or"
+                                        + " p.pai_id=?) order by h.criado_em desc limit 300",
+                                tenant(),
+                                id,
+                                id))
+            eventos.add(
+                    evento(
+                            c.get("criado_em"),
+                            "CUSTO",
+                            (c.get("antes") == null ? "" : reais(c.get("antes")) + " → ")
+                                    + (c.get("depois") == null ? "sem custo" : reais(c.get("depois"))),
+                            c.get("motivo") + " (" + c.get("sku") + ")",
+                            c.get("ator")));
         for (var a :
                 !veAlteracoes
                         ? List.<Map<String, Object>>of()
@@ -1059,10 +1124,16 @@ public class RadarProdutos {
         };
     }
 
+    /** R$ no formato brasileiro (1.234,56). */
+    private static String reais(Object v) {
+        return String.format(Locale.forLanguageTag("pt-BR"), "R$ %,.2f", (BigDecimal) v);
+    }
+
     private static String rotuloOperacao(String op, String acao) {
         return switch (op) {
             case "produto_salvar" -> "Cadastro salvo";
             case "produto_clonar" -> "Produto clonado";
+            case "custos_iniciar" -> "Histórico de custos iniciado";
             case "imagem_adicionar" -> "Imagem adicionada";
             case "imagem_remover" -> "Imagem removida";
             case "imagem_principal" -> "Imagem principal trocada";

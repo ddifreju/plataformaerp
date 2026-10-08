@@ -78,6 +78,12 @@ class RadarFontesTest {
                 assertThrows(
                         ResponseStatusException.class, () -> linhas(a, "ESTOQUE", "atendimento"));
         assertEquals(HttpStatus.FORBIDDEN, atendimento.getStatusCode());
+        // Histórico de custos: só quem vê o financeiro.
+        for (String papel : List.of("ESTOQUE", "MARKETING", "ANALISTA", "ATENDIMENTO")) {
+            var custos =
+                    assertThrows(ResponseStatusException.class, () -> linhas(a, papel, "custos"));
+            assertEquals(HttpStatus.FORBIDDEN, custos.getStatusCode());
+        }
         var inventada =
                 assertThrows(ResponseStatusException.class, () -> linhas(a, "DONO", "senhas"));
         assertEquals(HttpStatus.NOT_FOUND, inventada.getStatusCode());
@@ -95,7 +101,7 @@ class RadarFontesTest {
         UUID p = BancoRadarDeTeste.novoProduto(a, "REL-T", "10.00", "50.00");
         BancoRadarDeTeste.novoPedido(a, p, "Mercado Livre", "Ana", "50.00", "10.00");
         var catalogo = naEmpresa(a, () -> fontes.catalogo("DONO"));
-        assertEquals(8, catalogo.size());
+        assertEquals(9, catalogo.size());
         for (var fonte : catalogo) linhas(a, "DONO", (String) fonte.get("nome"));
     }
 

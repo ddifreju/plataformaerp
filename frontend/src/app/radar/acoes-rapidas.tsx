@@ -17,7 +17,8 @@ export type TipoRapido =
   | "compras"
   | "custo-variacoes"
   | "multiempresa"
-  | "receber";
+  | "receber"
+  | "custos-iniciar";
 
 // O erro do último comando aparece dentro do painel (a mensagem da tela fica atrás dele).
 const ErroDoPainel = createContext("");
@@ -196,6 +197,45 @@ function Painel(props: Props) {
     }
     case "custo-variacoes":
       return <CustoVariacoes {...props} escolhidos={escolhidos} />;
+    case "custos-iniciar": {
+      const comCusto = vendidos.filter((p) => p.custo !== null && p.custo !== undefined);
+      return (
+        <Gaveta
+          titulo="Iniciar histórico de custos"
+          fechar={fechar}
+          rodape={
+            <>
+              <button
+                className="primary"
+                disabled={props.busy || !comCusto.length}
+                onClick={async () => {
+                  if (await props.executar({ op: "custos_iniciar", ids: props.ids })) fechar();
+                }}
+              >
+                Iniciar
+              </button>
+              <button onClick={fechar}>cancelar</button>
+            </>
+          }
+        >
+          <Aviso titulo="Ponto de partida">
+            O custo de hoje de cada produto vira o primeiro registro do histórico. Daí em diante,
+            toda mudança de custo (edição, edição em lote, compra recebida) fica registrada com o
+            valor antes, o depois, o motivo e quem fez. Produto que já tem histórico não muda.
+          </Aviso>
+          <p>
+            <strong>{comCusto.length}</strong> produto(s) com custo
+            {vendidos.length > comCusto.length &&
+              ` · ${vendidos.length - comCusto.length} sem custo ficam de fora`}
+            .
+          </p>
+          <p className="rd-dica">
+            O histórico aparece na aba “Custo e compras” do produto e em Relatórios → Histórico de
+            custos.
+          </p>
+        </Gaveta>
+      );
+    }
     case "receber":
       return (
         <Gaveta

@@ -114,6 +114,8 @@ export function MaisAcoesProdutos(props: {
   ids: () => string[];
   podeEditar: boolean;
   podeAnuncios: boolean;
+  /** Quem vê e cuida de custo inicia o histórico de custos. */
+  iniciarCustos?: (ids: string[]) => void;
   receber: () => void;
   problemasFiscais: () => void;
   ir: (pagina: string) => void;
@@ -155,7 +157,8 @@ export function MaisAcoesProdutos(props: {
             {item("⇩ receber produtos do e-commerce", props.receber)}
             <li className="rd-menu-sep" />
             {item("🖨 imprimir relatório", () => lista()?.relatorio(props.ids()))}
-            {emBreve("☰ iniciar histórico de custos", "Vem com o custo médio pelas compras")}
+            {props.iniciarCustos &&
+              item("☰ iniciar histórico de custos", () => props.iniciarCustos?.(props.ids()))}
             {props.podeEditar &&
               item("$ reajustar preço dos produtos", () =>
                 lista()?.editarCampo("preco", "AUMENTAR_PCT", props.ids()),
