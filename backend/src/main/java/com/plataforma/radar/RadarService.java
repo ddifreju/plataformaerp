@@ -34,6 +34,7 @@ public class RadarService {
     private final RadarEmpresa empresa;
     private final RadarConfiguracao configuracao;
     private final RadarExemplo exemplo;
+    private final RadarFontes fontes;
     private static final Set<String> CANAIS = RadarAnuncios.CANAIS;
 
     public RadarService(
@@ -48,7 +49,8 @@ public class RadarService {
             RadarVendedores vendedores,
             RadarEmpresa empresa,
             RadarConfiguracao configuracao,
-            RadarExemplo exemplo) {
+            RadarExemplo exemplo,
+            RadarFontes fontes) {
         this.db = db;
         this.json = json;
         this.cadastros = cadastros;
@@ -61,6 +63,7 @@ public class RadarService {
         this.empresa = empresa;
         this.configuracao = configuracao;
         this.exemplo = exemplo;
+        this.fontes = fontes;
     }
 
     /** Usuário da requisição atual, para registrar quem fez cada movimento. */
@@ -188,6 +191,24 @@ public class RadarService {
     @Transactional(readOnly = true)
     public Map<String, Object> relatorios(String de, String ate) {
         return relatorios.gerar(papel(), de, ate);
+    }
+
+    /**
+     * Linhas de uma fonte do "Montar relatório" (RadarFontes). Fica na auditoria quem gerou, qual
+     * fonte, o período e quantas linhas (sem os dados): é saída em massa, como etiqueta e anexo.
+     */
+    @Transactional
+    public Map<String, Object> relatorioFonte(String nome, String de, String ate) {
+        var r = fontes.linhas(papel(), nome, de, ate);
+        Map<?, ?> periodo = (Map<?, ?>) r.get("periodo");
+        auditar(
+                "relatorio_gerar",
+                nome,
+                Map.of(
+                        "de", periodo.get("de"),
+                        "ate", periodo.get("ate"),
+                        "linhas", ((List<?>) r.get("linhas")).size()));
+        return r;
     }
 
     private UUID tenant() {
@@ -384,6 +405,8 @@ public class RadarService {
         out.put("anuncios", rows("radar_anuncio"));
         out.put("lojas", anuncios.lojas());
         out.put("exemplo", exemplo.estado());
+        out.put("fontesRelatorio", fontes.catalogo(p));
+        out.put("relatoriosSalvos", fontes.modelos(p));
         var pedidos = rows("radar_pedido");
         if (!f)
             pedidos.forEach(
@@ -674,7 +697,10 @@ public class RadarService {
         switch (op) {
             case "produto" -> {
                 permitir("DONO", "GESTOR");
-                result.put("id", produto(n));
+                UUID novo = produto(n);
+                // Como os outros caminhos de criação: nasce marcado com o que falta.
+                produtos.recalcularPendencias(List.of(novo));
+                result.put("id", novo);
             }
             case "produto_atualizar" -> {
                 permitir("DONO", "GESTOR");
@@ -1059,6 +1085,8 @@ public class RadarService {
                     result.putAll(produtos.salvar(n, papel()));
                 else if (RadarConfiguracao.OPERACOES.contains(op))
                     result.putAll(configuracao.salvar(n, papel()));
+                else if (RadarFontes.OPERACOES.contains(op))
+                    result.putAll(fontes.executar(op, n, papel(), user().usuarioId()));
                 else if (RadarPromocoes.OPERACOES.contains(op))
                     result.putAll(promocoes.executar(op, n, papel()));
                 else erro("Operação não reconhecida.");

@@ -6,7 +6,7 @@
 // O servidor valida e calcula (custo do kit, GTIN, estoque); a tela só
 // organiza o preenchimento e mostra o que falta para anunciar.
 
-import { CANAIS, canaisCom, palavras, regraDe } from "./canais";
+import { CANAIS, canaisCom, letras, palavras, regraDe } from "./canais";
 import { useEffect, useState, type ReactNode } from "react";
 import { Badge, Empty, Table, cents, centMoney, money, str, type ModalSpec, type Row } from "./ui";
 import { NO_RADAR, verNaCentral } from "./anuncios";
@@ -520,7 +520,7 @@ export default function ProdutoForm({
   const porCanal: Record<string, [string, boolean][]> = Object.fromEntries(
     CANAIS.map((canal) => {
       const r = regraDe(canal);
-      const titulo = str(v.nome).trim().length;
+      const titulo = letras(v.nome);
       const lista: [string, boolean][] = [
         [`Pelo menos ${r.imagensMin} imagem(ns)`, totalImagens >= r.imagensMin],
         ...comum,

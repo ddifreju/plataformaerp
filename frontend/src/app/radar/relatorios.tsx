@@ -80,7 +80,8 @@ function Bloco({
   );
 }
 
-export default function Relatorios() {
+/** O relatório de antes: resumo do período, por canal e categoria, curva ABC e estoque. */
+export function ResumoDoPeriodo() {
   const [de, setDe] = useState(isoDiasAtras(29));
   const [ate, setAte] = useState(isoDiasAtras(0));
   const [dados, setDados] = useState<Relatorio | null>(null);

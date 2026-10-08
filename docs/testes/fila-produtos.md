@@ -38,7 +38,7 @@ Print quando ajudar (salve em `docs/testes/prints/`).
 ## A. Cadastro do produto
 
 - [ ] **A1. Rascunho.** Cadastros → Produtos → "+ Novo produto". Preencha
-  só o nome e salve. Esperado: salva; aparece "Faltam N" com a lista do que
+  só o nome e o SKU (com SKU automático ligado, só o nome) e salve. Esperado: salva; aparece "Faltam N" com a lista do que
   falta; o produto aparece na lista com "Falta: …" na coluna Cadastro.
 - [ ] **A2. Abas.** Abra um produto simples (ex.: `EX-CORT-VOIL`). Esperado:
   abas Dados gerais, Imagens, Fiscal, Anúncios, Conferência e SEO,

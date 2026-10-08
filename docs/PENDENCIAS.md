@@ -196,6 +196,14 @@ restaurar, clonar e aba Histórico. Ficam na fila:
       limites por categoria e loja vindos do marketplace, lista de categorias
       para escolher, teste do anúncio antes de enviar e erro traduzido em
       instrução. Detalhes na decisão 0036.
+- [ ] **Preço promocional próprio da variação** (achado do teste 38): hoje a
+      grade não tem esse campo e salvar o pai repassa o promocional dele às
+      variações. Entra no Bloco 2, com as regras de herança (o pai escolhe o que
+      repassa).
+- [ ] **`produto_salvar` substitui o cadastro inteiro** (achado do teste 38): a
+      tela manda o formulário completo, então não perde dado; integração ou
+      importação nova precisa mandar tudo ou usar a edição por campo
+      (`produtos_lote` EDITAR/PREENCHER).
 - [ ] **Bloqueio de pendências no envio.** Ligar `RadarProdutos.pendencias()`
       no envio ao marketplace e na emissão de NF-e, quando essas funções
       existirem. Hoje o cadastro salva incompleto e só marca `incompleto`.

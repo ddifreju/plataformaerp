@@ -11,9 +11,12 @@
    criar o cargo "Administrativo" e se o gestor libera o que ele não tem.
 3. **Dados de exemplo:** feito (decisão 0037). Botão no Painel da empresa de
    demonstração; ela vai carregar e testar. NF-e fictícia não entra.
-4. **Relatórios:** ela prefere uma área única de relatórios em que o cliente
-   cruza qualquer coisa (financeiro, preço, compras, estoque, atendimento).
-   Proposta enviada; esperando o ok dela.
+4. **Relatórios:** feito (decisão 0038). Área única com prontos por área,
+   montar relatório, salvos e atalho no fim de cada menu.
+5. **Fila de testes dos agentes dela:** `Interno
+avegaila\entrada` (ver
+   `docs/testes/fila-produtos.md` e `docs/testes/radar_api.py`). Não reiniciar
+   o backend local enquanto a fila roda.
 
 ## Depois: Produtos, Bloco 2 (variações e kits)
 Regras dela (anotadas no documento de referência que ela mandou):
