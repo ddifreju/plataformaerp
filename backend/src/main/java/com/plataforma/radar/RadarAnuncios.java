@@ -577,7 +577,22 @@ public class RadarAnuncios {
         var loja = loja(id);
         db.update(
                 "update radar_loja set excluida_em=now() where tenant_id=? and id=?", tenant(), id);
-        return Map.of("mensagem", "Loja " + loja.get("nome") + " removida.");
+        // Anúncio pronto de loja removida não pode subir quando houver conector: volta a rascunho.
+        int voltaram =
+                db.update(
+                        "update radar_anuncio set estado='RASCUNHO',versao=versao+1,"
+                                + "atualizado_em=now() where tenant_id=? and loja_id=? and"
+                                + " estado='PRONTO'",
+                        tenant(),
+                        id);
+        return Map.of(
+                "mensagem",
+                "Loja "
+                        + loja.get("nome")
+                        + " removida."
+                        + (voltaram > 0
+                                ? " " + voltaram + " anúncio(s) pronto(s) dela voltaram a rascunho."
+                                : ""));
     }
 
     private Map<String, Object> loja(UUID id) {
@@ -638,6 +653,9 @@ public class RadarAnuncios {
                                 + ").");
             BigDecimal preco = valor(item, "preco");
             if (preco.signum() <= 0) erro(sku + ": o preço precisa ser maior que zero.");
+            // Mesma política da aprovação de preço: anúncio pronto não sobe abaixo do custo.
+            if (preco.compareTo((BigDecimal) p.get("custo")) < 0)
+                erro(sku + ": preço abaixo do custo do produto. Política local: bloqueado.");
             if ((regra.precoMin() != null && preco.compareTo(regra.precoMin()) < 0)
                     || (regra.precoMax() != null && preco.compareTo(regra.precoMax()) > 0))
                 erro(

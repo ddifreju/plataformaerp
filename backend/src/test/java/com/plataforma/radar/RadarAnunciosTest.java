@@ -456,6 +456,82 @@ class RadarAnunciosTest {
         assertThrows(
                 ResponseStatusException.class,
                 () -> anunciar(empresa, produto, lojaDaOutra, "Cortina blackout azul", "5"));
+        var remover =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresa,
+                                        () ->
+                                                anuncios.executar(
+                                                        "loja_remover",
+                                                        json("{\"id\":\"" + lojaDaOutra + "\"}"),
+                                                        "DONO")));
+        assertEquals(HttpStatus.NOT_FOUND, remover.getStatusCode());
+        assertEquals(1, naEmpresa(outra, () -> anuncios.lojas()).size());
+    }
+
+    @Test
+    void cargoSemPermissaoNaoRemoveLojaNemAnuncia() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID loja = novaLoja(empresa, "Shopee", "Shopee");
+        UUID produto = produtoCompleto(empresa, "Shopee");
+        var remover =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresa,
+                                        () ->
+                                                anuncios.executar(
+                                                        "loja_remover",
+                                                        json("{\"id\":\"" + loja + "\"}"),
+                                                        "MARKETING")));
+        assertEquals(HttpStatus.FORBIDDEN, remover.getStatusCode());
+        String corpo =
+                "{\"itens\":[{\"produto_id\":\""
+                        + produto
+                        + "\",\"loja_id\":\""
+                        + loja
+                        + "\",\"titulo\":\"Cortina\",\"preco\":\"89.90\",\"estoque\":\"1\"}]}";
+        var anunciar =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresa,
+                                        () -> anuncios.executar("anunciar", json(corpo), "ESTOQUE")));
+        assertEquals(HttpStatus.FORBIDDEN, anunciar.getStatusCode());
+    }
+
+    @Test
+    void precoAbaixoDoCustoNaoFicaProntoELojaRemovidaVoltaARascunho() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID loja = novaLoja(empresa, "Shopee", "Shopee");
+        UUID produto = produtoCompleto(empresa, "Shopee");
+        BancoRadarDeTeste.executarComoDono(
+                "update radar_produto set custo=100 where id=?", produto);
+        var abaixo =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> anunciar(empresa, produto, loja, "Cortina", "1"));
+        assertTrue(abaixo.getReason().contains("abaixo do custo"));
+        BancoRadarDeTeste.executarComoDono("update radar_produto set custo=30 where id=?", produto);
+        anunciar(empresa, produto, loja, "Cortina", "1");
+        naEmpresa(
+                empresa,
+                () ->
+                        anuncios.executar(
+                                "loja_remover", json("{\"id\":\"" + loja + "\"}"), "DONO"));
+        assertEquals(
+                "RASCUNHO",
+                naEmpresa(
+                        empresa,
+                        () ->
+                                db.queryForObject(
+                                        "select estado from radar_anuncio where produto_id=?",
+                                        String.class,
+                                        produto)));
     }
 
     @Test

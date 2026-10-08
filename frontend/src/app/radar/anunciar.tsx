@@ -157,6 +157,9 @@ export default function Anunciar(props: Props) {
     if (foraDoTitulo(r, n)) lista.push(`Título com ${n} letras: no ${m} ${limiteTitulo(r)}.`);
     const preco = Number(a.preco.replace(",", "."));
     if (!(preco > 0)) lista.push("Preço maior que zero.");
+    // Custo só chega para quem vê o financeiro; para os outros, o servidor confere ao salvar.
+    else if (p.custo != null && preco < Number(p.custo))
+      lista.push(`Preço abaixo do custo (R$ ${moeda(Number(p.custo))}): a política bloqueia.`);
     else if (
       (r.precoMin != null && preco < r.precoMin) ||
       (r.precoMax != null && preco > r.precoMax)
