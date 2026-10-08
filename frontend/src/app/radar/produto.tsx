@@ -79,8 +79,6 @@ const TIPOS_VARIACAO = [
 
 const ABAS = [
   ["geral", "Dados gerais"],
-  ["preco", "Preço e estoque"],
-  ["dimensoes", "Dimensões e embalagem"],
   ["composicao", "Variações / Kit"],
   ["imagens", "Imagens"],
   ["fiscal", "Fiscal"],
@@ -434,11 +432,10 @@ export default function ProdutoForm({
     if (vazio("ncm")) f.push(["NCM", "geral"]);
     if (!categoriaTexto.trim()) f.push(["Categoria", "geral"]);
     if (vazio("descricao")) f.push(["Descrição", "geral"]);
-    if (!(cents(v.preco) > 0)) f.push(["Preço de venda", "preco"]);
-    if (vazio("peso_bruto_kg")) f.push(["Peso bruto", "dimensoes"]);
+    if (!(cents(v.preco) > 0)) f.push(["Preço de venda", "geral"]);
+    if (vazio("peso_bruto_kg")) f.push(["Peso bruto", "geral"]);
     const medidas = !vazio("largura_cm") && !vazio("altura_cm") && !vazio("comprimento_cm");
-    if (!medidas && !v.embalagem_id && !embalagemNova)
-      f.push(["Medidas ou embalagem", "dimensoes"]);
+    if (!medidas && !v.embalagem_id && !embalagemNova) f.push(["Medidas ou embalagem", "geral"]);
     return f;
   }
 
@@ -549,7 +546,8 @@ export default function ProdutoForm({
     }),
   );
 
-  const conteudo: Record<Aba, ReactNode> = {
+  // Preço, estoque, dimensões e embalagem moram dentro de "Dados gerais" (uma página só).
+  const conteudo: Record<Aba | "preco" | "dimensoes", ReactNode> = {
     geral: (
       <div className="rd-form-grid">
         <Campo rotulo="Tipo do produto" largo>
@@ -1594,22 +1592,35 @@ export default function ProdutoForm({
         </div>
       )}
       <div className="rd-tabs" role="tablist" aria-label="Seções do cadastro do produto">
-        {ABAS.map(([chave, rotulo]) => (
-          <button
-            key={chave}
-            role="tab"
-            aria-selected={aba === chave}
-            className={aba === chave ? "active" : ""}
-            onClick={() => setAba(chave)}
-          >
-            {rotulo}
-            {chave === "anuncios" &&
-              anunciosDoProduto.length > 0 &&
-              ` (${anunciosDoProduto.length})`}
-          </button>
-        ))}
+        {ABAS.filter(([chave]) => chave !== "composicao" || tipo !== "SIMPLES").map(
+          ([chave, rotulo]) => (
+            <button
+              key={chave}
+              role="tab"
+              aria-selected={aba === chave}
+              className={aba === chave ? "active" : ""}
+              onClick={() => setAba(chave)}
+            >
+              {rotulo}
+              {chave === "anuncios" &&
+                anunciosDoProduto.length > 0 &&
+                ` (${anunciosDoProduto.length})`}
+            </button>
+          ),
+        )}
       </div>
-      <section className="rd-card">{conteudo[aba]}</section>
+      <section className="rd-card">
+        {aba === "geral" ? (
+          <>
+            {conteudo.geral}
+            <h3 className="rd-secao">Preço e estoque</h3>
+            {conteudo.preco}
+            {conteudo.dimensoes}
+          </>
+        ) : (
+          conteudo[aba]
+        )}
+      </section>
       <div className="rd-actions rd-produto-rodape">
         <button type="button" onClick={voltar}>
           Voltar
