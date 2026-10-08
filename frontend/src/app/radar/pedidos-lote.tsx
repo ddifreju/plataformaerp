@@ -19,20 +19,10 @@ type Props = {
   veFinanceiro: boolean;
   ativo: boolean;
   executar: (corpo: Record<string, unknown>) => Promise<boolean>;
-  children: (k: {
-    cabecalho: ReactNode;
-    celula: (p: Row) => ReactNode;
-  }) => ReactNode;
+  children: (k: { cabecalho: ReactNode; celula: (p: Row) => ReactNode }) => ReactNode;
 };
 
-type Acao =
-  | "SITUACAO"
-  | "SEPARAR"
-  | "EXPEDIR"
-  | "MARCADORES"
-  | "DATA"
-  | "CONTAS"
-  | "EXCLUIR";
+type Acao = "SITUACAO" | "SEPARAR" | "EXPEDIR" | "MARCADORES" | "DATA" | "CONTAS" | "EXCLUIR";
 
 const SEM_NOTA =
   "Nota fiscal pelo Radar precisa do CNPJ e do certificado digital. Entra depois do CNPJ.";
@@ -61,11 +51,7 @@ export default function PedidosLote({
 }: Props) {
   const [menu, setMenu] = useState(false);
   const caixaMenu = useFecharFora<HTMLDivElement>(menu, () => setMenu(false));
-  const [menuLinha, setMenuLinha] = useState<{
-    id: string;
-    x: number;
-    y: number;
-  } | null>(null);
+  const [menuLinha, setMenuLinha] = useState<{ id: string; x: number; y: number } | null>(null);
   // Esc fecha o "⋯" da linha (o clique fora já fecha pela capa).
   useFecharFora(!!menuLinha, () => setMenuLinha(null));
   const [acao, setAcao] = useState<Acao | null>(null);
@@ -76,15 +62,12 @@ export default function PedidosLote({
   const [marcadores, setMarcadores] = useState("");
   const [data, setData] = useState(hoje());
 
-  const todos =
-    linhas.length > 0 && linhas.every((p) => marcados.includes(str(p.id)));
+  const todos = linhas.length > 0 && linhas.every((p) => marcados.includes(str(p.id)));
   const selecionados = pedidos.filter((p) => marcados.includes(str(p.id)));
   const somaMarcados = selecionados.reduce((s, p) => s + valorPedido(p), 0);
   const somaLista = linhas.reduce((s, p) => s + valorPedido(p), 0);
-  const nomeProduto = (id: unknown) =>
-    str(produtos.find((x) => x.id === id)?.nome);
-  const pedidoLinha =
-    menuLinha && pedidos.find((p) => str(p.id) === menuLinha.id);
+  const nomeProduto = (id: unknown) => str(produtos.find((x) => x.id === id)?.nome);
+  const pedidoLinha = menuLinha && pedidos.find((p) => str(p.id) === menuLinha.id);
 
   function fecharMenus() {
     setMenu(false);
@@ -111,9 +94,7 @@ export default function PedidosLote({
     const lista = pedidos.filter((p) => ids.includes(str(p.id)));
     const linhasHtml = lista
       .map(
-        (
-          p,
-        ) => `<tr><td>${esc(p.numero)}</td><td>${esc(p.cliente)}</td><td>${esc(p.canal)}</td>
+        (p) => `<tr><td>${esc(p.numero)}</td><td>${esc(p.cliente)}</td><td>${esc(p.canal)}</td>
 <td>${esc(p.quantidade)} × ${esc(nomeProduto(p.produto_id))}</td><td class="n">${esc(centMoney(valorPedido(p)))}</td>
 <td>${esc(p.estado)}</td></tr>`,
       )
@@ -125,10 +106,7 @@ export default function PedidosLote({
 <tbody>${linhasHtml}</tbody></table>`,
       "table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}td.n{text-align:right}th{background:#f3f4f6}",
     );
-    if (!ok)
-      setAviso(
-        "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.",
-      );
+    if (!ok) setAviso("O navegador bloqueou a janela de impressão. Libere pop-ups para este site.");
   }
 
   // Etiqueta do pedido para separação e conferência (não é etiqueta de envio).
@@ -137,9 +115,7 @@ export default function PedidosLote({
     const html = pedidos
       .filter((p) => ids.includes(str(p.id)))
       .map(
-        (
-          p,
-        ) => `<div class="etq"><strong>${esc(p.numero)}</strong><span>${esc(p.cliente)}</span>
+        (p) => `<div class="etq"><strong>${esc(p.numero)}</strong><span>${esc(p.cliente)}</span>
 <span>${esc(p.quantidade)} × ${esc(nomeProduto(p.produto_id))}</span><small>${esc(p.canal)}</small></div>`,
       )
       .join("");
@@ -148,10 +124,7 @@ export default function PedidosLote({
       `<div class="grade">${html}</div>`,
       ".grade{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm}.etq{border:1px dashed #999;border-radius:2mm;padding:3mm;display:flex;flex-direction:column;gap:1mm;break-inside:avoid}strong{font-size:13pt}",
     );
-    if (!ok)
-      setAviso(
-        "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.",
-      );
+    if (!ok) setAviso("O navegador bloqueou a janela de impressão. Libere pop-ups para este site.");
   }
 
   // Declaração de conteúdo: itens e valores vêm do pedido; endereços, peso e
@@ -161,9 +134,7 @@ export default function PedidosLote({
     const html = pedidos
       .filter((p) => ids.includes(str(p.id)))
       .map(
-        (
-          p,
-        ) => `<section><h3>Declaração de conteúdo · Pedido ${esc(p.numero)}</h3>
+        (p) => `<section><h3>Declaração de conteúdo · Pedido ${esc(p.numero)}</h3>
 <table class="partes"><tr><td><b>Remetente</b><br>Nome: __________________________<br>Endereço: ________________________<br>CEP: ________ Cidade/UF: __________<br>CPF/CNPJ: ________________</td>
 <td><b>Destinatário</b><br>Nome: ${esc(p.cliente)}<br>Endereço: ________________________<br>CEP: ________ Cidade/UF: __________<br>CPF/CNPJ: ________________</td></tr></table>
 <table><thead><tr><th>Item</th><th>Conteúdo</th><th>Quant.</th><th>Valor</th></tr></thead>
@@ -178,21 +149,13 @@ export default function PedidosLote({
       html,
       "section{break-after:page;padding:4mm 0}table{width:100%;border-collapse:collapse;margin:3mm 0}th,td{border:1px solid #999;padding:4px 6px;text-align:left;vertical-align:top}table.partes td{width:50%;line-height:1.8}.dec{font-size:8.5pt}",
     );
-    if (!ok)
-      setAviso(
-        "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.",
-      );
+    if (!ok) setAviso("O navegador bloqueou a janela de impressão. Libere pop-ups para este site.");
   }
 
   async function confirmar() {
     const corpo: Record<string, unknown> = { op: "pedidos_lote", ids: alvo };
     if (acao === "SITUACAO" || acao === "SEPARAR" || acao === "EXPEDIR") {
-      const destino =
-        acao === "SEPARAR"
-          ? "SEPARADO"
-          : acao === "EXPEDIR"
-            ? "EXPEDIDO"
-            : estado;
+      const destino = acao === "SEPARAR" ? "SEPARADO" : acao === "EXPEDIR" ? "EXPEDIDO" : estado;
       corpo.acao = "ESTADO";
       corpo.estado = destino;
       if (destino === "EXPEDIDO") corpo.confirmar_simulacao = true;
@@ -249,9 +212,7 @@ export default function PedidosLote({
           aria-label={`Selecionar pedido ${str(p.numero)}`}
           checked={marcados.includes(id)}
           onChange={(e) =>
-            setMarcados((m) =>
-              e.target.checked ? [...m, id] : m.filter((x) => x !== id),
-            )
+            setMarcados((m) => (e.target.checked ? [...m, id] : m.filter((x) => x !== id)))
           }
         />
         <button
@@ -265,9 +226,7 @@ export default function PedidosLote({
             // Perto do rodapé o menu abre para cima, para não sair da tela.
             const altura = Math.min(420, window.innerHeight * 0.6);
             const y =
-              r.bottom + altura > window.innerHeight
-                ? Math.max(8, r.top - altura)
-                : r.bottom + 4;
+              r.bottom + altura > window.innerHeight ? Math.max(8, r.top - altura) : r.bottom + 4;
             setMenu(false);
             setMenuLinha(menuLinha?.id === id ? null : { id, x: r.left, y });
           }}
@@ -283,11 +242,7 @@ export default function PedidosLote({
       aria-label="Marcar todos da lista"
       title="Marcar todos da lista"
       checked={todos}
-      onChange={(e) =>
-        setMarcados(() =>
-          e.target.checked ? linhas.map((p) => str(p.id)) : [],
-        )
-      }
+      onChange={(e) => setMarcados(() => (e.target.checked ? linhas.map((p) => str(p.id)) : []))}
     />
   );
 
@@ -313,37 +268,21 @@ export default function PedidosLote({
               Pedido {str(pedidoLinha.numero)}
             </li>
             {pedidoLinha.estado === "RESERVADO" &&
-              item("⇉ Enviar para separação", () =>
-                abrir("SEPARAR", [menuLinha.id]),
-              )}
+              item("⇉ Enviar para separação", () => abrir("SEPARAR", [menuLinha.id]))}
             {pedidoLinha.estado === "SEPARADO" &&
-              item("🚚 Enviar para expedição", () =>
-                abrir("EXPEDIR", [menuLinha.id]),
-              )}
+              item("🚚 Enviar para expedição", () => abrir("EXPEDIR", [menuLinha.id]))}
             {item("🖨 Imprimir pedido", () => imprimirPedidos([menuLinha.id]))}
-            {item("🏷 Imprimir etiqueta", () =>
-              imprimirEtiquetas([menuLinha.id]),
-            )}
-            {item("🖨 Imprimir declaração de conteúdo", () =>
-              imprimirDeclaracao([menuLinha.id]),
-            )}
+            {item("🏷 Imprimir etiqueta", () => imprimirEtiquetas([menuLinha.id]))}
+            {item("🖨 Imprimir declaração de conteúdo", () => imprimirDeclaracao([menuLinha.id]))}
             <li className="rd-menu-sep" />
-            {item("🏷 Alterar marcadores", () =>
-              abrir("MARCADORES", [menuLinha.id]),
-            )}
-            {item("▦ Alterar data de faturamento", () =>
-              abrir("DATA", [menuLinha.id]),
-            )}
+            {item("🏷 Alterar marcadores", () => abrir("MARCADORES", [menuLinha.id]))}
+            {item("▦ Alterar data de faturamento", () => abrir("DATA", [menuLinha.id]))}
             {veFinanceiro &&
-              item("$ Lançar conta a receber", () =>
-                abrir("CONTAS", [menuLinha.id]),
-              )}
+              item("$ Lançar conta a receber", () => abrir("CONTAS", [menuLinha.id]))}
             {["RESERVADO", "SEPARADO"].includes(str(pedidoLinha.estado)) && (
               <>
                 <li className="rd-menu-sep" />
-                {item("🗑 Excluir (cancelar) pedido", () =>
-                  abrir("EXCLUIR", [menuLinha.id]),
-                )}
+                {item("🗑 Excluir (cancelar) pedido", () => abrir("EXCLUIR", [menuLinha.id]))}
               </>
             )}
           </ul>
@@ -372,11 +311,7 @@ export default function PedidosLote({
               ✕
             </button>
           </span>
-          <button
-            type="button"
-            className="primary"
-            onClick={() => avisar(SEM_NOTA)}
-          >
+          <button type="button" className="primary" onClick={() => avisar(SEM_NOTA)}>
             🗎 Gerar notas fiscais
           </button>
           <button type="button" onClick={() => avisar(SEM_LOJA)}>
@@ -419,18 +354,12 @@ export default function PedidosLote({
                 {item("🏷 Imprimir etiquetas", () => imprimirEtiquetas())}
                 {emBreve("🖨 Imprimir etiquetas dos Correios", SEM_FRETE)}
                 {emBreve("🖨 Imprimir etiquetas de transportadora", SEM_FRETE)}
-                {item("🖨 Imprimir declaração de conteúdo", () =>
-                  imprimirDeclaracao(),
-                )}
+                {item("🖨 Imprimir declaração de conteúdo", () => imprimirDeclaracao())}
                 {emBreve("🖨 Imprimir DACE", SEM_FRETE)}
                 <li className="rd-menu-sep" />
                 {veFinanceiro
                   ? item("$ Lançar contas", () => abrir("CONTAS"))
-                  : emBreve(
-                      "$ Lançar contas",
-                      "Seu cargo não lança contas.",
-                      "sem permissão",
-                    )}
+                  : emBreve("$ Lançar contas", "Seu cargo não lança contas.", "sem permissão")}
                 {emBreve(
                   "▣ Lançar estoque",
                   "O estoque já é reservado ao criar o pedido e baixado na expedição.",
@@ -454,9 +383,7 @@ export default function PedidosLote({
           <div className="rd-barra-totais">
             <span className="rd-barra-total rd-barra-destaque">
               <strong>
-                {(somaMarcados / 100).toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
+                {(somaMarcados / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </strong>
               <small>selecionados (R$)</small>
             </span>
@@ -466,9 +393,7 @@ export default function PedidosLote({
             </span>
             <span className="rd-barra-total">
               <strong>
-                {(somaLista / 100).toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
+                {(somaLista / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </strong>
               <small>valor total (R$)</small>
             </span>
@@ -508,36 +433,24 @@ export default function PedidosLote({
               <div className="rd-form-grid">
                 <label className="wide">
                   Nova situação
-                  <select
-                    value={estado}
-                    onChange={(e) => setEstado(e.target.value)}
-                  >
-                    <option value="SEPARADO">
-                      Separado (vale para pedidos reservados)
-                    </option>
+                  <select value={estado} onChange={(e) => setEstado(e.target.value)}>
+                    <option value="SEPARADO">Separado (vale para pedidos reservados)</option>
                     <option value="EXPEDIDO">
                       Expedido, simulação local (vale para pedidos separados)
                     </option>
-                    <option value="CANCELADO">
-                      Cancelado (devolve a reserva ao estoque)
-                    </option>
+                    <option value="CANCELADO">Cancelado (devolve a reserva ao estoque)</option>
                   </select>
                 </label>
               </div>
             )}
-            {(acao === "EXPEDIR" ||
-              (acao === "SITUACAO" && estado === "EXPEDIDO")) && (
+            {(acao === "EXPEDIR" || (acao === "SITUACAO" && estado === "EXPEDIDO")) && (
               <p>
-                Simulação local: baixa o estoque, mas não emite NF-e nem
-                contrata frete. Só os pedidos já separados mudam; os outros
-                ficam como estão.
+                Simulação local: baixa o estoque, mas não emite NF-e nem contrata frete. Só os
+                pedidos já separados mudam; os outros ficam como estão.
               </p>
             )}
             {acao === "SEPARAR" && (
-              <p>
-                Os pedidos reservados vão para separação. Os outros ficam como
-                estão.
-              </p>
+              <p>Os pedidos reservados vão para separação. Os outros ficam como estão.</p>
             )}
             {acao === "MARCADORES" && (
               <div className="rd-form-grid">
@@ -547,9 +460,7 @@ export default function PedidosLote({
                     value={modoMarcadores}
                     onChange={(e) => setModoMarcadores(e.target.value)}
                   >
-                    <option value="ADICIONAR">
-                      Adicionar estes marcadores
-                    </option>
+                    <option value="ADICIONAR">Adicionar estes marcadores</option>
                     <option value="REMOVER">Remover estes marcadores</option>
                     <option value="SUBSTITUIR">Trocar todos por estes</option>
                   </select>
@@ -569,11 +480,7 @@ export default function PedidosLote({
               <div className="rd-form-grid">
                 <label>
                   {acao === "DATA" ? "Data de faturamento" : "Vencimento"}
-                  <input
-                    type="date"
-                    value={data}
-                    onChange={(e) => setData(e.target.value)}
-                  />
+                  <input type="date" value={data} onChange={(e) => setData(e.target.value)} />
                   <small className="rd-dica">
                     {acao === "DATA"
                       ? "Em branco limpa a data. É só um registro: o Radar ainda não emite NF-e."
@@ -584,9 +491,8 @@ export default function PedidosLote({
             )}
             {acao === "EXCLUIR" && (
               <p>
-                Pedido não é apagado, para manter o histórico. Os pedidos
-                reservados ou separados são cancelados e a reserva volta para o
-                estoque. Pedido expedido fica como está: use
+                Pedido não é apagado, para manter o histórico. Os pedidos reservados ou separados
+                são cancelados e a reserva volta para o estoque. Pedido expedido fica como está: use
                 &quot;Devolver&quot;.
               </p>
             )}
@@ -594,8 +500,7 @@ export default function PedidosLote({
               <button onClick={() => setAcao(null)}>Cancelar</button>
               <button
                 className={
-                  acao === "EXCLUIR" ||
-                  (acao === "SITUACAO" && estado === "CANCELADO")
+                  acao === "EXCLUIR" || (acao === "SITUACAO" && estado === "CANCELADO")
                     ? "perigo"
                     : "primary"
                 }
