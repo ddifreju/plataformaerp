@@ -13,13 +13,13 @@ import { ORIGENS, UNIDADES, type Aba as AbaForm } from "./produto";
 import { Badge, Empty, cents, centMoney, date, money, str, type Row } from "./ui";
 
 type Aba =
-  "gerais" | "complementares" | "ficha" | "anuncios" | "variacoes" | "precos" | "custos" | "outros";
+  "gerais" | "descricao" | "fiscal" | "anuncios" | "variacoes" | "precos" | "custos" | "outros";
 
 // Onde cada aba da visualização é editada no formulário.
 const EDITAR_EM: Record<Aba, AbaForm> = {
   gerais: "geral",
-  complementares: "geral",
-  ficha: "seo",
+  descricao: "geral",
+  fiscal: "fiscal",
   anuncios: "anuncios",
   variacoes: "composicao",
   precos: "geral",
@@ -178,15 +178,15 @@ export default function ProdutoVer(props: Props) {
   const preco = cents(p.preco);
 
   const abas: [Aba, string][] = [
-    ["gerais", "dados gerais"],
-    ["complementares", "dados complementares"],
-    ["ficha", "ficha técnica"],
-    ["anuncios", `anúncios${anunciosDoProduto.length ? ` (${anunciosDoProduto.length})` : ""}`],
-    ...(tipo === "VARIACAO" ? [["variacoes", "variações"] as [Aba, string]] : []),
-    ...(tipo === "KIT" ? [["variacoes", "composição do kit"] as [Aba, string]] : []),
-    ["precos", "preços"],
-    ...(props.financeiro ? [["custos", "custos"] as [Aba, string]] : []),
-    ["outros", "outros"],
+    ["gerais", "Dados gerais"],
+    ["descricao", "Descrição e imagens"],
+    ["fiscal", "Fiscal"],
+    ["anuncios", `Anúncios${anunciosDoProduto.length ? ` (${anunciosDoProduto.length})` : ""}`],
+    ...(tipo === "VARIACAO" ? [["variacoes", "Variações"] as [Aba, string]] : []),
+    ...(tipo === "KIT" ? [["variacoes", "Kit"] as [Aba, string]] : []),
+    ["precos", "Preço e promoções"],
+    ...(props.financeiro ? [["custos", "Custo e compras"] as [Aba, string]] : []),
+    ["outros", "Fornecedores e observações"],
   ];
 
   const conteudo: Record<Aba, ReactNode> = {
@@ -207,20 +207,23 @@ export default function ProdutoVer(props: Props) {
                   : `Sem código: ${MOTIVOS[str(p.motivo_sem_gtin)] ?? str(p.motivo_sem_gtin)}`
                 : str(p.gtin)}
             </Info>
-            <Info rotulo="Origem do produto conforme ICMS" largo>
-              {ORIGENS.find(([v]) => v === str(p.origem))?.[1] ?? "—"}
-            </Info>
             <Info rotulo="Unidade de medida">
               {UNIDADES.find(([v]) => v === str(p.unidade))?.[1] ?? texto(p.unidade)}
             </Info>
-            <Info rotulo="NCM">{texto(p.ncm)}</Info>
             <Info rotulo="Código (SKU)">{texto(p.sku)}</Info>
-            <Info rotulo="Código CEST">{texto(p.cest)}</Info>
             <Info rotulo="Condição">
               {texto(p.condicao)
                 .toLowerCase()
                 .replace(/^./, (c) => c.toUpperCase())}
             </Info>
+          </div>
+        </Secao>
+        <Secao titulo="Categorização">
+          <div className="rd-ver-grade">
+            <Info rotulo="Categoria">{categoria ? str(categoria.nome) : "—"}</Info>
+            <Info rotulo="Marca">{texto(p.marca)}</Info>
+            <Info rotulo="Modelo">{texto(p.modelo)}</Info>
+            <Info rotulo="Linha de produto">{texto(p.linha_produto)}</Info>
           </div>
         </Secao>
         <Secao>
@@ -264,16 +267,8 @@ export default function ProdutoVer(props: Props) {
         </Secao>
       </>
     ),
-    complementares: (
+    descricao: (
       <>
-        <Secao titulo="Categorização">
-          <div className="rd-ver-grade">
-            <Info rotulo="Categoria">{categoria ? str(categoria.nome) : "—"}</Info>
-            <Info rotulo="Marca">{texto(p.marca)}</Info>
-            <Info rotulo="Modelo">{texto(p.modelo)}</Info>
-            <Info rotulo="Linha de produto">{texto(p.linha_produto)}</Info>
-          </div>
-        </Secao>
         <Secao titulo="Descrição">
           {vazio(p.descricao) ? (
             <p className="rd-dica">Sem descrição.</p>
@@ -293,7 +288,23 @@ export default function ProdutoVer(props: Props) {
             )}
           </div>
         </Secao>
-        <Secao titulo="Campos adicionais">
+        <Secao titulo="Características do produto">
+          {lista<{ nome: string; valor: string }>(p.atributos).length ? (
+            <div className="rd-ver-grade">
+              {lista<{ nome: string; valor: string }>(p.atributos).map((a) => (
+                <Info key={a.nome} rotulo={a.nome}>
+                  {texto(a.valor)}
+                </Info>
+              ))}
+            </div>
+          ) : (
+            <p className="rd-dica">
+              Sem características. Material, medidas, voltagem e outras características ajudam o
+              marketplace a mostrar o produto na busca.
+            </p>
+          )}
+        </Secao>
+        <Secao titulo="SEO e vídeo">
           <div className="rd-ver-grade">
             <Info rotulo="Keywords" largo>
               {texto(p.keywords)}
@@ -327,23 +338,26 @@ export default function ProdutoVer(props: Props) {
         </Secao>
       </>
     ),
-    ficha: (
-      <Secao titulo="Ficha técnica">
-        {lista<{ nome: string; valor: string }>(p.atributos).length ? (
+    fiscal: (
+      <>
+        <Secao titulo="Classificação fiscal">
           <div className="rd-ver-grade">
-            {lista<{ nome: string; valor: string }>(p.atributos).map((a) => (
-              <Info key={a.nome} rotulo={a.nome}>
-                {texto(a.valor)}
-              </Info>
-            ))}
+            <Info rotulo="Origem do produto conforme ICMS" largo>
+              {ORIGENS.find(([v]) => v === str(p.origem))?.[1] ?? "—"}
+            </Info>
+            <Info rotulo="NCM">{texto(p.ncm)}</Info>
+            <Info rotulo="Código CEST">{texto(p.cest)}</Info>
           </div>
-        ) : (
-          <p className="rd-dica">
-            Sem ficha técnica. Material, medidas, voltagem e outras características ajudam o
-            marketplace a mostrar o produto na busca.
-          </p>
-        )}
-      </Secao>
+        </Secao>
+        <Secao titulo="Informações tributárias adicionais">
+          <div className="rd-ver-grade">
+            <Info rotulo="GTIN tributável">{texto(p.gtin_tributavel)}</Info>
+            <Info rotulo="Unidade tributável">{texto(p.unidade_tributavel)}</Info>
+            <Info rotulo="Fator de conversão">{texto(p.fator_conversao)}</Info>
+            <Info rotulo="EX TIPI">{texto(p.ex_tipi)}</Info>
+          </div>
+        </Secao>
+      </>
     ),
     anuncios: (
       <Secao titulo="Anúncios">
@@ -636,14 +650,6 @@ export default function ProdutoVer(props: Props) {
               {p.permite_venda === false ? "Não" : "Sim"}
             </Info>
             <Info rotulo="Unidades por caixa">{texto(p.unidades_por_caixa)}</Info>
-          </div>
-        </Secao>
-        <Secao titulo="Informações tributárias adicionais">
-          <div className="rd-ver-grade">
-            <Info rotulo="GTIN tributável">{texto(p.gtin_tributavel)}</Info>
-            <Info rotulo="Unidade tributável">{texto(p.unidade_tributavel)}</Info>
-            <Info rotulo="Fator de conversão">{texto(p.fator_conversao)}</Info>
-            <Info rotulo="EX TIPI">{texto(p.ex_tipi)}</Info>
           </div>
         </Secao>
         <Secao titulo="Fornecedores">

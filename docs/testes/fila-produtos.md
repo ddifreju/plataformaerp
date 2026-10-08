@@ -100,8 +100,9 @@ Print quando ajudar (salve em `docs/testes/prints/`).
 - [ ] **D2. Coluna Anúncios.** Esperado: número de anúncios do produto (com
   as variações); clicar no número abre a aba Anúncios do produto.
 - [ ] **D3. Nome abre a visualização.** Clique no nome do produto. Esperado:
-  abre a página de visualização (abas dados gerais, complementares, ficha
-  técnica, anúncios, variações ou kit, preços, custos, outros), com "Enviar
+  abre a página de visualização (abas Dados gerais, Descrição e imagens,
+  Fiscal, Anúncios, Variações ou Kit, Preço e promoções, Custo e compras,
+  Fornecedores e observações), com "Enviar
   para o e-commerce", "Editar" (abre o formulário na aba equivalente e volta
   para a visualização) e "Mais ações". Custos só para dono, gestor e
   financeiro.
