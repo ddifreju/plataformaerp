@@ -23,6 +23,7 @@ import AreaRelatorios, { type Area, type Salvo } from "./relatorios-area";
 import type { Fonte } from "./relatorios-montar";
 import ProdutoForm, { type Aba as AbaProduto } from "./produto";
 import ProdutoVer, { type AbaVer } from "./produto-ver";
+import PainelRapido, { type TipoRapido } from "./acoes-rapidas";
 import Clientes from "./cliente";
 import Vendedores from "./vendedor";
 import ProdutosLote from "./produtos-lote";
@@ -260,6 +261,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [verLixeira, setVerLixeira] = useState(false),
     // Produto aberto na visualização (clique na lista); "Editar" abre o formulário por cima.
     [vendo, setVendo] = useState<{ id: string; aba?: AbaVer } | null>(null),
+    // Painel lateral de ação rápida (preços, estoque, histórico…) do "⋯" e do "Mais ações".
+    [rapido, setRapido] = useState<{ tipo: TipoRapido; ids: string[] } | null>(null),
     // Produtos abertos no passo a passo "Anunciar".
     [anunciando, setAnunciando] = useState<string[] | null>(null),
     [filtroPedidosAtual, setFiltroPedidos] = useState<Filtro | null>(null);
@@ -879,6 +882,10 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               disponivel={disponivel}
               editar={(aba) => setEditando({ id: vendo.id, aba, versao: Date.now() })}
               anunciar={() => setAnunciando([vendo.id])}
+              rapido={(tipo) => {
+                setError("");
+                setRapido({ tipo, ids: [vendo.id] });
+              }}
               clonar={
                 can("DONO", "GESTOR")
                   ? async () => {
@@ -944,6 +951,11 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                 anunciar={
                   can("DONO", "GESTOR", "MARKETING") ? (ids) => setAnunciando(ids) : undefined
                 }
+                rapido={(tipo, ids) => {
+                  setError("");
+                  setRapido({ tipo, ids });
+                }}
+                podeCusto={data.financeiroPermitido && can("DONO", "GESTOR")}
                 produtos={cadastrados}
                 clonar={
                   can("DONO", "GESTOR")
@@ -2072,6 +2084,29 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           </footer>
         </main>
       </div>
+      {rapido && data && (
+        <PainelRapido
+          key={`${rapido.tipo}-${rapido.ids.join()}`}
+          tipo={rapido.tipo}
+          ids={rapido.ids}
+          produtos={products}
+          lojas={data.lojas ?? []}
+          anuncios={listings}
+          movimentos={data.movimentos}
+          registros={data.registros}
+          financeiro={data.financeiroPermitido}
+          podeAjustarEstoque={can("DONO", "GESTOR", "ESTOQUE")}
+          busy={busy}
+          erro={error}
+          disponivel={disponivel}
+          executar={command}
+          irParaLojas={() => {
+            setRapido(null);
+            go("integracoes");
+          }}
+          fechar={() => setRapido(null)}
+        />
+      )}
       {anunciando && data && (
         <Anunciar
           ids={anunciando}

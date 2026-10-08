@@ -4,6 +4,7 @@ import static com.plataforma.radar.BancoRadarDeTeste.json;
 import static com.plataforma.radar.BancoRadarDeTeste.naEmpresa;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -708,6 +709,131 @@ class RadarAnunciosTest {
                         ResponseStatusException.class,
                         () -> anunciar(empresa, produto, ml, "Cortina", "1"));
         assertTrue(pequena.getReason().contains("foto(s) pequena(s)"));
+    }
+
+    @Test
+    void enviarPrecosEEstoqueAtualizaOsAnunciosDasLojasEscolhidas() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID ml = novaLoja(empresa, "Mercado Livre", "ML");
+        UUID shopee = novaLoja(empresa, "Shopee", "Shopee");
+        UUID produto = produtoCompleto(empresa, "Mercado Livre");
+        BancoRadarDeTeste.executarComoDono(
+                "insert into radar_categoria_canal(tenant_id,categoria_id,canal,codigo_externo,"
+                        + "nome_externo) select tenant_id,categoria_id,'Shopee','S','S'"
+                        + " from radar_categoria_canal where tenant_id=?",
+                empresa);
+        anunciar(empresa, produto, ml, "Cortina", "1");
+        anunciar(empresa, produto, shopee, "Cortina", "1");
+        BancoRadarDeTeste.executarComoDono(
+                "update radar_produto set preco=120, fisico=7, reservado=2 where id=?", produto);
+        String corpo =
+                "{\"campo\":\"%s\",\"produto_ids\":[\"" + produto + "\"],\"loja_ids\":[\"" + ml + "\"]}";
+        // Dono: o preço do cadastro vai direto para o anúncio do ML; o da Shopee fica como estava.
+        naEmpresa(
+                empresa,
+                () -> anuncios.executar("anuncios_sincronizar", json(String.format(corpo, "PRECO")), "DONO"));
+        assertEquals(0, new BigDecimal("120.00").compareTo(precoNaLoja(empresa, produto, ml)));
+        assertEquals(0, new BigDecimal("89.90").compareTo(precoNaLoja(empresa, produto, shopee)));
+        // Estoque: o disponível (7 - 2).
+        naEmpresa(
+                empresa,
+                () -> anuncios.executar("anuncios_sincronizar", json(String.format(corpo, "ESTOQUE")), "DONO"));
+        assertEquals(
+                5,
+                naEmpresa(
+                        empresa,
+                        () ->
+                                db.queryForObject(
+                                        "select estoque from radar_anuncio where loja_id=?",
+                                        Integer.class,
+                                        ml)));
+        // Marketing: vira proposta para aprovação, o preço não muda.
+        BancoRadarDeTeste.executarComoDono("update radar_produto set preco=130 where id=?", produto);
+        var r =
+                naEmpresa(
+                        empresa,
+                        () ->
+                                anuncios.executar(
+                                        "anuncios_sincronizar", json(String.format(corpo, "PRECO")), "MARKETING"));
+        assertEquals(1, r.get("propostas"));
+        assertEquals(0, new BigDecimal("120.00").compareTo(precoNaLoja(empresa, produto, ml)));
+        // Repetir não enche a Central de ações com a mesma proposta.
+        var repetida =
+                naEmpresa(
+                        empresa,
+                        () ->
+                                anuncios.executar(
+                                        "anuncios_sincronizar", json(String.format(corpo, "PRECO")), "MARKETING"));
+        assertEquals(0, repetida.get("propostas"));
+        // A mudança direta do dono também fica no histórico, já executada.
+        assertEquals(
+                1,
+                naEmpresa(
+                        empresa,
+                        () ->
+                                db.queryForObject(
+                                        "select count(*) from radar_acao where estado='EXECUTADA'",
+                                        Integer.class)));
+        // Abaixo do custo: mantém.
+        BancoRadarDeTeste.executarComoDono("update radar_produto set preco=10 where id=?", produto);
+        var abaixo =
+                naEmpresa(
+                        empresa,
+                        () -> anuncios.executar("anuncios_sincronizar", json(String.format(corpo, "PRECO")), "DONO"));
+        assertEquals(1, abaixo.get("mantidos"));
+        assertTrue(String.valueOf(abaixo.get("mensagem")).contains("abaixo do custo"));
+        // Quem não vê custo não fica sabendo o motivo.
+        var semCusto =
+                naEmpresa(
+                        empresa,
+                        () ->
+                                anuncios.executar(
+                                        "anuncios_sincronizar", json(String.format(corpo, "PRECO")), "MARKETING"));
+        assertFalse(String.valueOf(semCusto.get("mensagem")).contains("custo"));
+        // Produto de outra empresa: nenhum anúncio é tocado.
+        UUID alheio = produtoCompleto(BancoRadarDeTeste.novaEmpresa(), "Mercado Livre");
+        var deOutra =
+                naEmpresa(
+                        empresa,
+                        () ->
+                                anuncios.executar(
+                                        "anuncios_sincronizar",
+                                        json(
+                                                "{\"campo\":\"ESTOQUE\",\"produto_ids\":[\""
+                                                        + alheio
+                                                        + "\"],\"loja_ids\":[\""
+                                                        + ml
+                                                        + "\"]}"),
+                                        "DONO"));
+        assertEquals(0, deOutra.get("anuncios"));
+        // Loja de outra empresa: não encontrada.
+        UUID outra = novaLoja(BancoRadarDeTeste.novaEmpresa(), "Shopee", "Outra");
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                empresa,
+                                () ->
+                                        anuncios.executar(
+                                                "anuncios_sincronizar",
+                                                json(
+                                                        "{\"campo\":\"PRECO\",\"produto_ids\":[\""
+                                                                + produto
+                                                                + "\"],\"loja_ids\":[\""
+                                                                + outra
+                                                                + "\"]}"),
+                                                "DONO")));
+    }
+
+    private static BigDecimal precoNaLoja(UUID empresa, UUID produto, UUID loja) {
+        return naEmpresa(
+                empresa,
+                () ->
+                        db.queryForObject(
+                                "select preco from radar_anuncio where produto_id=? and loja_id=?",
+                                BigDecimal.class,
+                                produto,
+                                loja));
     }
 
     private static UUID novaLoja(UUID empresa, String marketplace, String nome) {
