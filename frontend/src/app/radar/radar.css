@@ -2168,10 +2168,11 @@ img.rd-product-thumb {
   position: relative;
 }
 .rd-mais-acoes ul {
+  /* acima da capa dos menus (.rd-menu-fundo, z 29) */
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
-  z-index: 20;
+  z-index: 31;
   list-style: none;
   margin: 0;
   padding: 6px;
@@ -3984,4 +3985,16 @@ ul.rd-menu-linha li button:disabled {
   color: var(--rd-ink);
   border-bottom-color: var(--rd-ink);
   font-weight: 600;
+}
+
+/* Rodapé da lista de produtos: quantos aparecem e "mostrar mais" */
+.rd-lista-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 0 4px;
+  font-size: 13px;
+  color: var(--rd-muted);
 }

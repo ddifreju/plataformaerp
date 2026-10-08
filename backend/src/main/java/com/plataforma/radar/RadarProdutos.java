@@ -855,7 +855,8 @@ public class RadarProdutos {
                 iniciados,
                 "mensagem",
                 iniciados == 0
-                        ? "Esses produtos já têm histórico de custos (ou estão sem custo)."
+                        ? "Nada a iniciar: esses produtos já têm histórico de custos (ele começa"
+                                + " sozinho no cadastro e a cada mudança de custo) ou estão sem custo."
                         : iniciados
                                 + " produto(s) com o histórico de custos iniciado. Cada mudança de"
                                 + " custo fica registrada daqui em diante.");

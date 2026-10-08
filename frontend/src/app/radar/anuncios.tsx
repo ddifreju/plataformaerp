@@ -7,7 +7,7 @@
 // impulsionar só aparecem quando houver loja conectada.
 
 import { useState, type ReactNode } from "react";
-import { Badge, Empty, Table, money, str, type ModalSpec, type Row } from "./ui";
+import { Badge, Empty, Table, money, str, useFecharFora, type ModalSpec, type Row } from "./ui";
 import { vinculoDe } from "./categorias";
 import { CANAIS, CENTRAL, SIGLA, canaisCom } from "./canais";
 import FiltrosAnuncios, {
@@ -205,6 +205,7 @@ function ListaDaLoja({
   // Anúncios que a ação vale: os marcados (barra) ou um só (⋯ da linha).
   const [alvo, setAlvo] = useState<string[]>([]);
   const [menuLote, setMenuLote] = useState(false);
+  const caixaMenuLote = useFecharFora<HTMLDivElement>(menuLote, () => setMenuLote(false));
   const [menuLinha, setMenuLinha] = useState<{
     id: string;
     x: number;
@@ -512,7 +513,7 @@ function ListaDaLoja({
             <button type="button" onClick={semLoja}>
               ▣ Enviar estoque para o e-commerce
             </button>
-            <div className="rd-mais-acoes">
+            <div className="rd-mais-acoes" ref={caixaMenuLote}>
               <button
                 type="button"
                 aria-expanded={menuLote}

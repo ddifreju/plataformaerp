@@ -219,12 +219,13 @@ function Painel(props: Props) {
           }
         >
           <Aviso titulo="Ponto de partida">
-            O custo de hoje de cada produto vira o primeiro registro do histórico. Daí em diante,
-            toda mudança de custo (edição, edição em lote, compra recebida) fica registrada com o
-            valor antes, o depois, o motivo e quem fez. Produto que já tem histórico não muda.
+            O histórico de custos já começa sozinho quando o produto é cadastrado e a cada mudança
+            de custo (edição, edição em lote, compra recebida), com o valor antes, o depois, o
+            motivo e quem fez. Este botão serve para os produtos antigos, de antes do histórico:
+            grava o custo de hoje como primeiro registro. Quem já tem histórico não muda.
           </Aviso>
           <p>
-            <strong>{comCusto.length}</strong> produto(s) com custo
+            <strong>{comCusto.length}</strong> produto(s) e variações com custo
             {vendidos.length > comCusto.length &&
               ` · ${vendidos.length - comCusto.length} sem custo ficam de fora`}
             .

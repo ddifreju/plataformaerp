@@ -1,4 +1,30 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+
+/**
+ * Menu aberto fecha com clique (ou toque) em qualquer lugar fora dele e com Esc. Devolve a ref
+ * para pôr no elemento que envolve o botão e o menu.
+ */
+export function useFecharFora<T extends HTMLElement>(aberto: boolean, fechar: () => void) {
+  const ref = useRef<T>(null);
+  const fecharAtual = useRef(fechar);
+  useEffect(() => {
+    fecharAtual.current = fechar;
+  });
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: Event) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) fecharAtual.current();
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && fecharAtual.current();
+    document.addEventListener("pointerdown", fora);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", fora);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [aberto]);
+  return ref;
+}
 
 export type Row = Record<string, string | number | boolean | Record<string, unknown>>;
 export type Field = {

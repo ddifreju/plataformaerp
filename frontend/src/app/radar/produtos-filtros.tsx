@@ -263,12 +263,12 @@ function chipsDe(f: FiltroProdutos, c: ContextoFiltro): Chip[] {
     });
   for (const k of f.noCanal)
     out.push({
-      rotulo: `está em: ${nomeCanal(k)}`,
+      rotulo: k === SEM_ANUNCIO ? "sem anúncio em nenhum canal" : `está em: ${nomeCanal(k)}`,
       tirar: (x) => ({ ...x, noCanal: x.noCanal.filter((v) => v !== k) }),
     });
   for (const k of f.foraCanal)
     out.push({
-      rotulo: `não está em: ${nomeCanal(k)}`,
+      rotulo: k === SEM_ANUNCIO ? "com anúncio em algum canal" : `não está em: ${nomeCanal(k)}`,
       tirar: (x) => ({ ...x, foraCanal: x.foraCanal.filter((v) => v !== k) }),
     });
   for (const k of f.categorias)

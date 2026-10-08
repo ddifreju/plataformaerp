@@ -237,9 +237,16 @@ async function call(path: string, body?: unknown, key?: string) {
   return data;
 }
 
+// A página aberta fica no endereço (#produtos): F5 e o link copiado voltam ao mesmo lugar.
+function paginaDoEndereco() {
+  if (typeof window === "undefined") return "";
+  const p = decodeURIComponent(window.location.hash.slice(1));
+  return nav.some((x) => x[0] === p) ? p : "";
+}
+
 export default function Radar({ initialPage = "visao" }: { initialPage?: string }) {
   const [data, setData] = useState<Data | null>(null),
-    [page, setPage] = useState(initialPage),
+    [page, setPage] = useState(() => paginaDoEndereco() || initialPage),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(""),
@@ -269,9 +276,27 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [filtroPedidosAtual, setFiltroPedidos] = useState<Filtro | null>(null),
     // Colunas visíveis da lista de produtos e a gaveta que escolhe.
     [colunasProdutos, setColunasProdutos] = useColunas(),
-    [verColunas, setVerColunas] = useState(false);
+    [verColunas, setVerColunas] = useState(false),
+    // Lista de produtos em partes (100 por vez), para não pesar com catálogo grande.
+    [mostrarProdutos, setMostrarProdutos] = useState(100);
   // O "mais ações" do topo usa as funções da lista (imprimir, exportar, editar em lote).
   const controleLote = useRef<ControleLote>(null);
+  // Cada troca de página vira um passo do histórico do navegador; "voltar" volta a página.
+  useEffect(() => {
+    if (window.location.hash !== `#${page}`) window.history.pushState(null, "", `#${page}`);
+  }, [page]);
+  useEffect(() => {
+    const voltar = () => {
+      const p = paginaDoEndereco();
+      if (p) {
+        setEditando(null);
+        setVendo(null);
+        setPage(p);
+      }
+    };
+    window.addEventListener("popstate", voltar);
+    return () => window.removeEventListener("popstate", voltar);
+  }, []);
   const refresh = useCallback(async () => {
     const d = await call("");
     setData(d);
@@ -1104,7 +1129,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                       ...colunasLista.map(([, rotulo]) => rotulo),
                       "Ações",
                     ]}
-                    rows={listaProdutos.map((p) => {
+                    rows={listaProdutos.slice(0, mostrarProdutos).map((p) => {
                       const capa = data.imagens.find((i) => i.produto_id === p.id);
                       const variacoes = products.filter((f) => f.pai_id === p.id).length;
                       // Anúncios do produto e das variações dele.
@@ -1170,15 +1195,19 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                                   .join(", ") || "—"
                               );
                             case "fisico":
-                              return p.controla_estoque === false
-                                ? "Sem controle"
-                                : p.tipo === "KIT"
-                                  ? "—"
-                                  : p.tipo === "VARIACAO"
-                                    ? products
-                                        .filter((f) => f.pai_id === p.id)
-                                        .reduce((t, f) => t + Number(f.fisico), 0)
-                                    : Number(p.fisico);
+                              return p.controla_estoque === false ? (
+                                "Sem controle"
+                              ) : p.tipo === "KIT" ? (
+                                <span title="Kit não tem estoque próprio: ele sai dos componentes">
+                                  —
+                                </span>
+                              ) : p.tipo === "VARIACAO" ? (
+                                products
+                                  .filter((f) => f.pai_id === p.id)
+                                  .reduce((t, f) => t + Number(f.fisico), 0)
+                              ) : (
+                                Number(p.fisico)
+                              );
                             case "disponivel":
                               return p.controla_estoque === false ? "Sem controle" : disponivel(p);
                             case "anuncios":
@@ -1217,6 +1246,15 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   />
                 )}
               </ProdutosLote>
+              <div className="rd-lista-rodape">
+                Mostrando {Math.min(mostrarProdutos, listaProdutos.length)} de{" "}
+                {listaProdutos.length} produto(s)
+                {listaProdutos.length > mostrarProdutos && (
+                  <button type="button" onClick={() => setMostrarProdutos(mostrarProdutos + 100)}>
+                    mostrar mais 100
+                  </button>
+                )}
+              </div>
             </section>
           )}
           {page === "importar" && (

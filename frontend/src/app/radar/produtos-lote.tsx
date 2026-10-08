@@ -7,7 +7,7 @@
 // cabeçalho e a de cada linha.
 
 import { useImperativeHandle, useState, type ReactNode, type Ref } from "react";
-import { money, str, type Row } from "./ui";
+import { money, str, useFecharFora, type Row } from "./ui";
 import type { TipoRapido } from "./acoes-rapidas";
 
 type Props = {
@@ -181,6 +181,7 @@ export default function ProdutosLote({
   children,
 }: Props) {
   const [menu, setMenu] = useState(false);
+  const caixaMenu = useFecharFora<HTMLDivElement>(menu, () => setMenu(false));
   const [menuLinha, setMenuLinha] = useState<{
     id: string;
     x: number;
@@ -195,6 +196,7 @@ export default function ProdutosLote({
   const [tags, setTags] = useState("");
   const [modoTags, setModoTags] = useState("ADICIONAR");
   const [aviso, setAviso] = useState("");
+  const [erroModal, setErroModal] = useState("");
 
   const todos =
     linhas.length > 0 && linhas.every((p) => marcados.includes(str(p.id)));
@@ -212,15 +214,18 @@ export default function ProdutosLote({
   const nomeCategoria = (id: unknown) =>
     str(categorias.find((c) => c.id === id)?.nome);
 
+  // Toda ação começa limpando o aviso da anterior (ex.: "Nenhum kit…" não fica na tela).
   function fecharMenus() {
     setMenu(false);
     setMenuLinha(null);
+    setAviso("");
   }
 
   function abrir(a: Acao, ids: string[] = marcados) {
     fecharMenus();
     setAlvo(ids);
     setAviso("");
+    setErroModal("");
     setValor("");
     setTags("");
     setModo("DEFINIR");
@@ -380,8 +385,19 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
       corpo.campo = campo;
       corpo.valor = valor.trim().replace(",", ".");
       if (tipoCampo === "DINHEIRO") corpo.modo = modo;
-      if (tipoCampo === "TEXTO" && (campo === "ncm" || campo === "cest"))
-        corpo.valor = valor.replace(/\D/g, "");
+      if (tipoCampo === "TEXTO" && (campo === "ncm" || campo === "cest")) {
+        // Pontos, traços e espaços saem; letra é erro (antes virava "" e apagava o campo).
+        const digitos = campo === "ncm" ? 8 : 7;
+        const nome = campo === "ncm" ? "NCM" : "CEST";
+        const limpo = valor.replace(/[\s.-]/g, "");
+        if (!/^\d*$/.test(limpo) || (limpo && limpo.length !== digitos)) {
+          setErroModal(
+            `${nome} deve ter ${digitos} números. Para apagar o ${nome}, deixe em branco.`,
+          );
+          return;
+        }
+        corpo.valor = limpo;
+      }
     }
     if (acao === "TAGS") {
       corpo.modo = modoTags;
@@ -638,7 +654,7 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
           <button type="button" onClick={() => abrir("EDITAR")}>
             ✎ Editar dados em massa
           </button>
-          <div className="rd-mais-acoes">
+          <div className="rd-mais-acoes" ref={caixaMenu}>
             <button
               type="button"
               aria-expanded={menu}
@@ -842,6 +858,11 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
                 Mover {alvo.length} produto(s) para a lixeira? Eles saem da
                 venda e das listas, mas pedidos e histórico continuam. Dá para
                 restaurar quando quiser, em &quot;Lixeira&quot;.
+              </p>
+            )}
+            {erroModal && (
+              <p className="rd-error" role="alert">
+                {erroModal}
               </p>
             )}
             <div className="rd-modal-foot">
