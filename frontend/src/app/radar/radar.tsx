@@ -846,6 +846,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                 embalagens: data.embalagens,
                 fornecedores: data.fornecedores,
                 anuncios: listings,
+                lojas: data.lojas ?? [],
                 kitItens: data.kitItens,
                 produtoFornecedores: data.produtoFornecedores,
                 imagens: data.imagens,
@@ -930,12 +931,19 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                       "Tipo",
                       "Custo / preço",
                       "Disponível",
+                      "Anúncios",
                       "Cadastro",
                       "Ações",
                     ]}
                     rows={listaProdutos.map((p) => {
                       const capa = data.imagens.find((i) => i.produto_id === p.id);
                       const variacoes = products.filter((f) => f.pai_id === p.id).length;
+                      // Anúncios do produto e das variações dele.
+                      const qtdAnuncios = listings.filter(
+                        (a) => a.produto_id === p.id || prod(a.produto_id)?.pai_id === p.id,
+                      ).length;
+                      const abrir = (aba: AbaProduto) =>
+                        setEditando({ id: str(p.id), aba, versao: Date.now() });
                       return [
                         lote.celula(p),
                         <div className="rd-product-name">
@@ -950,7 +958,14 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                             <span className="rd-product-thumb">▥</span>
                           )}
                           <div>
-                            <strong>{str(p.nome)}</strong>
+                            <button
+                              type="button"
+                              className="rd-link-produto"
+                              title="Abrir o cadastro do produto"
+                              onClick={() => abrir("geral")}
+                            >
+                              {str(p.nome)}
+                            </button>
                             <small>{str(p.marca) || "Sem marca"}</small>
                           </div>
                         </div>,
@@ -967,6 +982,18 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                           {money(p.preco)}
                         </>,
                         p.controla_estoque === false ? "Sem controle" : disponivel(p),
+                        qtdAnuncios ? (
+                          <button
+                            type="button"
+                            className="rd-link-produto"
+                            title="Ver os anúncios vinculados"
+                            onClick={() => abrir("anuncios")}
+                          >
+                            {qtdAnuncios}
+                          </button>
+                        ) : (
+                          <span className="rd-dica">0</span>
+                        ),
                         <Cadastro produto={p} variacoes={products} />,
                         <div className="rd-row-actions">
                           <button
@@ -2000,7 +2027,6 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           ids={anunciando}
           produtos={products}
           lojas={data.lojas ?? []}
-          anuncios={listings}
           categorias={data.categorias}
           categoriaCanais={data.categoriaCanais ?? []}
           imagens={data.imagens}

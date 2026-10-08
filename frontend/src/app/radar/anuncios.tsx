@@ -38,7 +38,7 @@ const NO_MARKETPLACE: Record<string, [string, string]> = {
   REJEITADO: ["Rejeitado", "red"],
   ENCERRADO: ["Encerrado", "gray"],
 };
-const NO_RADAR: Record<string, string> = {
+export const NO_RADAR: Record<string, string> = {
   RASCUNHO: "Rascunho",
   PRONTO: "Pronto para publicar",
   SIMULADO: "Simulado",

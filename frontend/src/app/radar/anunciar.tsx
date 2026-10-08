@@ -17,7 +17,6 @@ type Props = {
   ids: string[];
   produtos: Row[];
   lojas: Row[];
-  anuncios: Row[];
   categorias: Row[];
   categoriaCanais: Row[];
   imagens: Row[];
@@ -38,7 +37,7 @@ type Ajuste = { titulo: string; preco: string; estoque: string };
 const PASSOS = ["Onde anunciar", "Categoria", "Ajustes por loja", "Conferir e salvar"];
 
 export default function Anunciar(props: Props) {
-  const { produtos, lojas, anuncios } = props;
+  const { produtos, lojas } = props;
   const [passo, setPasso] = useState(0);
   const [escolhidas, setEscolhidas] = useState<string[]>(() =>
     lojas.length === 1 ? [str(lojas[0].id)] : [],
@@ -62,8 +61,6 @@ export default function Anunciar(props: Props) {
     .filter((p, i, todos) => todos.findIndex((x) => x.id === p.id) === i);
 
   const lojaDe = (id: string) => lojas.find((l) => str(l.id) === id)!;
-  const jaTem = (produto: Row, loja: string) =>
-    anuncios.some((a) => a.produto_id === produto.id && str(a.loja_id) === loja);
   // Cada par produto × loja vira um anúncio novo, mesmo que já exista outro dele na loja (o
   // lojista pode ter quantos quiser: teste de título, ads, mais catálogo).
   const pares = itens.flatMap((p) =>
@@ -227,7 +224,6 @@ export default function Anunciar(props: Props) {
         <div className="rd-anunciar-lojas">
           {lojas.map((l) => {
             const id = str(l.id);
-            const ja = itens.filter((p) => jaTem(p, id)).length;
             return (
               <label key={id} className={escolhidas.includes(id) ? "ativo" : ""}>
                 <input
@@ -241,11 +237,7 @@ export default function Anunciar(props: Props) {
                 />
                 <span>
                   <strong>{str(l.nome)}</strong>
-                  <small>
-                    {str(l.marketplace)}
-                    {ja > 0 &&
-                      ` · já tem anúncio aqui: ${ja} de ${itens.length} (este será mais um)`}
-                  </small>
+                  <small>{str(l.marketplace)}</small>
                 </span>
                 {l.conectada_em ? (
                   <Badge tone="green">Conectada</Badge>

@@ -6,10 +6,10 @@
 // O servidor valida e calcula (custo do kit, GTIN, estoque); a tela só
 // organiza o preenchimento e mostra o que falta para anunciar.
 
-import { CANAIS, palavras, regraDe } from "./canais";
+import { CANAIS, canaisCom, palavras, regraDe } from "./canais";
 import { useEffect, useState, type ReactNode } from "react";
 import { Badge, Empty, Table, cents, centMoney, money, str, type ModalSpec, type Row } from "./ui";
-import { verNaCentral } from "./anuncios";
+import { NO_RADAR, verNaCentral } from "./anuncios";
 
 type Valores = Record<string, string | boolean>;
 type Par = { nome: string; valor: string };
@@ -84,7 +84,8 @@ const ABAS = [
   ["composicao", "Variações / Kit"],
   ["imagens", "Imagens"],
   ["fiscal", "Fiscal"],
-  ["anuncios", "Anúncios e SEO"],
+  ["anuncios", "Anúncios"],
+  ["seo", "Conferência e SEO"],
   ["fornecedores", "Fornecedores"],
   ["observacoes", "Observações"],
   ["historico", "Histórico"],
@@ -98,6 +99,7 @@ export type DadosProduto = {
   embalagens: Row[];
   fornecedores: Row[];
   anuncios: Row[];
+  lojas: Row[];
   kitItens: Row[];
   produtoFornecedores: Row[];
   imagens: Row[];
@@ -1232,33 +1234,6 @@ export default function ProdutoForm({
     ),
     anuncios: (
       <>
-        <section className="rd-card rd-pronto">
-          <h3>Pronto para anunciar?</h3>
-          <p className="rd-note">
-            Requisitos comuns de cada canal. As regras exatas variam por categoria do marketplace.
-          </p>
-          <div className="rd-pronto-grade">
-            {CANAIS.map((canal) => {
-              const itens = porCanal[canal];
-              const faltam = itens.filter(([, ok]) => !ok);
-              return (
-                <div key={canal}>
-                  <strong>{canal}</strong>
-                  <Badge tone={faltam.length ? "amber" : "green"}>
-                    {faltam.length ? `Faltam ${faltam.length}` : "Completo"}
-                  </Badge>
-                  <ul>
-                    {itens.map(([rotulo, ok]) => (
-                      <li key={rotulo} className={ok ? "ok" : "falta"}>
-                        {ok ? "✓" : "○"} {rotulo}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        </section>
         <h3 className="rd-secao">Anúncios deste produto</h3>
         {avisoCentral && (
           <p className="rd-ok" role="status">
@@ -1294,7 +1269,7 @@ export default function ProdutoForm({
             </button>
           </div>
         )}
-        {CANAIS.map((canal) => {
+        {canaisCom(anunciosDoProduto).map((canal) => {
           const doCanal = anunciosDoProduto.filter((a) => a.canal === canal);
           return (
             <div key={canal} className="rd-anuncios-canal">
@@ -1303,7 +1278,7 @@ export default function ProdutoForm({
               </h4>
               {doCanal.length ? (
                 <Table
-                  headers={["Título", "Preço", "Situação", ""]}
+                  headers={["Título", "Loja", "Preço", "Qtd.", "Situação", ""]}
                   rows={doCanal.map((a) => [
                     <div key="t">
                       {str(a.titulo)}
@@ -1314,9 +1289,11 @@ export default function ProdutoForm({
                           : "Criado no Radar"}
                       </small>
                     </div>,
+                    str(dados.lojas.find((l) => l.id === a.loja_id)?.nome) || "—",
                     money(a.preco),
-                    <Badge tone={a.estado === "SIMULADO" ? "green" : "gray"}>
-                      {str(a.estado)}
+                    a.estoque == null ? "—" : str(a.estoque),
+                    <Badge tone={["SIMULADO", "PRONTO"].includes(str(a.estado)) ? "green" : "gray"}>
+                      {NO_RADAR[str(a.estado)] ?? str(a.estado)}
                     </Badge>,
                     <span key="a" className="rd-row-actions">
                       <button
@@ -1385,10 +1362,40 @@ export default function ProdutoForm({
           );
         })}
         <p className="rd-note">
-          Ao enviar este produto para um e-commerce conectado, um anúncio é criado automaticamente.
-          Anúncios também podem ser adicionados à mão, para vincular publicações existentes ou ter
-          mais de um anúncio do mesmo produto.
+          Use “Anunciar nas minhas lojas” para criar anúncios conferidos, quantos quiser, em
+          qualquer loja. “Adicionar anúncio” vincula à mão uma publicação que já existe.
         </p>
+      </>
+    ),
+    seo: (
+      <>
+        <section className="rd-card rd-pronto">
+          <h3>Pronto para anunciar?</h3>
+          <p className="rd-note">
+            Requisitos comuns de cada canal. As regras exatas variam por categoria do marketplace.
+          </p>
+          <div className="rd-pronto-grade">
+            {CANAIS.map((canal) => {
+              const itens = porCanal[canal];
+              const faltam = itens.filter(([, ok]) => !ok);
+              return (
+                <div key={canal}>
+                  <strong>{canal}</strong>
+                  <Badge tone={faltam.length ? "amber" : "green"}>
+                    {faltam.length ? `Faltam ${faltam.length}` : "Completo"}
+                  </Badge>
+                  <ul>
+                    {itens.map(([rotulo, ok]) => (
+                      <li key={rotulo} className={ok ? "ok" : "falta"}>
+                        {ok ? "✓" : "○"} {rotulo}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </section>
         <h3 className="rd-secao">SEO e classificação</h3>
         <div className="rd-form-grid">
           <Campo rotulo="Keywords" dica="Palavras separadas por vírgula" largo>
@@ -1596,6 +1603,9 @@ export default function ProdutoForm({
             onClick={() => setAba(chave)}
           >
             {rotulo}
+            {chave === "anuncios" &&
+              anunciosDoProduto.length > 0 &&
+              ` (${anunciosDoProduto.length})`}
           </button>
         ))}
       </div>
