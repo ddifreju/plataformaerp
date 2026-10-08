@@ -16,7 +16,8 @@ export type TipoRapido =
   | "vendas"
   | "compras"
   | "custo-variacoes"
-  | "multiempresa";
+  | "multiempresa"
+  | "receber";
 
 // O erro do último comando aparece dentro do painel (a mensagem da tela fica atrás dele).
 const ErroDoPainel = createContext("");
@@ -89,7 +90,7 @@ type Props = {
   erro: string;
   disponivel: (p: Row) => number;
   executar: (corpo: Record<string, unknown>) => Promise<boolean>;
-  irParaLojas: () => void;
+  ir: (pagina: string) => void;
   fechar: () => void;
 };
 
@@ -195,6 +196,32 @@ function Painel(props: Props) {
     }
     case "custo-variacoes":
       return <CustoVariacoes {...props} escolhidos={escolhidos} />;
+    case "receber":
+      return (
+        <Gaveta
+          titulo="Receber produtos do e-commerce"
+          fechar={fechar}
+          rodape={
+            <>
+              <button className="primary" onClick={() => props.ir("importar")}>
+                Importar de uma planilha
+              </button>
+              <button onClick={() => props.ir("integracoes")}>Ver minhas lojas</button>
+            </>
+          }
+        >
+          {props.lojas.length > 0 ? (
+            <EscolherLojas lojas={props.lojas} escolhidas={[]} mudar={() => {}} desligado />
+          ) : (
+            <p className="rd-dica">Nenhuma loja cadastrada ainda.</p>
+          )}
+          <Aviso titulo="Depende da conexão">
+            Quando a loja estiver conectada, o Radar traz os anúncios dela e cria os produtos que
+            ainda não existem, vinculando cada anúncio ao seu produto. Hoje nenhuma loja está
+            conectada: dá para trazer o catálogo por planilha.
+          </Aviso>
+        </Gaveta>
+      );
     case "multiempresa":
       return (
         <Gaveta titulo="Consultar estoque multiempresa" fechar={fechar}>
