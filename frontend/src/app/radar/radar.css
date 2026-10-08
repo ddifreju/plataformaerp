@@ -4044,3 +4044,33 @@ ul.rd-menu-linha li button,
     bottom: calc(100% + 6px);
   }
 }
+
+/* Anunciar: lojas agrupadas por marketplace, problemas embaixo de cada loja (passo 3) */
+.rd-anunciar-grupo {
+  margin-bottom: 14px;
+}
+.rd-anunciar-grupo-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.rd-anunciar-problemas {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: #b13737;
+  font-size: 12px;
+}
+.rd-anunciar-margem {
+  grid-column: 1 / -1;
+}
+/* Janela lateral: botões do rodapé sempre à vista (no celular a lista é longa). */
+.rd-modal.lateral .rd-modal-foot {
+  position: sticky;
+  bottom: -27px;
+  background: white;
+  padding: 12px 0;
+  margin-bottom: -27px;
+  z-index: 2;
+}

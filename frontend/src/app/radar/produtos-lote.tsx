@@ -355,6 +355,8 @@ export default function ProdutosLote({
     linhas.length > 0 && linhas.every((p) => marcados.includes(str(p.id)));
   // Lixeira em 20 ou mais produtos pede para digitar a quantidade (evita o clique por engano).
   const loteGrande = acao === "EXCLUIR" && alvo.length >= 20;
+  // Marcar vários: quem edita, quem anuncia (marketing) e quem envia estoque (estoque).
+  const podeMarcar = ativo || !!anunciar || podeEnviarEstoque;
   const temKitMarcado = produtos.some(
     (p) => p.tipo === "KIT" && marcados.includes(str(p.id)),
   );
@@ -542,7 +544,7 @@ export default function ProdutosLote({
     const id = str(p.id);
     return (
       <span className="rd-celula-lote">
-        {ativo && (
+        {podeMarcar && (
           <input
             type="checkbox"
             aria-label={`Selecionar ${str(p.nome)}`}
@@ -595,7 +597,7 @@ export default function ProdutosLote({
   return (
     <>
       {children({
-        cabecalho: ativo ? cabecalho : "",
+        cabecalho: podeMarcar ? cabecalho : "",
         // Todo cargo tem o "⋯" (só com o que pode fazer); marcar para o lote é de quem edita.
         celula: (p) => caixa(p),
       })}
@@ -692,7 +694,7 @@ export default function ProdutosLote({
           {aviso}
         </div>
       )}
-      {ativo && marcados.length > 0 && (
+      {podeMarcar && marcados.length > 0 && (
         <div
           className="rd-barra-lote"
           role="region"
@@ -710,12 +712,16 @@ export default function ProdutosLote({
               ✕
             </button>
           </span>
-          <button type="button" className="primary" onClick={enviarEcommerce}>
-            ⇪ Enviar para o e-commerce
-          </button>
-          <button type="button" onClick={() => abrir("EDITAR")}>
-            ✎ Editar dados em massa
-          </button>
+          {anunciar && (
+            <button type="button" className="primary" onClick={enviarEcommerce}>
+              ⇪ Enviar para o e-commerce
+            </button>
+          )}
+          {ativo && (
+            <button type="button" onClick={() => abrir("EDITAR")}>
+              ✎ Editar dados em massa
+            </button>
+          )}
           <div className="rd-mais-acoes" ref={caixaMenu}>
             <button
               type="button"
@@ -732,7 +738,8 @@ export default function ProdutosLote({
             </button>
             {menu && (
               <ul role="menu" className="rd-menu-cima rd-menu-longo">
-                {item("⇪ Enviar para o e-commerce", enviarEcommerce)}
+                {anunciar &&
+                  item("⇪ Enviar para o e-commerce", enviarEcommerce)}
                 {anunciar &&
                   rapidoItem(
                     "$ Enviar preços para o e-commerce",
@@ -773,9 +780,10 @@ export default function ProdutosLote({
                   "Entra junto com o cadastro de produção (fabricados)",
                 )}
                 <li className="rd-menu-sep" />
-                {item("✎ Editar dados em massa", () => abrir("EDITAR"))}
+                {ativo &&
+                  item("✎ Editar dados em massa", () => abrir("EDITAR"))}
                 {item("🏷 Imprimir etiquetas", () => etiquetas())}
-                {item("# Alterar tags", () => abrir("TAGS"))}
+                {ativo && item("# Alterar tags", () => abrir("TAGS"))}
                 {emBreve(
                   "⇆ Unificar cadastros",
                   "Precisa juntar estoque e histórico; vem numa próxima etapa",
@@ -795,14 +803,18 @@ export default function ProdutosLote({
                   "✦ Sugerir NCM",
                   "Sugestão por IA, sempre revisada por você; vem numa próxima etapa",
                 )}
-                <li className="rd-menu-sep" />
-                {todosInativos
-                  ? item("✓ Ativar produtos", () => abrir("ATIVAR"))
-                  : item("⊘ Inativar produtos", () => abrir("INATIVAR"))}
-                {item("🗑 Excluir anexos dos produtos", () =>
-                  abrir("EXCLUIR_ANEXOS"),
+                {ativo && (
+                  <>
+                    <li className="rd-menu-sep" />
+                    {todosInativos
+                      ? item("✓ Ativar produtos", () => abrir("ATIVAR"))
+                      : item("⊘ Inativar produtos", () => abrir("INATIVAR"))}
+                    {item("🗑 Excluir anexos dos produtos", () =>
+                      abrir("EXCLUIR_ANEXOS"),
+                    )}
+                    {item("🗑 Mover para a lixeira", () => abrir("EXCLUIR"))}
+                  </>
                 )}
-                {item("🗑 Mover para a lixeira", () => abrir("EXCLUIR"))}
               </ul>
             )}
           </div>

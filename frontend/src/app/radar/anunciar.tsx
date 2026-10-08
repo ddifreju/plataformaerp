@@ -16,6 +16,8 @@ import { Badge, str, useFecharFora, type Row } from "./ui";
 type Props = {
   ids: string[];
   produtos: Row[];
+  /** Anúncios que já existem (para avisar quando o produto já está na loja). */
+  anuncios: Row[];
   lojas: Row[];
   categorias: Row[];
   categoriaCanais: Row[];
@@ -152,8 +154,12 @@ export default function Anunciar(props: Props) {
     const lista: string[] = [];
     const n = letras(a.titulo);
     if (foraDoTitulo(r, n)) lista.push(`Título com ${n} letras: no ${m} ${limiteTitulo(r)}.`);
-    const preco = Number(a.preco.replace(",", "."));
-    if (!(preco > 0)) lista.push("Preço maior que zero.");
+    const textoPreco = numeroBR(a.preco);
+    const preco = Number(textoPreco);
+    if (!/^\d+(\.\d{1,2})?$/.test(textoPreco))
+      lista.push("Preço com no máximo 2 casas decimais (ex.: 89,90).");
+    else if (preco > 999999999) lista.push("Preço até R$ 999.999.999,00.");
+    else if (!(preco > 0)) lista.push("Preço maior que zero.");
     // Custo só chega para quem vê o financeiro; para os outros, o servidor confere ao salvar.
     else if (p.custo != null && preco < Number(p.custo))
       lista.push(`Preço abaixo do custo (R$ ${moeda(Number(p.custo))}): a política bloqueia.`);
@@ -164,6 +170,7 @@ export default function Anunciar(props: Props) {
       lista.push(`Preço no ${m}: de R$ ${moeda(r.precoMin ?? 0)} a R$ ${moeda(r.precoMax ?? 0)}.`);
     const qtd = Number(a.estoque.trim());
     if (!/^\d+$/.test(a.estoque.trim())) lista.push("Quantidade a anunciar (número inteiro).");
+    else if (qtd > 9999999) lista.push("Quantidade: no máximo 9.999.999.");
     else if (qtd < Math.max(1, r.estoqueMin ?? 1))
       lista.push(`Quantidade: pelo menos ${Math.max(1, r.estoqueMin ?? 1)}.`);
     else if (r.estoqueMax != null && qtd > r.estoqueMax)
@@ -190,7 +197,7 @@ export default function Anunciar(props: Props) {
           produto_id: p.id,
           loja_id: loja.id,
           titulo: a.titulo.trim(),
-          preco: a.preco.replace(",", "."),
+          preco: numeroBR(a.preco),
           estoque: a.estoque.trim(),
         };
       }),
@@ -222,33 +229,58 @@ export default function Anunciar(props: Props) {
             : `Escolha onde anunciar estes ${itens.length} produtos.`}{" "}
           Aparecem as suas lojas cadastradas em Integrações.
         </p>
-        <div className="rd-anunciar-lojas">
-          {lojas.map((l) => {
-            const id = str(l.id);
-            return (
-              <label key={id} className={escolhidas.includes(id) ? "ativo" : ""}>
-                <input
-                  type="checkbox"
-                  checked={escolhidas.includes(id)}
-                  onChange={(e) =>
-                    setEscolhidas((s) =>
-                      e.target.checked ? [...s, id] : s.filter((x) => x !== id),
-                    )
-                  }
-                />
-                <span>
-                  <strong>{str(l.nome)}</strong>
-                  <small>{str(l.marketplace)}</small>
-                </span>
-                {l.conectada_em ? (
-                  <Badge tone="green">Conectada</Badge>
-                ) : (
-                  <Badge tone="amber">Aguardando conexão</Badge>
+        {[...new Set(lojas.map((l) => str(l.marketplace)))].map((m) => {
+          const doMarketplace = lojas.filter((l) => str(l.marketplace) === m);
+          const ids = doMarketplace.map((l) => str(l.id));
+          const todas = ids.every((x) => escolhidas.includes(x));
+          return (
+            <div key={m} className="rd-anunciar-grupo">
+              <div className="rd-anunciar-grupo-topo">
+                <strong>{m}</strong>
+                {doMarketplace.length > 1 && (
+                  <button
+                    type="button"
+                    className="text"
+                    onClick={() =>
+                      setEscolhidas((s) =>
+                        todas ? s.filter((x) => !ids.includes(x)) : [...new Set([...s, ...ids])],
+                      )
+                    }
+                  >
+                    {todas ? "desmarcar todas" : `marcar todas do ${m}`}
+                  </button>
                 )}
-              </label>
-            );
-          })}
-        </div>
+              </div>
+              <div className="rd-anunciar-lojas">
+                {doMarketplace.map((l) => {
+                  const id = str(l.id);
+                  return (
+                    <label key={id} className={escolhidas.includes(id) ? "ativo" : ""}>
+                      <input
+                        type="checkbox"
+                        checked={escolhidas.includes(id)}
+                        onChange={(e) =>
+                          setEscolhidas((s) =>
+                            e.target.checked ? [...s, id] : s.filter((x) => x !== id),
+                          )
+                        }
+                      />
+                      <span>
+                        <strong>{str(l.nome)}</strong>
+                        <small>{str(l.marketplace)}</small>
+                      </span>
+                      {l.conectada_em ? (
+                        <Badge tone="green">Conectada</Badge>
+                      ) : (
+                        <Badge tone="amber">Aguardando conexão</Badge>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
         {lojas.length > 1 && (
           <button
             type="button"
@@ -424,6 +456,23 @@ export default function Anunciar(props: Props) {
                   />
                   <small>Em estoque: {props.disponivel(p)}</small>
                 </label>
+                {p.custo != null && Number(numeroBR(a.preco)) > 0 && (
+                  <small className="rd-dica rd-anunciar-margem">
+                    Custo R$ {moeda(Number(p.custo))} · margem{" "}
+                    {Math.round(
+                      ((Number(numeroBR(a.preco)) - Number(p.custo)) / Number(numeroBR(a.preco))) *
+                        100,
+                    )}
+                    %
+                  </small>
+                )}
+                {problemasDoPar(par).length > 0 && (
+                  <ul className="rd-anunciar-problemas" role="alert">
+                    {problemasDoPar(par).map((t) => (
+                      <li key={t}>{t}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
             );
           })}
@@ -437,6 +486,40 @@ export default function Anunciar(props: Props) {
           ✓ Tudo certo: {pares.length} anúncio(s) em {escolhidas.length} loja(s) seguem as regras
           dos marketplaces.
         </p>
+        <div className="rd-table-wrap">
+          <table className="rd-table">
+            <thead>
+              <tr>
+                <th>Produto</th>
+                <th>Loja</th>
+                <th>Preço</th>
+                <th>Qtd.</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {pares.map(({ p, loja, chave }) => {
+                const a = ajusteDe(p, chave);
+                const ja = props.anuncios.filter(
+                  (x) => x.produto_id === p.id && x.loja_id === loja.id,
+                ).length;
+                return (
+                  <tr key={chave}>
+                    <td>{str(p.nome)}</td>
+                    <td>{str(loja.nome)}</td>
+                    <td>R$ {moeda(Number(numeroBR(a.preco)))}</td>
+                    <td>{a.estoque}</td>
+                    <td>
+                      {ja > 0 && (
+                        <small className="rd-dica">já tem {ja} anúncio(s) nesta loja</small>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
         <p className="rd-note">
           Os anúncios ficam salvos como <strong>prontos para publicar</strong>. Eles sobem para o
           marketplace quando a loja for conectada (a conexão entra depois do CNPJ).
@@ -551,3 +634,11 @@ const limiteTitulo = (r: Regra) =>
     ? `vai de ${r.tituloMin} a ${r.tituloMax}`
     : `vai de ${r.tituloMin} a ${TITULO_MAX_RADAR} (limite do Radar)`;
 const moeda = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+
+/** Número como se digita no Brasil: "1.234,56" → 1234.56; "1.234" (milhar) → 1234; "20.5" → 20.5. */
+const numeroBR = (t: string) => {
+  const s = t.trim();
+  if (s.includes(",")) return s.replace(/\./g, "").replace(",", ".");
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) return s.replace(/\./g, "");
+  return s;
+};

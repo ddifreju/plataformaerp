@@ -643,7 +643,7 @@ class RadarAnunciosTest {
                 assertThrows(
                         ResponseStatusException.class,
                         () -> anunciar(empresa, produto, tiktok, titulo, "100000"));
-        assertTrue(demais.getReason().contains("no máximo 99999"));
+        assertTrue(demais.getReason().contains("no máximo 99.999"));
         assertEquals(1, anunciar(empresa, produto, tiktok, titulo, "99999").get("criados"));
 
         UUID ml = novaLoja(empresa, "Mercado Livre", "ML");

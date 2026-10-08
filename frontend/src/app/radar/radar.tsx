@@ -2341,6 +2341,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
         <Anunciar
           ids={anunciando}
           produtos={products}
+          anuncios={listings}
           lojas={data.lojas ?? []}
           categorias={data.categorias}
           categoriaCanais={data.categoriaCanais ?? []}
