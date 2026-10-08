@@ -99,8 +99,12 @@ Print quando ajudar (salve em `docs/testes/prints/`).
   produto com variação, conta as variações incompletas.
 - [ ] **D2. Coluna Anúncios.** Esperado: número de anúncios do produto (com
   as variações); clicar no número abre a aba Anúncios do produto.
-- [ ] **D3. Nome abre o cadastro.** Clique no nome do produto. Esperado: abre
-  o cadastro em Dados gerais.
+- [ ] **D3. Nome abre a visualização.** Clique no nome do produto. Esperado:
+  abre a página de visualização (abas dados gerais, complementares, ficha
+  técnica, anúncios, variações ou kit, preços, custos, outros), com "Enviar
+  para o e-commerce", "Editar" (abre o formulário na aba equivalente e volta
+  para a visualização) e "Mais ações". Custos só para dono, gestor e
+  financeiro.
 - [ ] **D4. Filtros, busca e edição em massa** continuam funcionando (busca
   por nome/SKU, filtros combinados, filtro salvo, editar dados em massa,
   reajuste de preço, tags). Edição em massa de unidade não oferece CM nem PCT.

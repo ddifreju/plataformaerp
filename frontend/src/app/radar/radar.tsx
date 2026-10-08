@@ -22,6 +22,7 @@ import Promocoes, { situacao } from "./promocoes";
 import AreaRelatorios, { type Area, type Salvo } from "./relatorios-area";
 import type { Fonte } from "./relatorios-montar";
 import ProdutoForm, { type Aba as AbaProduto } from "./produto";
+import ProdutoVer, { type AbaVer } from "./produto-ver";
 import Clientes from "./cliente";
 import Vendedores from "./vendedor";
 import ProdutosLote from "./produtos-lote";
@@ -257,6 +258,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     // null até a lista de produtos abrir: aí lê o último filtro deste navegador.
     [filtroProdutosSalvo, setFiltroProdutos] = useState<FiltroProdutos | null>(null),
     [verLixeira, setVerLixeira] = useState(false),
+    // Produto aberto na visualização (clique na lista); "Editar" abre o formulário por cima.
+    [vendo, setVendo] = useState<{ id: string; aba?: AbaVer } | null>(null),
     // Produtos abertos no passo a passo "Anunciar".
     [anunciando, setAnunciando] = useState<string[] | null>(null),
     [filtroPedidosAtual, setFiltroPedidos] = useState<Filtro | null>(null);
@@ -313,6 +316,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   }
   function go(p: string) {
     setEditando(null);
+    setVendo(null);
     setPage(p);
     setMenu(false);
     setNotice("");
@@ -852,7 +856,53 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               aoSalvar={(id, aba) => setEditando({ id, aba, versao: Date.now() })}
             />
           )}
-          {page === "produtos" && !editando && can("DONO", "GESTOR") && (
+          {page === "produtos" && !editando && vendo && prod(vendo.id) && (
+            <ProdutoVer
+              key={`${vendo.id}-${vendo.aba ?? ""}`}
+              produto={prod(vendo.id)!}
+              abaInicial={vendo.aba}
+              produtos={products}
+              imagens={data.imagens}
+              anuncios={listings}
+              lojas={data.lojas ?? []}
+              categorias={data.categorias}
+              embalagens={data.embalagens}
+              fornecedores={data.fornecedores ?? []}
+              produtoFornecedores={data.produtoFornecedores}
+              kitItens={data.kitItens}
+              registros={data.registros}
+              pedidos={orders}
+              promocoes={data.promocoes ?? []}
+              financeiro={data.financeiroPermitido}
+              podeEditar={can("DONO", "GESTOR")}
+              podeAnunciar={can("DONO", "GESTOR", "MARKETING")}
+              disponivel={disponivel}
+              editar={(aba) => setEditando({ id: vendo.id, aba, versao: Date.now() })}
+              anunciar={() => setAnunciando([vendo.id])}
+              clonar={
+                can("DONO", "GESTOR")
+                  ? async () => {
+                      const r = await commandResult({
+                        op: "produto_clonar",
+                        id: vendo.id,
+                        imagens: true,
+                      });
+                      if (r) setVendo({ id: str(r.id) });
+                    }
+                  : undefined
+              }
+              paraLixeira={
+                can("DONO", "GESTOR")
+                  ? async () => {
+                      if (await command({ op: "produtos_lote", acao: "EXCLUIR", ids: [vendo.id] }))
+                        setVendo(null);
+                    }
+                  : undefined
+              }
+              voltar={() => setVendo(null)}
+            />
+          )}
+          {page === "produtos" && !editando && !vendo && can("DONO", "GESTOR") && (
             <Pendencias
               produtos={cadastrados}
               imagens={data.imagens}
@@ -864,7 +914,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               marcarParaLote={setMarcadosProdutos}
             />
           )}
-          {page === "produtos" && !editando && verLixeira && (
+          {page === "produtos" && !editando && !vendo && verLixeira && (
             <Lixeira
               itens={naLixeira}
               podeEditar={can("DONO", "GESTOR")}
@@ -872,7 +922,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               voltar={() => setVerLixeira(false)}
             />
           )}
-          {page === "produtos" && !editando && !verLixeira && (
+          {page === "produtos" && !editando && !vendo && !verLixeira && (
             <section className="rd-card">
               <div className="rd-card-head">
                 <h2>{principais.length} produtos</h2>
@@ -933,8 +983,6 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                       const qtdAnuncios = listings.filter(
                         (a) => a.produto_id === p.id || prod(a.produto_id)?.pai_id === p.id,
                       ).length;
-                      const abrir = (aba: AbaProduto) =>
-                        setEditando({ id: str(p.id), aba, versao: Date.now() });
                       return [
                         lote.celula(p),
                         <div className="rd-product-name">
@@ -952,8 +1000,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                             <button
                               type="button"
                               className="rd-link-produto"
-                              title="Abrir o cadastro do produto"
-                              onClick={() => abrir("geral")}
+                              title="Ver o produto"
+                              onClick={() => setVendo({ id: str(p.id) })}
                             >
                               {str(p.nome)}
                             </button>
@@ -978,7 +1026,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                             type="button"
                             className="rd-link-produto"
                             title="Ver os anúncios vinculados"
-                            onClick={() => abrir("anuncios")}
+                            onClick={() => setVendo({ id: str(p.id), aba: "anuncios" })}
                           >
                             {qtdAnuncios}
                           </button>
