@@ -1381,6 +1381,7 @@ public class RadarProdutos {
                             fator);
             if (invalidos != null && invalidos > 0)
                 erro("O reajuste deixaria " + invalidos + " produto(s) com valor inválido.");
+            promocionalAcima(campo, "round(" + expressao + ", 2)", fator, ids);
             k =
                     db.update(
                             "update radar_produto set "
@@ -1397,6 +1398,7 @@ public class RadarProdutos {
                             ids);
         } else {
             Object valor = valorDoLote(n, campo, tipo);
+            if (valor != null) promocionalAcima(campo, "?", valor, ids);
             String filtroKit = campo.equals("custo") ? " and tipo<>'KIT'" : "";
             // campo vem só de CAMPOS_LOTE (chaves fixas), nunca do texto da requisição.
             k =
@@ -1408,22 +1410,6 @@ public class RadarProdutos {
                             valor,
                             tenant(),
                             ids);
-        }
-        // Promoção acima do preço confunde o cliente e o marketplace recusa: desfaz o lote.
-        if (campo.equals("preco") || campo.equals("preco_promocional")) {
-            Integer acima =
-                    db.queryForObject(
-                            "select count(*) from radar_produto where tenant_id=? and id = any(?)"
-                                    + " and preco_promocional is not null and preco_promocional"
-                                    + " >= preco",
-                            Integer.class,
-                            tenant(),
-                            ids);
-            if (acima != null && acima > 0)
-                erro(
-                        acima
-                                + " produto(s) ficariam com o preço promocional igual ou maior que o"
-                                + " preço de venda. Ajuste o promocional antes.");
         }
         return Map.of(
                 "mensagem",
@@ -1502,6 +1488,34 @@ public class RadarProdutos {
                 yield null;
             }
         };
+    }
+
+    /**
+     * Antes de gravar preço ou promocional em lote: promoção igual ou acima do preço confunde o
+     * cliente e o marketplace recusa. {@code novo} é a expressão SQL do valor novo (com um "?").
+     */
+    private void promocionalAcima(String campo, String novo, Object parametro, UUID[] ids) {
+        String condicao =
+                switch (campo) {
+                    case "preco" ->
+                            "preco_promocional is not null and preco_promocional >= " + novo;
+                    case "preco_promocional" -> "preco > 0 and " + novo + " >= preco";
+                    default -> null;
+                };
+        if (condicao == null) return;
+        Integer acima =
+                db.queryForObject(
+                        "select count(*) from radar_produto where tenant_id=? and id = any(?) and "
+                                + condicao,
+                        Integer.class,
+                        tenant(),
+                        ids,
+                        parametro);
+        if (acima != null && acima > 0)
+            erro(
+                    acima
+                            + " produto(s) ficariam com o preço promocional igual ou maior que o preço"
+                            + " de venda. Ajuste o promocional antes.");
     }
 
     private Map<String, Object> alterarTags(JsonNode n, List<UUID> alvo) {

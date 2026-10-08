@@ -743,6 +743,38 @@ class RadarProdutosTest {
                 + "\"largura_cm\":\"10\",\"altura_cm\":\"10\",\"comprimento_cm\":\"10\"";
     }
 
+    @Test
+    void precoPromocionalTemQueSerMenorQueOPreco() throws SQLException {
+        var acima =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                salvar(
+                                        empresaA,
+                                        "{\"nome\":\"Promo acima\",\"sku\":\"PROMO-1\",\"tipo\":\"SIMPLES\","
+                                                + "\"preco\":\"100\",\"preco_promocional\":\"180\"}"));
+        assertTrue(acima.getReason().contains("promocional"));
+        // Lote: reduzir o preço abaixo do promocional desfaz o lote inteiro.
+        UUID p = BancoRadarDeTeste.novoProduto(empresaA, "PROMO-2", "10.00", "100.00");
+        BancoRadarDeTeste.executarComoDono(
+                "update radar_produto set preco_promocional=90 where id=?", p);
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        lote(
+                                "{\"acao\":\"EDITAR\",\"campo\":\"preco\",\"modo\":\"REDUZIR_PCT\","
+                                        + "\"valor\":\"20\",\"ids\":[\""
+                                        + p
+                                        + "\"]}"));
+        assertEquals(
+                0,
+                new BigDecimal("100.00")
+                        .compareTo(
+                                (BigDecimal)
+                                        linha(empresaA, "select preco from radar_produto where id=?", p)
+                                                .get("preco")));
+    }
+
     private static UUID salvar(UUID empresa, String corpo) {
         return (UUID) naEmpresa(empresa, () -> produtos.salvar(json(corpo), "DONO")).get("id");
     }
