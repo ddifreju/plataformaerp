@@ -155,8 +155,8 @@ export function MaisAcoesProdutos(props: {
       {aberto && (
         <>
           <ul role="menu" className="rd-menu-longo">
-            {item("⇩ receber produtos do e-commerce", props.receber)}
-            <li className="rd-menu-sep" />
+            {props.podeEditar && item("⇩ receber produtos do e-commerce", props.receber)}
+            {props.podeEditar && <li className="rd-menu-sep" />}
             {item("🖨 imprimir relatório", () => lista()?.relatorio(props.ids()))}
             {props.iniciarCustos &&
               item("☰ iniciar histórico de custos", () => props.iniciarCustos?.(props.ids()))}

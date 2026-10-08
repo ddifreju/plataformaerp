@@ -44,7 +44,7 @@ public class RadarProdutos {
 
     static final Set<String> OPERACOES = Set.of("produto_salvar", "produto_clonar");
 
-    private static final int MAX_LOTE = 500;
+    private static final int MAX_LOTE = 5000;
 
     /** Campos que "editar dados em massa" pode mudar, com o tipo de valor de cada um. */
     private static final Map<String, String> CAMPOS_LOTE =
@@ -116,6 +116,24 @@ public class RadarProdutos {
         return out;
     }
 
+    /** Data e hora vindas do banco ou do formulário (texto ISO); null quando não há. */
+    private static java.time.Instant instante(Object v) {
+        if (v instanceof java.sql.Timestamp t) return t.toInstant();
+        if (v instanceof java.time.OffsetDateTime o) return o.toInstant();
+        if (v instanceof java.time.Instant i) return i;
+        String t = v == null ? "" : v.toString().trim();
+        if (t.isEmpty()) return null;
+        try {
+            return java.time.OffsetDateTime.parse(t).toInstant();
+        } catch (java.time.format.DateTimeParseException e) {
+            try {
+                return java.time.Instant.ofEpochMilli(Long.parseLong(t));
+            } catch (NumberFormatException e2) {
+                return null;
+            }
+        }
+    }
+
     /** Cria ou atualiza o produto com tudo o que o formulário envia. */
     Map<String, Object> salvar(JsonNode n, String papel) {
         permitir(papel, "DONO", "GESTOR");
@@ -132,6 +150,17 @@ public class RadarProdutos {
             if (antes.get("pai_id") != null) erro("Edite a variação pelo produto principal.");
             if (!antes.get("tipo").equals(tipo))
                 erro("O tipo do produto não muda depois de criado. Cadastre um novo produto.");
+            // Outra pessoa salvou depois que este formulário abriu: não sobrescreve sem avisar.
+            java.time.Instant lido = instante(n.path("versao_lida").asText(""));
+            java.time.Instant atual = instante(antes.get("atualizado_em"));
+            // Compara em milissegundos: o texto que a tela recebeu pode vir com menos casas.
+            var ms = java.time.temporal.ChronoUnit.MILLIS;
+            if (lido != null && atual != null && atual.truncatedTo(ms).isAfter(lido.truncatedTo(ms)))
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Outra pessoa salvou este produto depois que você abriu. Para não apagar o"
+                                + " que ela mudou, volte para a lista, abra o produto de novo e"
+                                + " refaça a sua alteração.");
         }
 
         Map<String, Object> c = colunasComuns(n);
@@ -259,16 +288,22 @@ public class RadarProdutos {
     /** Recalcula a coluna incompleto depois de mudanças fora do formulário (lote, importação). */
     void recalcularPendencias(List<UUID> ids) {
         if (ids.isEmpty()) return;
+        // Duas gravações para o lote inteiro (uma por produto ficaria lenta com catálogo grande).
+        List<UUID> incompletos = new ArrayList<>(), completos = new ArrayList<>();
         for (var linha :
                 db.queryForList(
                         "select * from radar_produto where tenant_id=? and id = any(?)",
                         tenant(),
                         ids.toArray(UUID[]::new)))
+            (pendencias(linha).isEmpty() ? completos : incompletos).add((UUID) linha.get("id"));
+        for (boolean incompleto : List.of(true, false))
             db.update(
-                    "update radar_produto set incompleto=? where tenant_id=? and id=?",
-                    !pendencias(linha).isEmpty(),
+                    "update radar_produto set incompleto=? where tenant_id=? and id = any(?)"
+                            + " and incompleto is distinct from ?",
+                    incompleto,
                     tenant(),
-                    linha.get("id"));
+                    (incompleto ? incompletos : completos).toArray(UUID[]::new),
+                    incompleto);
     }
 
     /** SKU automático conforme Configurações do cadastro de produtos. Manual: SKU obrigatório. */
@@ -1169,7 +1204,11 @@ public class RadarProdutos {
         List<UUID> marcados = new ArrayList<>();
         JsonNode lista = n.path("ids");
         if (!lista.isArray() || lista.isEmpty() || lista.size() > MAX_LOTE)
-            erro("Escolha entre 1 e " + MAX_LOTE + " produtos.");
+            erro(
+                    "São "
+                            + lista.size()
+                            + " produtos marcados: dá para até 5.000 por vez. Use um filtro ou faça"
+                            + " em partes.");
         for (JsonNode i : lista) {
             try {
                 UUID u = UUID.fromString(i.asText());
@@ -1618,9 +1657,10 @@ public class RadarProdutos {
     /** Apaga de vez, da lixeira, só o que não tem histórico nenhum. */
     private Map<String, Object> excluirDeVez(List<UUID> alvo) {
         UUID[] ids = alvo.toArray(UUID[]::new);
-        List<String> presos =
+        var presos =
                 db.queryForList(
-                        "select p.sku from radar_produto p where p.tenant_id=? and p.id = any(?)"
+                        "select p.id, p.sku, p.pai_id from radar_produto p where p.tenant_id=? and"
+                                + " p.id = any(?)"
                                 + " and (exists(select 1 from radar_pedido x where"
                                 + " x.tenant_id=p.tenant_id and x.produto_id=p.id) or exists(select"
                                 + " 1 from radar_anuncio x where x.tenant_id=p.tenant_id and"
@@ -1633,16 +1673,34 @@ public class RadarProdutos {
                                 + " exists(select 1 from radar_registro x where"
                                 + " x.tenant_id=p.tenant_id and x.tipo='COMPRA' and"
                                 + " x.dados->>'produto_id'=p.id::text)) order by p.sku",
-                        String.class,
                         tenant(),
                         ids,
                         ids);
-        if (!presos.isEmpty())
+        // Quem tem histórico fica na lixeira; o produto principal de uma variação presa também.
+        Set<UUID> ficam = new HashSet<>();
+        for (var x : presos) {
+            ficam.add((UUID) x.get("id"));
+            if (x.get("pai_id") != null) ficam.add((UUID) x.get("pai_id"));
+        }
+        // Componente de um kit que fica na lixeira também fica (o kit ainda aponta para ele).
+        if (!ficam.isEmpty())
+            ficam.addAll(
+                    db.queryForList(
+                            "select componente_id from radar_kit_item where tenant_id=? and"
+                                    + " kit_id = any(?)",
+                            UUID.class,
+                            tenant(),
+                            ficam.toArray(UUID[]::new)));
+        List<UUID> apagar = alvo.stream().filter(id -> !ficam.contains(id)).toList();
+        String naLixeira =
+                presos.stream().map(x -> (String) x.get("sku")).collect(Collectors.joining(", "));
+        if (apagar.isEmpty())
             erro(
                     "Não dá para apagar de vez produto com histórico (pedido, anúncio, estoque,"
                             + " kit, promoção ou compra): "
-                            + String.join(", ", presos)
+                            + naLixeira
                             + ". Ele pode ficar na lixeira para sempre, sem atrapalhar.");
+        ids = apagar.toArray(UUID[]::new);
         for (String tabela : List.of("radar_produto_imagem", "radar_produto_fornecedor"))
             db.update(
                     "delete from " + tabela + " where tenant_id=? and produto_id = any(?)",
@@ -1657,7 +1715,16 @@ public class RadarProdutos {
                 tenant(),
                 ids);
         db.update("delete from radar_produto where tenant_id=? and id = any(?)", tenant(), ids);
-        return Map.of("mensagem", alvo.size() + " produto(s) apagado(s) de vez.");
+        return Map.of(
+                "mensagem",
+                apagar.size()
+                        + " produto(s) apagado(s) de vez."
+                        + (ficam.isEmpty()
+                                ? ""
+                                : " Ficaram na lixeira, por terem histórico (pedido, anúncio,"
+                                        + " estoque, kit, promoção ou compra): "
+                                        + naLixeira
+                                        + "."));
     }
 
     private Map<String, Object> linhaParaAtualizar(UUID id) {

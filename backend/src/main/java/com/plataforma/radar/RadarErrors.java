@@ -23,6 +23,16 @@ public class RadarErrors {
                                 e.getReason() == null ? "Operação inválida." : e.getReason()));
     }
 
+    // Cabeçalho ou caminho com identificador malformado (ex.: Idempotency-Key "abc"): 400, não 500.
+    @ExceptionHandler({
+        org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class,
+        org.springframework.web.bind.MissingRequestHeaderException.class
+    })
+    ResponseEntity<?> parametroInvalido() {
+        return ResponseEntity.status(400)
+                .body(Map.of("mensagem", "Pedido inválido: identificador malformado ou faltando."));
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
     ResponseEntity<?> conflito() {
         return ResponseEntity.status(409)

@@ -240,7 +240,7 @@ async function call(path: string, body?: unknown, key?: string) {
 // A página aberta fica no endereço (#produtos): F5 e o link copiado voltam ao mesmo lugar.
 function paginaDoEndereco() {
   if (typeof window === "undefined") return "";
-  const p = decodeURIComponent(window.location.hash.slice(1));
+  const p = decodeURIComponent(window.location.hash.slice(1)).split("/")[0];
   return nav.some((x) => x[0] === p) ? p : "";
 }
 
@@ -297,6 +297,12 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   useEffect(() => {
     if (window.location.hash !== `#${page}`) window.history.pushState(null, "", `#${page}`);
   }, [page]);
+  // Abrir um produto (visualizar ou editar) também vira um passo: "voltar" fecha e volta à lista.
+  const produtoAberto = !!(vendo || editando);
+  useEffect(() => {
+    if (produtoAberto && !window.location.hash.endsWith("/aberto"))
+      window.history.pushState(null, "", `#${page}/aberto`);
+  }, [produtoAberto, page]);
   useEffect(() => {
     const voltar = () => {
       const p = paginaDoEndereco();

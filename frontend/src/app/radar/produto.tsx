@@ -355,6 +355,7 @@ export default function ProdutoForm({
   const [salvando, setSalvando] = useState(false);
   // Foto do formulário ao abrir, para saber se há alteração não salva.
   const inicial = useRef<string | null>(null);
+  const lidoEm = useRef(str(produto?.atualizado_em));
   const salvo = useRef(false);
   const [erro, setErro] = useState("");
   const [alvoImagem, setAlvoImagem] = useState("");
@@ -435,6 +436,8 @@ export default function ProdutoForm({
   function corpo(): Record<string, unknown> {
     const base: Record<string, unknown> = { op: "produto_salvar", ...v };
     if (id) base.id = id;
+    // Quando o formulário abriu: o servidor recusa se outra pessoa salvou depois.
+    if (id) base.versao_lida = lidoEm.current;
     if (!novo) delete base.saldo;
     if (embalagemNova) {
       base.embalagem_id = "";
