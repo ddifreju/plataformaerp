@@ -33,6 +33,7 @@ public class RadarService {
     private final RadarVendedores vendedores;
     private final RadarEmpresa empresa;
     private final RadarConfiguracao configuracao;
+    private final RadarExemplo exemplo;
     private static final Set<String> CANAIS = RadarAnuncios.CANAIS;
 
     public RadarService(
@@ -46,7 +47,8 @@ public class RadarService {
             RadarAnuncios anuncios,
             RadarVendedores vendedores,
             RadarEmpresa empresa,
-            RadarConfiguracao configuracao) {
+            RadarConfiguracao configuracao,
+            RadarExemplo exemplo) {
         this.db = db;
         this.json = json;
         this.cadastros = cadastros;
@@ -58,6 +60,7 @@ public class RadarService {
         this.vendedores = vendedores;
         this.empresa = empresa;
         this.configuracao = configuracao;
+        this.exemplo = exemplo;
     }
 
     /** Usuário da requisição atual, para registrar quem fez cada movimento. */
@@ -380,6 +383,7 @@ public class RadarService {
         out.put("produtos", produtos);
         out.put("anuncios", rows("radar_anuncio"));
         out.put("lojas", anuncios.lojas());
+        out.put("exemplo", exemplo.estado());
         var pedidos = rows("radar_pedido");
         if (!f)
             pedidos.forEach(
@@ -646,6 +650,27 @@ public class RadarService {
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("mensagem", "Alteração salva no ambiente local.");
+        executar(op, n, result);
+        auditar(
+                op,
+                result.getOrDefault("id", n.path("id").asText("lote")).toString(),
+                Map.of("resultado", result, "parametros", semDocumento(n)));
+        db.update(
+                "insert into radar_comando(tenant_id,id,ator,hash,resultado)"
+                        + " values(?,?,?,?,?::jsonb)",
+                tenant(),
+                chave,
+                user().usuarioId(),
+                hash,
+                enc(result));
+        return result;
+    }
+
+    /**
+     * O que cada operação faz. Fica fora de {@link #comando} (trava, idempotência e auditoria) para
+     * os dados de exemplo usarem exatamente as mesmas regras, dentro de um comando só.
+     */
+    private void executar(String op, JsonNode n, Map<String, Object> result) {
         switch (op) {
             case "produto" -> {
                 permitir("DONO", "GESTOR");
@@ -833,6 +858,17 @@ public class RadarService {
                                 ? "Aprovado e aplicado ao anúncio local. Canal externo"
                                         + " desconectado."
                                 : "Proposta rejeitada.");
+            }
+            case "dados_exemplo" -> {
+                permitir("DONO");
+                result.putAll(
+                        exemplo.etapa(
+                                n,
+                                (o, corpo) -> {
+                                    Map<String, Object> r = new LinkedHashMap<>();
+                                    executar(o, corpo, r);
+                                    return r;
+                                }));
             }
             case "pedido" -> {
                 permitir("DONO", "GESTOR");
@@ -1028,19 +1064,6 @@ public class RadarService {
                 else erro("Operação não reconhecida.");
             }
         }
-        auditar(
-                op,
-                result.getOrDefault("id", n.path("id").asText("lote")).toString(),
-                Map.of("resultado", result, "parametros", semDocumento(n)));
-        db.update(
-                "insert into radar_comando(tenant_id,id,ator,hash,resultado)"
-                        + " values(?,?,?,?,?::jsonb)",
-                tenant(),
-                chave,
-                user().usuarioId(),
-                hash,
-                enc(result));
-        return result;
     }
 
     private UUID produto(JsonNode n) {

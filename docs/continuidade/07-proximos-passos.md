@@ -9,9 +9,8 @@
    pessoas**; proposta enviada (tela de permissões por pessoa em
    Configurações → Usuários, depois do Bloco 2), esperando: quando fazer,
    criar o cargo "Administrativo" e se o gestor libera o que ele não tem.
-3. **Dados fictícios em todas as áreas** para ela testar (anúncios, vendas,
-   atendimento, promoções, compras, estoque, financeiro; NF-e só se der para
-   simular sem enganar). Pedido dela de 07/10/2026.
+3. **Dados de exemplo:** feito (decisão 0037). Botão no Painel da empresa de
+   demonstração; ela vai carregar e testar. NF-e fictícia não entra.
 4. **Relatórios:** ela prefere uma área única de relatórios em que o cliente
    cruza qualquer coisa (financeiro, preço, compras, estoque, atendimento).
    Proposta enviada; esperando o ok dela.
