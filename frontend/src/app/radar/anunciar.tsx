@@ -7,7 +7,7 @@
 //   4. Conferência: as regras de cada marketplace; o que falta no cadastro se completa ali.
 // O resultado são anúncios PRONTOS. Nada sobe para o marketplace antes da loja ser conectada.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { TITULO_MAX_RADAR, letras, palavras, regraDe, type Regra } from "./canais";
 import { vinculoDe } from "./categorias";
 import { CHAVE_DA_PENDENCIA, LinhaPreencher, faltasDoCadastro, type Chave } from "./pendencias";
@@ -29,6 +29,8 @@ type Props = {
   erro: string;
   busy: boolean;
   executar: (corpo: Record<string, unknown>) => Promise<boolean>;
+  /** Pergunta ao servidor (sem gravar) e devolve a resposta. */
+  conferir: (corpo: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
   recarregar: () => Promise<void>;
   irParaLojas: () => void;
   fechar: () => void;
@@ -130,7 +132,7 @@ export default function Anunciar(props: Props) {
       }).length;
       if (pequenas)
         faltas.push({
-          texto: `${pequenas} foto(s) pequena(s) para o ${m}: ${
+          texto: `${pequenas} foto(s) pequena(s) ${m === "Shopee" ? "para a" : "para o"} ${m}: ${
             r.fotoMaiorLadoMin
               ? `o maior lado precisa ter ${r.fotoMaiorLadoMin} pixels ou mais`
               : `os dois lados precisam ter ${r.fotoMenorLadoMin} pixels ou mais`
@@ -143,12 +145,12 @@ export default function Anunciar(props: Props) {
         const r = regraDe(m);
         if (r.descricaoMinPalavras && palavras(descricao) < r.descricaoMinPalavras)
           faltas.push({
-            texto: `Descrição com pelo menos ${r.descricaoMinPalavras} palavras no ${m} (tem ${palavras(descricao)})`,
+            texto: `Descrição com pelo menos ${r.descricaoMinPalavras} palavras ${noM(m)} (tem ${palavras(descricao)})`,
             chave: "descricao",
           });
         if (r.descricaoMax && descricao.length > r.descricaoMax)
           faltas.push({
-            texto: `Descrição com até ${r.descricaoMax} letras no ${m} (tem ${descricao.length})`,
+            texto: `Descrição com até ${r.descricaoMax} letras ${noM(m)} (tem ${descricao.length})`,
             chave: "descricao",
           });
       }
@@ -160,10 +162,11 @@ export default function Anunciar(props: Props) {
     const m = str(loja.marketplace);
     const lista: string[] = [];
     const n = letras(a.titulo);
-    if (foraDoTitulo(r, n)) lista.push(`Título com ${n} letras: no ${m} ${limiteTitulo(r)}.`);
+    if (foraDoTitulo(r, n)) lista.push(`Título com ${n} letras: ${noM(m)} ${limiteTitulo(r)}.`);
     const textoPreco = numeroBR(a.preco);
     const preco = Number(textoPreco);
-    if (!/^\d+(\.\d{1,2})?$/.test(textoPreco))
+    if (!textoPreco) lista.push("Informe o preço.");
+    else if (!/^\d+(\.\d{1,2})?$/.test(textoPreco))
       lista.push("Preço com no máximo 2 casas decimais (ex.: 89,90).");
     else if (preco > 999999999) lista.push("Preço até R$ 999.999.999,00.");
     else if (!(preco > 0)) lista.push("Preço maior que zero.");
@@ -174,43 +177,66 @@ export default function Anunciar(props: Props) {
       (r.precoMin != null && preco < r.precoMin) ||
       (r.precoMax != null && preco > r.precoMax)
     )
-      lista.push(`Preço no ${m}: de R$ ${moeda(r.precoMin ?? 0)} a R$ ${moeda(r.precoMax ?? 0)}.`);
+      lista.push(
+        `Preço ${noM(m)}: de R$ ${moeda(r.precoMin ?? 0)} a R$ ${moeda(r.precoMax ?? 0)}.`,
+      );
     const qtd = Number(a.estoque.trim());
     if (!/^\d+$/.test(a.estoque.trim())) lista.push("Quantidade a anunciar (número inteiro).");
     else if (qtd > 9999999) lista.push("Quantidade: no máximo 9.999.999.");
     else if (qtd < Math.max(1, r.estoqueMin ?? 1))
       lista.push(`Quantidade: pelo menos ${Math.max(1, r.estoqueMin ?? 1)}.`);
     else if (r.estoqueMax != null && qtd > r.estoqueMax)
-      lista.push(`Quantidade no ${m}: no máximo ${r.estoqueMax.toLocaleString("pt-BR")}.`);
+      lista.push(`Quantidade ${noM(m)}: no máximo ${r.estoqueMax.toLocaleString("pt-BR")}.`);
     return lista;
   };
   const comFalta = itens.filter((p) => faltasDe(p).length > 0);
   const paresComProblema = pares.filter((x) => problemasDoPar(x).length > 0);
   const tudoCerto = pares.length > 0 && comFalta.length === 0 && paresComProblema.length === 0;
 
+  const demais = pares.length > 1000;
   const podeAvancar = [
-    pares.length > 0,
+    pares.length > 0 && !demais,
     semCategoria.length === 0 && faltaVinculo.length === 0,
     paresComProblema.length === 0,
     tudoCerto,
   ];
 
-  async function salvar() {
-    const ok = await props.executar({
-      op: "anunciar",
-      itens: pares.map(({ p, loja, chave }) => {
-        const a = ajusteDe(p, chave);
-        return {
-          produto_id: p.id,
-          loja_id: loja.id,
-          titulo: a.titulo.trim(),
-          preco: numeroBR(a.preco),
-          estoque: a.estoque.trim(),
-        };
-      }),
+  const itensDoEnvio = () =>
+    pares.map(({ p, loja, chave }) => {
+      const a = ajusteDe(p, chave);
+      return {
+        produto_id: p.id,
+        loja_id: loja.id,
+        titulo: a.titulo.trim(),
+        preco: numeroBR(a.preco),
+        estoque: a.estoque.trim(),
+      };
     });
+
+  async function salvar() {
+    const ok = await props.executar({ op: "anunciar", itens: itensDoEnvio() });
     if (ok) props.fechar();
   }
+
+  // Passo 4: o servidor confere tudo antes de liberar o Salvar (inclui o que a tela não sabe,
+  // como o custo para quem não vê o financeiro). Nada é gravado nessa conferência.
+  const chaveDoEnvio = passo === 3 && tudoCerto ? JSON.stringify(itensDoEnvio()) : "";
+  const [conferencia, setConferencia] = useState<{ chave: string; problemas: string[] }>();
+  const pedindo = useRef("");
+  useEffect(() => {
+    if (!chaveDoEnvio || pedindo.current === chaveDoEnvio) return;
+    pedindo.current = chaveDoEnvio;
+    void props
+      .conferir({ op: "anunciar", conferir: true, itens: JSON.parse(chaveDoEnvio) })
+      .then((r) =>
+        setConferencia({
+          chave: chaveDoEnvio,
+          problemas: r ? ((r.problemas as string[]) ?? []) : ["Não foi possível conferir agora."],
+        }),
+      );
+  }, [chaveDoEnvio, props]);
+  const conferido = conferencia?.chave === chaveDoEnvio ? conferencia : undefined;
+  const servidorOk = !!conferido && conferido.problemas.length === 0;
 
   const linha = (p: Row, chave: Chave) => (
     <LinhaPreencher
@@ -242,6 +268,21 @@ export default function Anunciar(props: Props) {
             : `Escolha onde anunciar estes ${itens.length} produtos.`}{" "}
           Aparecem as suas lojas cadastradas em Integrações.
         </p>
+        {demais && (
+          <p className="rd-error" role="alert">
+            São {pares.length} anúncios: dá para até 1.000 por vez. Escolha menos lojas ou menos
+            produtos.
+          </p>
+        )}
+        {lojas.length > 1 && (
+          <button
+            type="button"
+            className="text"
+            onClick={() => setEscolhidas(lojas.map((l) => str(l.id)))}
+          >
+            Marcar todas
+          </button>
+        )}
         {[...new Set(lojas.map((l) => str(l.marketplace)))].map((m) => {
           const doMarketplace = lojas.filter((l) => str(l.marketplace) === m);
           const ids = doMarketplace.map((l) => str(l.id));
@@ -260,7 +301,9 @@ export default function Anunciar(props: Props) {
                       )
                     }
                   >
-                    {todas ? "desmarcar todas" : `marcar todas do ${m}`}
+                    {todas
+                      ? "desmarcar todas"
+                      : `marcar todas ${m === "Shopee" ? "da" : "do"} ${m}`}
                   </button>
                 )}
               </div>
@@ -294,15 +337,6 @@ export default function Anunciar(props: Props) {
             </div>
           );
         })}
-        {lojas.length > 1 && (
-          <button
-            type="button"
-            className="text"
-            onClick={() => setEscolhidas(lojas.map((l) => str(l.id)))}
-          >
-            Marcar todas
-          </button>
-        )}
       </>
     ) : (
       <div className="rd-anunciar-vazio">
@@ -385,7 +419,7 @@ export default function Anunciar(props: Props) {
                       {nomeCat} → {m}
                     </strong>
                     <input
-                      aria-label={`Código da categoria no ${m}`}
+                      aria-label={`Código da categoria ${noM(m)}`}
                       placeholder="Código (ex.: MLB1234)"
                       maxLength={60}
                       value={v.codigo}
@@ -394,7 +428,7 @@ export default function Anunciar(props: Props) {
                       }
                     />
                     <input
-                      aria-label={`Nome da categoria no ${m}`}
+                      aria-label={`Nome da categoria ${noM(m)}`}
                       placeholder="Nome (ex.: Casa > Cortinas)"
                       maxLength={300}
                       value={v.nome}
@@ -471,12 +505,14 @@ export default function Anunciar(props: Props) {
                 </label>
                 {p.custo != null && Number(numeroBR(a.preco)) > 0 && (
                   <small className="rd-dica rd-anunciar-margem">
-                    Custo R$ {moeda(Number(p.custo))} · margem{" "}
-                    {Math.round(
-                      ((Number(numeroBR(a.preco)) - Number(p.custo)) / Number(numeroBR(a.preco))) *
-                        100,
-                    )}
-                    %
+                    Custo R$ {moeda(Number(p.custo))} ·{" "}
+                    {Number(numeroBR(a.preco)) < Number(p.custo)
+                      ? "abaixo do custo"
+                      : `margem ${Math.round(
+                          ((Number(numeroBR(a.preco)) - Number(p.custo)) /
+                            Number(numeroBR(a.preco))) *
+                            100,
+                        )}%`}
                   </small>
                 )}
                 {problemasDoPar(par).length > 0 && (
@@ -495,10 +531,20 @@ export default function Anunciar(props: Props) {
   } else {
     corpo = tudoCerto ? (
       <>
-        <p className="rd-pendencias rd-pendencias-ok">
-          ✓ Tudo certo: {pares.length} anúncio(s) em {escolhidas.length} loja(s) seguem as regras
-          dos marketplaces.
-        </p>
+        {!conferido ? (
+          <p className="rd-dica">Conferindo com as regras…</p>
+        ) : conferido.problemas.length ? (
+          <ul className="rd-anunciar-problemas" role="alert">
+            {conferido.problemas.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rd-pendencias rd-pendencias-ok">
+            ✓ Tudo certo: {pares.length} anúncio(s) em {escolhidas.length} loja(s) seguem as regras
+            dos marketplaces.
+          </p>
+        )}
         <div className="rd-table-wrap">
           <table className="rd-table">
             <thead>
@@ -630,7 +676,11 @@ export default function Anunciar(props: Props) {
               Continuar →
             </button>
           ) : (
-            <button className="primary" disabled={props.busy || !tudoCerto} onClick={salvar}>
+            <button
+              className="primary"
+              disabled={props.busy || !tudoCerto || !servidorOk}
+              onClick={salvar}
+            >
               Salvar {pares.length} anúncio(s) pronto(s)
             </button>
           )}
@@ -646,4 +696,6 @@ const limiteTitulo = (r: Regra) =>
   r.tituloMax
     ? `vai de ${r.tituloMin} a ${r.tituloMax}`
     : `vai de ${r.tituloMin} a ${TITULO_MAX_RADAR} (limite do Radar)`;
+/** "na Shopee" / "no Mercado Livre". */
+const noM = (m: string) => (m === "Shopee" ? "na " : "no ") + m;
 const moeda = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });

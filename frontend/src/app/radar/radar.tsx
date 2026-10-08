@@ -2374,6 +2374,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           erro={error}
           busy={busy}
           executar={command}
+          conferir={commandResult}
           recarregar={refresh}
           irParaLojas={() => {
             setAnunciando(null);
