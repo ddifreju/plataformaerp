@@ -448,7 +448,11 @@ public class RadarService {
                 };
         for (var r : rows("radar_registro"))
             if (tipos.contains(r.get("tipo"))) {
-                r.put("dados", dec(r.get("dados").toString()));
+                var dados = dec(r.get("dados").toString());
+                // Custo da compra só para quem vê o financeiro (decisão da Jéssica: o cargo
+                // Estoque registra e recebe compras, mas não vê o custo).
+                if (!f && "COMPRA".equals(r.get("tipo"))) dados.remove("custo_unitario");
+                r.put("dados", dados);
                 registros.add(r);
             }
         out.put("registros", registros);

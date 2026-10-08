@@ -286,8 +286,8 @@ public class RadarFontes {
                                     c("produto", "Produto", "texto"),
                                     c("fornecedor", "Fornecedor", "texto"),
                                     c("quantidade", "Quantidade", "inteiro"),
-                                    c("custo_unitario", "Custo unitário", "dinheiro"),
-                                    c("total", "Total", "dinheiro"),
+                                    f("custo_unitario", "Custo unitário", "dinheiro"),
+                                    f("total", "Total", "dinheiro"),
                                     c("situacao", "Situação", "texto"),
                                     c("recebida_em", "Recebida em", "data"))),
                     new Fonte(
