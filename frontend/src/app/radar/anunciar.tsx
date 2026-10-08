@@ -8,7 +8,7 @@
 // O resultado são anúncios PRONTOS. Nada sobe para o marketplace antes da loja ser conectada.
 
 import { useEffect, useState } from "react";
-import { palavras, regraDe, type Regra } from "./canais";
+import { TITULO_MAX_RADAR, letras, palavras, regraDe, type Regra } from "./canais";
 import { vinculoDe } from "./categorias";
 import { CHAVE_DA_PENDENCIA, LinhaPreencher, faltasDoCadastro, type Chave } from "./pendencias";
 import { Badge, str, type Row } from "./ui";
@@ -149,7 +149,7 @@ export default function Anunciar(props: Props) {
     const a = ajusteDe(p, chave);
     const m = str(loja.marketplace);
     const lista: string[] = [];
-    const n = a.titulo.trim().length;
+    const n = letras(a.titulo);
     if (foraDoTitulo(r, n)) lista.push(`Título com ${n} letras: no ${m} ${limiteTitulo(r)}.`);
     const preco = Number(a.preco.replace(",", "."));
     if (!(preco > 0)) lista.push("Preço maior que zero.");
@@ -163,8 +163,8 @@ export default function Anunciar(props: Props) {
       lista.push(`Preço no ${m}: de R$ ${moeda(r.precoMin ?? 0)} a R$ ${moeda(r.precoMax ?? 0)}.`);
     const qtd = Number(a.estoque.trim());
     if (!/^\d+$/.test(a.estoque.trim())) lista.push("Quantidade a anunciar (número inteiro).");
-    else if (r.estoqueMin != null && qtd < r.estoqueMin)
-      lista.push(`Quantidade no ${m}: pelo menos ${r.estoqueMin}.`);
+    else if (qtd < Math.max(1, r.estoqueMin ?? 1))
+      lista.push(`Quantidade: pelo menos ${Math.max(1, r.estoqueMin ?? 1)}.`);
     else if (r.estoqueMax != null && qtd > r.estoqueMax)
       lista.push(`Quantidade no ${m}: no máximo ${r.estoqueMax.toLocaleString("pt-BR")}.`);
     return lista;
@@ -381,7 +381,7 @@ export default function Anunciar(props: Props) {
             const { p, loja, chave } = par;
             const a = ajusteDe(p, chave);
             const r = regraDe(loja.marketplace);
-            const n = a.titulo.trim().length;
+            const n = letras(a.titulo);
             const foraDoLimite = foraDoTitulo(r, n);
             return (
               <div key={chave} className="rd-anunciar-par">
@@ -399,9 +399,9 @@ export default function Anunciar(props: Props) {
                     onChange={(e) => mudar(p, chave, "titulo", e.target.value)}
                   />
                   <small className={foraDoLimite ? "rd-erro-texto" : ""}>
-                    {r.tituloMax ? `${n}/${r.tituloMax}` : `${n} letras`}
+                    {`${n}/${r.tituloMax ?? TITULO_MAX_RADAR}`}
                     {r.tituloMin > 1 && ` (mínimo ${r.tituloMin})`}
-                    {!r.tituloMax && " · limite conferido com a loja ao conectar"}
+                    {!r.tituloMax && " (limite do Radar; o da loja é conferido ao conectar)"}
                   </small>
                 </label>
                 <label>
@@ -544,7 +544,9 @@ export default function Anunciar(props: Props) {
 }
 
 const foraDoTitulo = (r: Regra, n: number) =>
-  n < r.tituloMin || (r.tituloMax != null && n > r.tituloMax);
+  n < r.tituloMin || n > (r.tituloMax ?? TITULO_MAX_RADAR);
 const limiteTitulo = (r: Regra) =>
-  r.tituloMax ? `vai de ${r.tituloMin} a ${r.tituloMax}` : `precisa de pelo menos ${r.tituloMin}`;
+  r.tituloMax
+    ? `vai de ${r.tituloMin} a ${r.tituloMax}`
+    : `vai de ${r.tituloMin} a ${TITULO_MAX_RADAR} (limite do Radar)`;
 const moeda = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });

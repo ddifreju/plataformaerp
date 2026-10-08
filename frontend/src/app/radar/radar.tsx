@@ -19,7 +19,8 @@ import {
 } from "./ui";
 import Mercado from "./mercado";
 import Promocoes, { situacao } from "./promocoes";
-import Relatorios from "./relatorios";
+import AreaRelatorios, { type Area, type Salvo } from "./relatorios-area";
+import type { Fonte } from "./relatorios-montar";
 import ProdutoForm, { type Aba as AbaProduto } from "./produto";
 import Clientes from "./cliente";
 import Vendedores from "./vendedor";
@@ -54,6 +55,8 @@ type Data = {
   anuncios: Row[];
   lojas?: Row[];
   exemplo?: EstadoExemplo;
+  fontesRelatorio?: Fonte[];
+  relatoriosSalvos?: Salvo[];
   pedidos: Row[];
   movimentos: Row[];
   lancamentos: Row[];
@@ -100,6 +103,11 @@ const nav = [
   ["financeiro", "Financeiro", "◈"],
   ["precos", "Precificação", "↗"],
   ["relatorios", "Relatórios", "▥"],
+  // Atalhos "Relatórios" no fim de cada menu: abrem a área de Relatórios já naquela parte.
+  ["rel-cadastros", "Relatórios", "▥"],
+  ["rel-vendas", "Relatórios", "▥"],
+  ["rel-suprimentos", "Relatórios", "▥"],
+  ["rel-financas", "Relatórios", "▥"],
   ["inbox", "Atendimento", "☏"],
   ["studio", "Brand Studio", "✧"],
   ["mercado", "Mercado", "◉"],
@@ -125,11 +133,28 @@ const grupos: { id: string; rotulo: string; icone: string; itens: string[] }[] =
       "vendedores",
       "categorias",
       "embalagens",
+      "rel-cadastros",
     ],
   },
-  { id: "vendas", rotulo: "Vendas", icone: "▢", itens: ["pedidos", "inbox", "promocoes"] },
-  { id: "suprimentos", rotulo: "Suprimentos", icone: "▦", itens: ["estoque", "compras", "fiscal"] },
-  { id: "financas", rotulo: "Finanças", icone: "◈", itens: ["financeiro", "precos", "relatorios"] },
+  {
+    id: "vendas",
+    rotulo: "Vendas",
+    icone: "▢",
+    itens: ["pedidos", "inbox", "promocoes", "rel-vendas"],
+  },
+  {
+    id: "suprimentos",
+    rotulo: "Suprimentos",
+    icone: "▦",
+    itens: ["estoque", "compras", "fiscal", "rel-suprimentos"],
+  },
+  {
+    id: "financas",
+    rotulo: "Finanças",
+    icone: "◈",
+    itens: ["financeiro", "precos", "rel-financas"],
+  },
+  { id: "relatorios", rotulo: "Relatórios", icone: "▥", itens: ["relatorios"] },
   { id: "marketing", rotulo: "Marketing", icone: "✧", itens: ["studio"] },
   { id: "mercado", rotulo: "Mercado", icone: "◉", itens: ["mercado"] },
   { id: "ia", rotulo: "Radar AI", icone: "✳", itens: ["ia"] },
@@ -187,7 +212,7 @@ const titles: Record<string, [string, string]> = {
   promocoes: ["Promoções", "Planeje descontos por produto, canal e período, vendo a margem antes."],
   relatorios: [
     "Relatórios",
-    "Vendas, resultado, curva ABC e estoque do período, prontos para exportar.",
+    "Prontos por área ou do seu jeito: escolha as colunas, cruze as áreas, salve e exporte.",
   ],
 };
 async function call(path: string, body?: unknown, key?: string) {
@@ -445,7 +470,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     nav
       .map(([p]) => p)
       .filter(
-        (p) => !["financeiro", "precos", "relatorios"].includes(p) || data.financeiroPermitido,
+        (p) => !["financeiro", "precos", "rel-financas"].includes(p) || data.financeiroPermitido,
       )
       .filter((p) => p !== "auditoria" || can("DONO"))
       .filter(
@@ -602,8 +627,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   ? "COMMERCE OPERATING SYSTEM"
                   : nav.find((x) => x[0] === page)?.[1].toUpperCase()}
               </div>
-              <h1>{titles[page][0]}</h1>
-              <p>{titles[page][1]}</p>
+              <h1>{(titles[page] ?? titles.relatorios)[0]}</h1>
+              <p>{(titles[page] ?? titles.relatorios)[1]}</p>
             </div>
             <div className="rd-heading-actions">
               {page === "produtos" && can("DONO", "GESTOR") && (
@@ -1864,7 +1889,18 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               abrirModal={setModal}
             />
           )}
-          {page === "relatorios" && data.financeiroPermitido && <Relatorios />}
+          {(page === "relatorios" || page.startsWith("rel-")) && (
+            <AreaRelatorios
+              key={page}
+              area={page.startsWith("rel-") ? (page.slice(4) as Area) : undefined}
+              catalogo={data.fontesRelatorio ?? []}
+              salvos={data.relatoriosSalvos ?? []}
+              financeiro={data.financeiroPermitido}
+              usuarioId={data.usuario.id}
+              apagaQualquer={can("DONO", "GESTOR")}
+              executar={command}
+            />
+          )}
           {page === "mercado" && (
             <Mercado
               registros={data.registros}
@@ -1977,7 +2013,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               avisar={setNotice}
             />
           )}
-          {!data.financeiroPermitido && ["financeiro", "precos", "relatorios"].includes(page) && (
+          {!data.financeiroPermitido && ["financeiro", "precos", "rel-financas"].includes(page) && (
             <Empty text="Seu cargo não tem acesso a dados financeiros." />
           )}
           <footer className="rd-footer">

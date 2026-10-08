@@ -135,6 +135,7 @@ public class RadarProdutos {
 
         Map<String, Object> c = colunasComuns(n);
         c.put("tipo", tipo);
+        if (novo) aplicarPadroes(c, n);
         // Rascunho: para salvar bastam nome e SKU. O que a nota e os marketplaces exigem vira
         // pendência (coluna incompleto) e só bloqueia na hora de enviar ou faturar.
         if (n.path("nome").asText("").isBlank()) erro("Dê um nome ao produto.");
@@ -280,16 +281,49 @@ public class RadarProdutos {
         String prefixo = modo.equals("PREFIXO") ? (String) cfg.get("sku_prefixo") : "";
         int digitos = (Integer) cfg.get("sku_digitos");
         // O prefixo só tem letras, números e hífen (validado ao salvar a configuração).
+        // Só conta o que tem o formato da sequência (os dígitos configurados, até 12): um código
+        // de barras digitado no campo SKU (13 ou 14 dígitos) não puxa a numeração nem a trava.
+        String formato = "^" + prefixo + "[0-9]{" + digitos + "," + Math.max(12, digitos) + "}$";
         Long ultimo =
                 db.queryForObject(
                         "select max(substring(sku from ?)::numeric) from radar_produto where"
                                 + " tenant_id=? and sku ~ ?",
                         Long.class,
-                        "^" + prefixo + "([0-9]{1,18})$",
+                        "^" + prefixo + "([0-9]+)$",
                         tenant(),
-                        "^" + prefixo + "[0-9]{1,18}$");
+                        formato);
         long proximo = (ultimo == null ? 0 : ultimo) + 1;
-        return prefixo + String.format("%0" + digitos + "d", proximo);
+        // Se o próximo já existir (digitado à mão), segue para o seguinte livre.
+        for (int tentativa = 0; tentativa < 1000; tentativa++, proximo++) {
+            String sku = prefixo + String.format("%0" + digitos + "d", proximo);
+            if (!skuExiste(sku)) return sku;
+        }
+        erro("Não achei um SKU livre na sequência. Informe o SKU à mão.");
+        return null;
+    }
+
+    /**
+     * Valores padrão de Configurações → cadastros (unidade, NCM, origem) para produto novo que
+     * não trouxe o campo: valem também fora da tela (importação, integração).
+     */
+    private void aplicarPadroes(Map<String, Object> c, JsonNode n) {
+        var cfg = RadarConfiguracao.produtos(db, json);
+        String unidade = (String) cfg.get("unidade_padrao");
+        if (!n.has("unidade") && unidade != null && !unidade.isBlank()) c.put("unidade", unidade);
+        String ncm = (String) cfg.get("ncm_padrao");
+        if (!n.has("ncm") && ncm != null && !ncm.isBlank()) c.put("ncm", ncm);
+        String origem = String.valueOf(cfg.get("origem_padrao"));
+        if (!n.has("origem") && origem.matches("[0-8]")) c.put("origem", Integer.parseInt(origem));
+    }
+
+    private boolean skuExiste(String sku) {
+        Integer n =
+                db.queryForObject(
+                        "select count(*) from radar_produto where tenant_id=? and sku=?",
+                        Integer.class,
+                        tenant(),
+                        sku);
+        return n != null && n > 0;
     }
 
     private static BigDecimal valorOuZero(JsonNode n, String campo) {

@@ -522,7 +522,8 @@ public class RadarExemplo {
                         "canal", "",
                         "inicio", hoje.minusDays(20).toString(),
                         "fim", hoje.plusDays(20).toString()));
-        op.rodar(
+        var encerrada =
+                op.rodar(
                 "promocao",
                 m(
                         "nome", "Liquida persianas (exemplo, encerrada)",
@@ -532,6 +533,7 @@ public class RadarExemplo {
                         "canal", "",
                         "inicio", hoje.minusDays(60).toString(),
                         "fim", hoje.minusDays(45).toString()));
+        op.rodar("promocao_encerrar", m("id", encerrada.get("id").toString()));
     }
 
     private void atendimentoEMercado(Op op) {

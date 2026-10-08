@@ -69,8 +69,14 @@ final class RadarEntrada {
 
     // Dinheiro: BigDecimal com escala 2, sem arredondamento silencioso (regra 2).
     static BigDecimal valor(JsonNode n, String campo) {
+        JsonNode bruto = n.path(campo);
+        // Lista ou objeto no lugar de um valor é pedido malformado: recusa, não vira zero.
+        if (bruto.isContainerNode()) erro("Valor inválido: " + campo);
+        String s = bruto.asText("0").trim();
+        // "59,90" (como se digita no Brasil) vale o mesmo que "59.90".
+        if (s.contains(",") && !s.contains(".")) s = s.replace(",", ".");
         try {
-            BigDecimal v = new BigDecimal(n.path(campo).asText("0").trim());
+            BigDecimal v = new BigDecimal(s);
             if (v.signum() < 0 || v.scale() > 2 || v.compareTo(new BigDecimal("999999999")) > 0)
                 erro("Valor inválido: " + campo);
             return v.setScale(2);
@@ -110,6 +116,7 @@ final class RadarEntrada {
 
     /** Dinheiro opcional: vazio vira null; preenchido segue as regras de {@link #valor}. */
     static BigDecimal valorOpcional(JsonNode n, String campo) {
+        if (n.path(campo).isContainerNode()) erro("Valor inválido: " + campo);
         return n.path(campo).asText("").isBlank() ? null : valor(n, campo);
     }
 

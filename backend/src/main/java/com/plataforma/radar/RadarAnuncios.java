@@ -63,14 +63,21 @@ public class RadarAnuncios {
             BigDecimal precoMin,
             BigDecimal precoMax,
             Integer estoqueMin,
-            Integer estoqueMax) {}
+            Integer estoqueMax,
+            Integer fotoMaiorLadoMin,
+            Integer fotoMenorLadoMin) {}
 
-    private static final Regra LIVRE = new Regra(1, null, 1, null, null, null, null, null, null);
+    private static final Regra LIVRE =
+            new Regra(1, null, 1, null, null, null, null, null, null, null, null);
+
+    /** Teto do próprio Radar (tamanho do campo), para marketplace sem limite oficial. */
+    static final int TITULO_MAX_RADAR = 250;
 
     static final Map<String, Regra> REGRAS =
             Map.of(
                     // Estoque 0 só é aceito no Fulfillment: anúncio comum precisa de pelo menos 1.
-                    "Mercado Livre", new Regra(1, 60, 1, null, 50000, null, null, 1, null),
+                    "Mercado Livre",
+                            new Regra(1, 60, 1, null, 50000, null, null, 1, null, 500, null),
                     // Os limites da Shopee são por loja: sem número público.
                     "Shopee", LIVRE,
                     // Política BR: 25 a 200 letras (a API aceita 300); vale a mais restrita.
@@ -84,8 +91,10 @@ public class RadarAnuncios {
                                     new BigDecimal("0.50"),
                                     new BigDecimal("10000.00"),
                                     1,
-                                    99999),
-                    "AliExpress", new Regra(1, 128, 1, null, null, null, null, null, null));
+                                    99999,
+                                    null,
+                                    300),
+                    "AliExpress", new Regra(1, 128, 1, null, null, null, null, null, null, null, null));
 
     private static final Set<String> SITUACOES =
             Set.of("NAO_PUBLICADO", "ATIVO", "PAUSADO", "REJEITADO", "ENCERRADO");
@@ -541,19 +550,28 @@ public class RadarAnuncios {
         String nome = texto(n, "nome", 60);
         boolean nova = n.path("id").asText("").isBlank();
         UUID id = nova ? UUID.randomUUID() : id(n, "id");
-        Integer repetido =
-                db.queryForObject(
-                        "select count(*) from radar_loja where tenant_id=? and lower(nome)=lower(?)"
-                                + " and excluida_em is null and id<>?",
-                        Integer.class,
+        String marketplace =
+                nova ? texto(n, "marketplace", 40) : (String) loja(id).get("marketplace");
+        if (nova && !CANAIS.contains(marketplace)) erro("Marketplace não suportado.");
+        // O nome só não pode repetir dentro do mesmo marketplace ("Casa Bonita" pode ter uma
+        // loja no Mercado Livre e outra na Shopee).
+        var repetidas =
+                db.queryForList(
+                        "select nome from radar_loja where tenant_id=? and marketplace=? and"
+                                + " lower(nome)=lower(?) and excluida_em is null and id<>?",
+                        String.class,
                         tenant(),
+                        marketplace,
                         nome,
                         id);
-        if (repetido != null && repetido > 0)
-            erro("Já existe uma loja chamada " + nome + ". Escolha outro nome.");
+        if (!repetidas.isEmpty())
+            erro(
+                    "Já existe a loja "
+                            + repetidas.getFirst()
+                            + " no "
+                            + marketplace
+                            + ". Escolha outro nome.");
         if (nova) {
-            String marketplace = texto(n, "marketplace", 40);
-            if (!CANAIS.contains(marketplace)) erro("Marketplace não suportado.");
             db.update(
                     "insert into radar_loja(id,tenant_id,marketplace,nome) values(?,?,?,?)",
                     id,
@@ -561,7 +579,6 @@ public class RadarAnuncios {
                     marketplace,
                     nome);
         } else {
-            loja(id);
             db.update(
                     "update radar_loja set nome=? where tenant_id=? and id=?", nome, tenant(), id);
         }
@@ -636,85 +653,98 @@ public class RadarAnuncios {
             if ("VARIACAO".equals(p.get("tipo")))
                 erro(sku + ": anuncie as variações (cor, tamanho…), não o produto pai.");
 
-            String titulo = opcional(item, "titulo", 250);
-            int letras = titulo == null ? 0 : titulo.length();
-            if (letras < regra.tituloMin()
-                    || (regra.tituloMax() != null && letras > regra.tituloMax()))
-                erro(
-                        sku
-                                + ": o título no "
+            // Todos os problemas do anúncio de uma vez: corrigir um e descobrir o próximo só no
+            // envio seguinte é o retrabalho que o passo a passo quer evitar (decisão 0036).
+            List<String> problemas = new ArrayList<>();
+            List<String> faltando = RadarProdutos.pendencias(p);
+            if (!faltando.isEmpty())
+                problemas.add("complete o cadastro (falta " + String.join(", ", faltando) + ")");
+
+            String titulo = opcional(item, "titulo", 1000);
+            // Conta caracteres como a pessoa vê (emoji vale 1).
+            int letras = titulo == null ? 0 : titulo.codePointCount(0, titulo.length());
+            int maximo = regra.tituloMax() == null ? TITULO_MAX_RADAR : regra.tituloMax();
+            if (letras < regra.tituloMin())
+                problemas.add(
+                        "o título no "
                                 + marketplace
-                                + " precisa ter de "
+                                + " precisa ter pelo menos "
                                 + regra.tituloMin()
-                                + " a "
-                                + (regra.tituloMax() == null ? 250 : regra.tituloMax())
                                 + " letras (tem "
                                 + letras
-                                + ").");
+                                + ")");
+            else if (letras > maximo)
+                problemas.add(
+                        (regra.tituloMax() == null
+                                        ? "o Radar guarda títulos de até "
+                                        : "o título no " + marketplace + " vai até ")
+                                + maximo
+                                + " letras (tem "
+                                + letras
+                                + ")");
+
             BigDecimal preco = valor(item, "preco");
-            if (preco.signum() <= 0) erro(sku + ": o preço precisa ser maior que zero.");
-            // Mesma política da aprovação de preço: anúncio pronto não sobe abaixo do custo.
-            if (preco.compareTo((BigDecimal) p.get("custo")) < 0)
-                erro(sku + ": preço abaixo do custo do produto. Política local: bloqueado.");
+            if (preco.signum() <= 0) problemas.add("o preço precisa ser maior que zero");
             if ((regra.precoMin() != null && preco.compareTo(regra.precoMin()) < 0)
                     || (regra.precoMax() != null && preco.compareTo(regra.precoMax()) > 0))
-                erro(
-                        sku
-                                + ": o preço no "
+                problemas.add(
+                        "o preço no "
                                 + marketplace
                                 + " vai de R$ "
                                 + regra.precoMin()
                                 + " a R$ "
-                                + regra.precoMax()
-                                + ".");
-            // Quantidade livre, por decisão da lojista: não é limitada pelo estoque físico,
-            // só pelo que o marketplace aceita.
+                                + regra.precoMax());
+            // Mesma política da aprovação de preço: anúncio pronto não sobe abaixo do custo.
+            if (preco.compareTo((BigDecimal) p.get("custo")) < 0)
+                problemas.add("preço abaixo do custo do produto (política local: bloqueado)");
+
+            // Quantidade livre, por decisão da lojista: não é limitada pelo estoque físico. Mas
+            // anúncio com zero não está pronto para vender em marketplace nenhum.
             Integer estoque = inteiroOpcional(item, "estoque", 0, 9_999_999);
             if (estoque == null) erro(sku + ": informe a quantidade a anunciar.");
-            if (regra.estoqueMin() != null && estoque < regra.estoqueMin())
-                erro(sku + ": o " + marketplace + " pede pelo menos " + regra.estoqueMin() + ".");
+            int minimo = regra.estoqueMin() == null ? 1 : Math.max(1, regra.estoqueMin());
+            if (estoque < minimo) problemas.add("a quantidade precisa ser pelo menos " + minimo);
             if (regra.estoqueMax() != null && estoque > regra.estoqueMax())
-                erro(sku + ": o " + marketplace + " aceita no máximo " + regra.estoqueMax() + ".");
-            String descricao = String.valueOf(p.get("descricao")).strip();
+                problemas.add(
+                        "o " + marketplace + " aceita quantidade de no máximo " + regra.estoqueMax());
+
+            String descricao = p.get("descricao") == null ? "" : String.valueOf(p.get("descricao")).strip();
             if (regra.descricaoMinPalavras() != null
+                    && !descricao.isEmpty()
                     && descricao.split("\\s+").length < regra.descricaoMinPalavras())
-                erro(
-                        sku
-                                + ": o "
+                problemas.add(
+                        "o "
                                 + marketplace
                                 + " pede descrição com pelo menos "
                                 + regra.descricaoMinPalavras()
-                                + " palavras.");
+                                + " palavras");
             if (regra.descricaoMax() != null && descricao.length() > regra.descricaoMax())
-                erro(
-                        sku
-                                + ": o "
-                                + marketplace
-                                + " aceita descrição com até "
-                                + regra.descricaoMax()
-                                + " letras.");
+                problemas.add(
+                        "o " + marketplace + " aceita descrição com até " + regra.descricaoMax() + " letras");
 
-            List<String> faltando = RadarProdutos.pendencias(p);
-            if (!faltando.isEmpty())
-                erro(sku + ": complete o cadastro antes (falta " + String.join(", ", faltando) + ").");
             // A variação mostra também as fotos do produto pai.
             UUID pai = p.get("pai_id") == null ? pid : (UUID) p.get("pai_id");
-            Integer imagens =
-                    db.queryForObject(
-                            "select count(*) from radar_produto_imagem where tenant_id=? and"
+            List<byte[]> fotos =
+                    db.queryForList(
+                            "select dados from radar_produto_imagem where tenant_id=? and"
                                     + " produto_id in (?,?)",
-                            Integer.class,
+                            byte[].class,
                             tenant(),
                             pid,
                             pai);
-            if (imagens == null || imagens < regra.imagensMin())
-                erro(
-                        sku
-                                + ": o "
+            if (fotos.size() < regra.imagensMin())
+                problemas.add("o " + marketplace + " pede pelo menos " + regra.imagensMin() + " imagem(ns)");
+            int pequenas = 0;
+            for (byte[] foto : fotos) if (fotoPequena(foto, regra)) pequenas++;
+            if (pequenas > 0)
+                problemas.add(
+                        pequenas
+                                + " foto(s) pequena(s) para o "
                                 + marketplace
-                                + " pede pelo menos "
-                                + regra.imagensMin()
-                                + " imagem(ns).");
+                                + (regra.fotoMaiorLadoMin() != null
+                                        ? " (o maior lado precisa ter " + regra.fotoMaiorLadoMin() + " pixels)"
+                                        : " (os dois lados precisam ter " + regra.fotoMenorLadoMin() + " pixels)"));
+
             Integer ligada =
                     db.queryForObject(
                             "select count(*) from radar_categoria_canal where tenant_id=? and"
@@ -724,7 +754,8 @@ public class RadarAnuncios {
                             marketplace,
                             p.get("categoria_id"));
             if (ligada == null || ligada == 0)
-                erro(sku + ": ligue a categoria do produto a uma categoria do " + marketplace + ".");
+                problemas.add("ligue a categoria do produto a uma categoria do " + marketplace);
+            if (!problemas.isEmpty()) erro(sku + ": " + String.join("; ", problemas) + ".");
             // Quantos anúncios o lojista quiser do mesmo produto na mesma loja (decisão dela:
             // teste de título, estratégia de ads, mais catálogo).
             db.update(
@@ -746,6 +777,24 @@ public class RadarAnuncios {
                 itens.size()
                         + " anúncio(s) conferido(s) e pronto(s) para publicar. Eles sobem quando a"
                         + " loja for conectada.");
+    }
+
+    /**
+     * Foto abaixo do tamanho mínimo do marketplace. Formato que o Java não lê (WEBP) não é
+     * medido aqui: a tela mede no navegador.
+     */
+    private static boolean fotoPequena(byte[] foto, Regra regra) {
+        if (regra.fotoMaiorLadoMin() == null && regra.fotoMenorLadoMin() == null) return false;
+        try {
+            var imagem = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(foto));
+            if (imagem == null) return false;
+            int maior = Math.max(imagem.getWidth(), imagem.getHeight());
+            int menor = Math.min(imagem.getWidth(), imagem.getHeight());
+            return (regra.fotoMaiorLadoMin() != null && maior < regra.fotoMaiorLadoMin())
+                    || (regra.fotoMenorLadoMin() != null && menor < regra.fotoMenorLadoMin());
+        } catch (java.io.IOException e) {
+            return false;
+        }
     }
 
     private Map<String, Object> produto(UUID id) {

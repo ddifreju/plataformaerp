@@ -676,6 +676,54 @@ class RadarProdutosTest {
         naEmpresa(empresaA, () -> produtos.lote(json(corpo), "DONO"));
     }
 
+    @Test
+    void skuAutomaticoIgnoraCodigoDeBarrasEPulaOQueJaExiste() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        BancoRadarDeTeste.executarComoDono(
+                "insert into radar_configuracao(tenant_id,chave,valor) values(?,'produtos',"
+                        + "'{\"sku_modo\":\"SEQUENCIAL\",\"sku_digitos\":5}'::jsonb)",
+                empresa);
+        // Código de barras digitado no campo SKU e um SKU comprido não puxam a sequência.
+        salvar(empresa, "{\"tipo\":\"SIMPLES\",\"nome\":\"Barras\",\"sku\":\"7891234567895\"}");
+        salvar(empresa, "{\"tipo\":\"SIMPLES\",\"nome\":\"Longo\",\"sku\":\"999999999999999999\"}");
+        // O próximo da sequência já existe (digitado à mão): pula para o seguinte livre.
+        salvar(empresa, "{\"tipo\":\"SIMPLES\",\"nome\":\"Manual\",\"sku\":\"00002\"}");
+        assertEquals("00003", sku(empresa, salvar(empresa, "{\"tipo\":\"SIMPLES\",\"nome\":\"A\"}")));
+        assertEquals("00004", sku(empresa, salvar(empresa, "{\"tipo\":\"SIMPLES\",\"nome\":\"B\"}")));
+    }
+
+    @Test
+    void valoresPadraoValemForaDaTelaEPrecoAceitaVirgula() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        BancoRadarDeTeste.executarComoDono(
+                "insert into radar_configuracao(tenant_id,chave,valor) values(?,'produtos',"
+                        + "'{\"sku_modo\":\"MANUAL\",\"unidade_padrao\":\"KG\","
+                        + "\"ncm_padrao\":\"63039100\",\"origem_padrao\":\"1\"}'::jsonb)",
+                empresa);
+        UUID id =
+                salvar(
+                        empresa,
+                        "{\"tipo\":\"SIMPLES\",\"nome\":\"Padrao\",\"sku\":\"PAD-1\","
+                                + "\"preco\":\"59,90\"}");
+        var p = linha(empresa, "select unidade, ncm, origem, preco from radar_produto where id=?", id);
+        assertEquals("KG", p.get("unidade"));
+        assertEquals("63039100", p.get("ncm"));
+        assertEquals(1, ((Number) p.get("origem")).intValue());
+        assertEquals(0, new BigDecimal("59.90").compareTo((BigDecimal) p.get("preco")));
+        // Preço em formato errado (lista) é recusado, não vira zero.
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        salvar(
+                                empresa,
+                                "{\"tipo\":\"SIMPLES\",\"nome\":\"Q\",\"sku\":\"PAD-2\","
+                                        + "\"preco\":[1,2]}"));
+    }
+
+    private static String sku(UUID empresa, UUID id) {
+        return (String) linha(empresa, "select sku from radar_produto where id=?", id).get("sku");
+    }
+
     private static String base(String sku) {
         return base(sku, "SIMPLES");
     }

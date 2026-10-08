@@ -67,6 +67,12 @@ export const REGRAS: Record<string, Regra> = {
 
 export const regraDe = (marketplace: unknown) => REGRAS[str(marketplace)] ?? LIVRE;
 
+/** Teto do próprio Radar para título (tamanho do campo), quando o marketplace não tem limite. */
+export const TITULO_MAX_RADAR = 250;
+
+/** Letras como a pessoa vê: emoji conta 1 (o servidor conta igual). */
+export const letras = (texto: unknown) => [...str(texto).trim()].length;
+
 export const palavras = (texto: unknown) => str(texto).trim().split(/\s+/).filter(Boolean).length;
 
 // Central do vendedor de cada marketplace. A lojista entra com o próprio login. SHEIN fica para

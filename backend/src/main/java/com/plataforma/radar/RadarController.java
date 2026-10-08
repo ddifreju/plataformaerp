@@ -168,6 +168,14 @@ public class RadarController {
         return service.relatorios(de, ate);
     }
 
+    @GetMapping("/relatorios/fonte")
+    public Map<String, Object> relatorioFonte(
+            @RequestParam String nome,
+            @RequestParam(required = false) String de,
+            @RequestParam(required = false) String ate) {
+        return service.relatorioFonte(nome, de, ate);
+    }
+
     @PostMapping(value = "/perguntar", consumes = "application/json")
     public Map<String, Object> perguntar(@RequestBody JsonNode body) {
         return service.perguntar(body.path("texto").asText(""));

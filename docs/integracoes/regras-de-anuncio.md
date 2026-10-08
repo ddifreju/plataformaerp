@@ -70,6 +70,11 @@ conexão existir, esses limites vêm do marketplace (ver decisão 0036).
   lados), descrição (TikTok 30 palavras e 10.000 letras; ML 50.000), preço
   (TikTok R$ 0,50 a R$ 10.000), quantidade (ML e TikTok pelo menos 1; TikTok
   até 99.999) e categoria ligada à do marketplace.
+- Regras do próprio Radar (não são de marketplace): quantidade anunciada de pelo
+  menos 1 em todos; título de até 250 letras quando o marketplace não tem limite
+  oficial; emoji conta como 1 letra. Tamanho da foto conferido também no
+  servidor (PNG e JPG; WEBP só na tela). Todos os problemas de um anúncio
+  aparecem juntos.
 - Ainda não confere (precisa da conexão): atributos obrigatórios de cada
   categoria, preço mínimo por categoria do ML, limites por loja da Shopee e a
   proporção das fotos do AliExpress.

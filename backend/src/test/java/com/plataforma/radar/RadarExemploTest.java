@@ -51,7 +51,8 @@ class RadarExemploTest {
                         new RadarVendedores(db, json, new BCryptPasswordEncoder(12)),
                         new RadarEmpresa(db, new BCryptPasswordEncoder(12)),
                         new RadarConfiguracao(db, json),
-                        exemplo);
+                        exemplo,
+                        new RadarFontes(db, json));
     }
 
     @AfterEach
@@ -78,6 +79,12 @@ class RadarExemploTest {
         assertTrue(contar(empresa, "select count(*) from radar_titulo where tipo='RECEBER'") > 20);
         assertTrue(contar(empresa, "select count(*) from radar_titulo where tipo='PAGAR'") >= 5);
         assertEquals(3L, contar(empresa, "select count(*) from radar_promocao"));
+        // A promoção "encerrada" de exemplo está encerrada de fato (não só vencida).
+        assertEquals(
+                0L,
+                contar(
+                        empresa,
+                        "select count(*) from radar_promocao where fim < current_date and ativo"));
         assertEquals(
                 6L, contar(empresa, "select count(*) from radar_registro where tipo='MENSAGEM'"));
         assertTrue(contar(empresa, "select count(*) from radar_pedido where estado='EXPEDIDO'") > 40);

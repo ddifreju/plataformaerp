@@ -409,8 +409,11 @@ class RadarAnunciosTest {
         var repetida =
                 assertThrows(
                         ResponseStatusException.class,
-                        () -> novaLoja(empresa, "Shopee", "ml loja x"));
-        assertTrue(repetida.getReason().contains("Já existe"));
+                        () -> novaLoja(empresa, "Mercado Livre", "ml loja x"));
+        // A mensagem mostra o nome que já existe, não o digitado.
+        assertTrue(repetida.getReason().contains("Já existe a loja ML Loja X no Mercado Livre"));
+        // Em outro marketplace o mesmo nome pode.
+        novaLoja(empresa, "Shopee", "ML Loja X");
         assertThrows(
                 ResponseStatusException.class, () -> novaLoja(empresa, "SHEIN", "Loja SHEIN"));
         assertThrows(
@@ -430,7 +433,23 @@ class RadarAnunciosTest {
                                 "loja_remover", json("{\"id\":\"" + x + "\"}"), "GESTOR"));
         // Removida, o nome fica livre de novo.
         novaLoja(empresa, "Mercado Livre", "ML Loja X");
-        assertEquals(2, naEmpresa(empresa, () -> anuncios.lojas()).size());
+        assertEquals(3, naEmpresa(empresa, () -> anuncios.lojas()).size());
+        // Renomear com id inventado: loja não encontrada (não "nome repetido").
+        var inventada =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresa,
+                                        () ->
+                                                anuncios.executar(
+                                                        "loja_salvar",
+                                                        json(
+                                                                "{\"id\":\""
+                                                                        + UUID.randomUUID()
+                                                                        + "\",\"nome\":\"ML Loja X\"}"),
+                                                        "DONO")));
+        assertEquals(HttpStatus.NOT_FOUND, inventada.getStatusCode());
     }
 
     @Test
@@ -578,7 +597,7 @@ class RadarAnunciosTest {
                 assertThrows(
                         ResponseStatusException.class,
                         () -> anunciar(empresa, produto, ml, "x".repeat(61), "1"));
-        assertTrue(longo.getReason().contains("de 1 a 60 letras"));
+        assertTrue(longo.getReason().contains("vai até 60 letras"));
         // Categoria ligada só ao Mercado Livre: no TikTok Shop falta o vínculo.
         var semVinculo =
                 assertThrows(
@@ -618,7 +637,7 @@ class RadarAnunciosTest {
                 assertThrows(
                         ResponseStatusException.class,
                         () -> anunciar(empresa, produto, tiktok, "Cortina azul", "1"));
-        assertTrue(curto.getReason().contains("de 25 a 200 letras"));
+        assertTrue(curto.getReason().contains("pelo menos 25 letras"));
         var demais =
                 assertThrows(
                         ResponseStatusException.class,
@@ -637,6 +656,58 @@ class RadarAnunciosTest {
                         ResponseStatusException.class,
                         () -> anunciar(empresa, produto, ml, "Cortina", "0"));
         assertTrue(zero.getReason().contains("pelo menos 1"));
+    }
+
+    @Test
+    void anunciarMostraTodosOsProblemasDeUmaVez() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID tiktok = novaLoja(empresa, "TikTok Shop", "TikTok");
+        UUID shopee = novaLoja(empresa, "Shopee", "Shopee");
+        UUID produto = produtoCompleto(empresa, "TikTok Shop");
+        BancoRadarDeTeste.executarComoDono(
+                "update radar_produto set ncm='', descricao='Curta demais' where id=?", produto);
+        var tudo =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> anunciar(empresa, produto, tiktok, "Curto", "0"));
+        String msg = tudo.getReason();
+        for (String trecho :
+                List.of("NCM", "pelo menos 25 letras", "pelo menos 1", "30 palavras"))
+            assertTrue(msg.contains(trecho), "faltou \"" + trecho + "\" em: " + msg);
+        // Shopee não tem quantidade mínima oficial, mas anúncio com zero não fica pronto.
+        UUID completo = produtoCompleto(empresa, "Shopee");
+        var zero =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> anunciar(empresa, completo, shopee, "Cortina", "0"));
+        assertTrue(zero.getReason().contains("pelo menos 1"));
+        // Título acima de 250 na Shopee: o limite é do Radar, não da Shopee.
+        var longo =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> anunciar(empresa, completo, shopee, "x".repeat(251), "1"));
+        assertTrue(longo.getReason().contains("o Radar guarda títulos de até 250"));
+    }
+
+    @Test
+    void fotoPequenaEEmojiNoTitulo() throws Exception {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID ml = novaLoja(empresa, "Mercado Livre", "ML");
+        UUID produto = produtoCompleto(empresa, "Mercado Livre");
+        // Emoji conta como 1: 59 letras + 1 emoji = 60.
+        String titulo = "x".repeat(59) + "\uD83D\uDE00";
+        assertEquals(1, anunciar(empresa, produto, ml, titulo, "1").get("criados"));
+        // Foto de 200 px: o Mercado Livre pede 500 px no maior lado.
+        var imagem = new java.awt.image.BufferedImage(200, 200, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var bytes = new java.io.ByteArrayOutputStream();
+        javax.imageio.ImageIO.write(imagem, "png", bytes);
+        BancoRadarDeTeste.executarComoDono(
+                "update radar_produto_imagem set dados=? where produto_id=?", bytes.toByteArray(), produto);
+        var pequena =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> anunciar(empresa, produto, ml, "Cortina", "1"));
+        assertTrue(pequena.getReason().contains("foto(s) pequena(s)"));
     }
 
     private static UUID novaLoja(UUID empresa, String marketplace, String nome) {
@@ -678,9 +749,10 @@ class RadarAnunciosTest {
                         empresa, "CORT-" + UUID.randomUUID().toString().substring(0, 6), "30", "90");
         UUID categoria = UUID.randomUUID();
         BancoRadarDeTeste.executarComoDono(
-                "insert into radar_categoria(id,tenant_id,nome) values(?,?,'Cortinas')",
+                "insert into radar_categoria(id,tenant_id,nome) values(?,?,?)",
                 categoria,
-                empresa);
+                empresa,
+                "Cortinas " + categoria.toString().substring(0, 6));
         BancoRadarDeTeste.executarComoDono(
                 "insert into radar_categoria_canal(tenant_id,categoria_id,canal,codigo_externo,"
                         + "nome_externo) values(?,?,?,'C1','Casa > Cortinas')",
