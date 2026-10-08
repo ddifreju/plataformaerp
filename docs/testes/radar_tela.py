@@ -48,6 +48,9 @@ def abrir(email: str, largura: int = 1440, visivel: bool = False, produtos: bool
         pg.get_by_label("Senha").fill(SENHA)
         pg.get_by_role("button", name="Entrar no Radar").click()
         if produtos:
+            # No celular o menu lateral fica escondido atrás do botão ☰.
+            if largura < 720:
+                pg.get_by_role("button", name="Abrir menu").click()
             pg.get_by_role("button", name="Cadastros").click()
             pg.get_by_role("button", name="Produtos").first.click()
             pg.get_by_role("heading", name="Produtos", exact=True).wait_for()
