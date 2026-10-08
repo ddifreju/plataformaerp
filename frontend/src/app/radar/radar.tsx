@@ -640,7 +640,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   <button onClick={() => go("importar")}>↥ Importar</button>
                   <button
                     className="primary"
-                    onClick={() => setEditando({ id: null, aba: "geral", versao: Date.now() })}
+                    onClick={() => setEditando({ id: null, aba: "gerais", versao: Date.now() })}
                   >
                     + Novo produto
                   </button>
@@ -949,7 +949,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   can("DONO", "GESTOR")
                     ? async (id) => {
                         const r = await commandResult({ op: "produto_clonar", id, imagens: true });
-                        if (r) setEditando({ id: str(r.id), aba: "geral", versao: Date.now() });
+                        if (r) setEditando({ id: str(r.id), aba: "gerais", versao: Date.now() });
                       }
                     : undefined
                 }
@@ -1037,7 +1037,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                         <div className="rd-row-actions">
                           <button
                             onClick={() =>
-                              setEditando({ id: str(p.id), aba: "geral", versao: Date.now() })
+                              setEditando({ id: str(p.id), aba: "gerais", versao: Date.now() })
                             }
                           >
                             {can("DONO", "GESTOR") ? "Editar" : "Ver"}
@@ -1072,7 +1072,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               lojas={data.lojas ?? []}
               abrirProduto={(id) => {
                 setPage("produtos");
-                setEditando({ id, aba: "geral", versao: Date.now() });
+                setEditando({ id, aba: "gerais", versao: Date.now() });
               }}
             />
           )}

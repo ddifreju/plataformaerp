@@ -40,12 +40,11 @@ Print quando ajudar (salve em `docs/testes/prints/`).
 - [ ] **A1. Rascunho.** Cadastros → Produtos → "+ Novo produto". Preencha
   só o nome e o SKU (com SKU automático ligado, só o nome) e salve. Esperado: salva; aparece "Faltam N" com a lista do que
   falta; o produto aparece na lista com "Falta: …" na coluna Cadastro.
-- [ ] **A2. Abas.** Abra um produto simples (ex.: `EX-CORT-VOIL`). Esperado:
-  abas Dados gerais, Imagens, Fiscal, Anúncios, Conferência e SEO,
-  Fornecedores, Observações e Histórico. **Não** aparece "Variações / Kit".
-  Em Dados gerais ficam juntos: dados, preço e estoque, dimensões e
-  embalagem. Num produto com variação (`EX-CORT-BLACK`) e no kit
-  (`EX-KIT-SALA`), a aba "Variações / Kit" aparece.
+- [ ] **A2. Abas iguais nas três telas.** Cadastro novo, edição e visualização
+  têm as mesmas abas, na mesma ordem: Dados gerais, Descrição e imagens,
+  Fiscal, Anúncios, Variações ou Kit (só nesses tipos), Preço e promoções,
+  Custo e compras (só dono, gestor e financeiro) e Fornecedores e
+  observações. "Editar" na visualização abre a mesma aba no formulário.
 - [ ] **A3. Salvar com tudo na mesma página.** Mude preço, estoque mínimo,
   peso e uma medida em Dados gerais e salve. Reabra: os valores ficaram.
   Esperado: nenhum campo some ou volta ao valor antigo.
