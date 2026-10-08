@@ -517,6 +517,10 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     page === "produtos" ? filtrarProdutos(principais, filtroProdutos, contextoFiltro) : [];
   // Ação em lote vale só para o que está na lista: marcado que o filtro escondeu não conta.
   const marcadosNaLista = marcadosProdutos.filter((id) => listaProdutos.some((p) => p.id === id));
+  // Produtos que o "mais ações" do topo atinge: os marcados ou, sem marcação, a lista.
+  const idsDoTopo = new Set(
+    marcadosNaLista.length ? marcadosNaLista : listaProdutos.map((p) => str(p.id)),
+  );
   // Trocar o filtro desmarca o que saiu da lista (para não agir em produto que não aparece).
   const filtrarLista = (f: FiltroProdutos) => {
     setFiltroProdutos(f);
@@ -755,6 +759,15 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                     }
                     podeEditar={can("DONO", "GESTOR")}
                     podeAnuncios={can("DONO", "GESTOR", "MARKETING")}
+                    temKit={products.some((p) => p.tipo === "KIT" && idsDoTopo.has(str(p.id)))}
+                    semHistoricoCusto={
+                      products.filter(
+                        (p) =>
+                          (idsDoTopo.has(str(p.id)) || idsDoTopo.has(str(p.pai_id))) &&
+                          p.custo != null &&
+                          p.tem_historico_custo === false,
+                      ).length
+                    }
                     iniciarCustos={
                       data.financeiroPermitido && can("DONO", "GESTOR", "FINANCEIRO")
                         ? (ids) => {

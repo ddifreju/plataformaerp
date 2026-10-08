@@ -342,7 +342,11 @@ function Sincronizar(props: Props & { vendidos: Row[]; nomes: string }) {
       (a) => str(a.loja_id) === loja && props.vendidos.some((p) => p.id === a.produto_id),
     );
   const comAnuncio = props.lojas.filter((l) => anunciosDe(str(l.id)).length > 0);
-  const [lojas, setLojas] = useState<string[]>(() => comAnuncio.map((l) => str(l.id)));
+  // Um produto: já vem com as lojas dele marcadas. Vários: começa sem nenhuma, para não mandar
+  // preço ou estoque em massa com um clique só.
+  const [lojas, setLojas] = useState<string[]>(() =>
+    props.ids.length === 1 ? comAnuncio.map((l) => str(l.id)) : [],
+  );
   const [promocional, setPromocional] = useState(false);
   const linhas = lojas.flatMap((l) =>
     anunciosDe(l).map((a) => {

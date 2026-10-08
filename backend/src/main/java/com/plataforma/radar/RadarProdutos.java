@@ -116,6 +116,31 @@ public class RadarProdutos {
         return out;
     }
 
+    /**
+     * Aviso (não bloqueia): o mesmo código de barras em outro produto ativo. Marketplace recusa
+     * GTIN repetido; pode ser cópia que esqueceu de trocar o código.
+     */
+    private String gtinRepetido(UUID id, Object gtin) {
+        if (gtin == null || gtin.toString().isBlank()) return "";
+        List<String> outros =
+                db.queryForList(
+                        "select sku from radar_produto where tenant_id=? and gtin=? and id<>? and"
+                                + " pai_id is distinct from ? and excluido_em is null order by sku"
+                                + " limit 5",
+                        String.class,
+                        tenant(),
+                        gtin.toString(),
+                        id,
+                        id);
+        return outros.isEmpty()
+                ? ""
+                : " Atenção: o código de barras "
+                        + gtin
+                        + " também está em "
+                        + String.join(", ", outros)
+                        + " (o marketplace recusa código repetido).";
+    }
+
     /** Data e hora vindas do banco ou do formulário (texto ISO); null quando não há. */
     private static java.time.Instant instante(Object v) {
         if (v instanceof java.sql.Timestamp t) return t.toInstant();
@@ -212,7 +237,8 @@ public class RadarProdutos {
                                 ? "."
                                 : " como rascunho. Para anunciar e emitir nota, falta: "
                                         + String.join(", ", faltando)
-                                        + "."));
+                                        + ".")
+                        + gtinRepetido(id, c.get("gtin")));
         if (antes != null)
             r.put(
                     "antes",

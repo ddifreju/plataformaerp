@@ -690,8 +690,11 @@ export default function ProdutosLote({
         </>
       )}
       {aviso && (
-        <div className="rd-error" role="alert">
-          {aviso}
+        <div className="rd-toast neutro" role="status">
+          ⓘ {aviso}
+          <button aria-label="Fechar aviso" onClick={() => setAviso("")}>
+            ×
+          </button>
         </div>
       )}
       {podeMarcar && marcados.length > 0 && (

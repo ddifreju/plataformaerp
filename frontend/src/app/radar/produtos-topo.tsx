@@ -115,6 +115,10 @@ export function MaisAcoesProdutos(props: {
   ids: () => string[];
   podeEditar: boolean;
   podeAnuncios: boolean;
+  /** Há kit entre os produtos da ação (sem kit, "exportar composição" fica desligado). */
+  temKit: boolean;
+  /** Quantos produtos ainda não têm histórico de custos (0 desliga o item). */
+  semHistoricoCusto: number;
   /** Quem vê e cuida de custo inicia o histórico de custos. */
   iniciarCustos?: (ids: string[]) => void;
   receber: () => void;
@@ -159,7 +163,15 @@ export function MaisAcoesProdutos(props: {
             {props.podeEditar && <li className="rd-menu-sep" />}
             {item("🖨 imprimir relatório", () => lista()?.relatorio(props.ids()))}
             {props.iniciarCustos &&
-              item("☰ iniciar histórico de custos", () => props.iniciarCustos?.(props.ids()))}
+              (props.semHistoricoCusto > 0
+                ? item(
+                    `☰ iniciar histórico de custos (${props.semHistoricoCusto} sem histórico)`,
+                    () => props.iniciarCustos?.(props.ids()),
+                  )
+                : emBreve(
+                    "☰ iniciar histórico de custos",
+                    "Todos já têm: o histórico começa sozinho no cadastro",
+                  ))}
             {props.podeEditar &&
               item("$ reajustar preço dos produtos", () =>
                 lista()?.editarCampo("preco", "AUMENTAR_PCT", props.ids()),
@@ -173,12 +185,21 @@ export function MaisAcoesProdutos(props: {
               item("$ gerenciar preços dos anúncios", () => props.ir("anuncios"))}
             {emBreve("✦ consultar último lote de sugestão de NCM", "Vem com a sugestão de NCM")}
             <li className="rd-menu-sep" />
-            {item("⇧ exportar produtos para planilha", () =>
-              lista()?.exportarProdutos(props.ids()),
-            )}
-            {item("⇧ exportar composição de kits para planilha", () =>
-              lista()?.exportarKits(props.ids()),
-            )}
+            {item("⇧ exportar produtos para planilha", () => {
+              const ids = props.ids();
+              // Lista inteira e grande: confirma antes de baixar.
+              if (
+                ids.length > 50 &&
+                !window.confirm(`Baixar a planilha com ${ids.length} produtos (e as variações)?`)
+              )
+                return;
+              lista()?.exportarProdutos(ids);
+            })}
+            {props.temKit
+              ? item("⇧ exportar composição de kits para planilha", () =>
+                  lista()?.exportarKits(props.ids()),
+                )
+              : emBreve("⇧ exportar composição de kits para planilha", "Nenhum kit na lista")}
             {emBreve(
               "⇧ exportar estrutura de fabricados para planilha",
               "Vem com o cadastro de fabricados",
