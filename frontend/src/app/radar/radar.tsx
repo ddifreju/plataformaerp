@@ -287,6 +287,12 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   const controleLote = useRef<ControleLote>(null);
   // Mensagem do último comando recusado: o formulário do produto abre a aba do campo.
   const ultimoErro = useRef("");
+  // Aviso de sucesso some sozinho depois de alguns segundos (erro fica até fechar).
+  useEffect(() => {
+    if (!notice) return;
+    const t = window.setTimeout(() => setNotice(""), 8000);
+    return () => window.clearTimeout(t);
+  }, [notice]);
   // Cada troca de página vira um passo do histórico do navegador; "voltar" volta a página.
   useEffect(() => {
     if (window.location.hash !== `#${page}`) window.history.pushState(null, "", `#${page}`);
@@ -333,6 +339,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       await refresh();
       return true;
     } catch (e) {
+      setNotice("");
       setError((e as Error).message);
       return false;
     } finally {
@@ -352,6 +359,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       return r as Record<string, unknown>;
     } catch (e) {
       ultimoErro.current = (e as Error).message;
+      setNotice("");
       setError((e as Error).message);
       return null;
     } finally {
@@ -501,6 +509,14 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   };
   const listaProdutos =
     page === "produtos" ? filtrarProdutos(principais, filtroProdutos, contextoFiltro) : [];
+  // Ação em lote vale só para o que está na lista: marcado que o filtro escondeu não conta.
+  const marcadosNaLista = marcadosProdutos.filter((id) => listaProdutos.some((p) => p.id === id));
+  // Trocar o filtro desmarca o que saiu da lista (para não agir em produto que não aparece).
+  const filtrarLista = (f: FiltroProdutos) => {
+    setFiltroProdutos(f);
+    const ficam = new Set(filtrarProdutos(principais, f, contextoFiltro).map((p) => str(p.id)));
+    setMarcadosProdutos((m) => m.filter((id) => ficam.has(id)));
+  };
   // Colunas escolhidas em "Informações visíveis" (custo só para quem vê financeiro).
   const colunasLista = COLUNAS.filter(
     ([c]) =>
@@ -729,9 +745,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   <MaisAcoesProdutos
                     controle={controleLote}
                     ids={() =>
-                      marcadosProdutos.length
-                        ? marcadosProdutos
-                        : listaProdutos.map((p) => str(p.id))
+                      marcadosNaLista.length ? marcadosNaLista : listaProdutos.map((p) => str(p.id))
                     }
                     podeEditar={can("DONO", "GESTOR")}
                     podeAnuncios={can("DONO", "GESTOR", "MARKETING")}
@@ -748,7 +762,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                       setRapido({ tipo: "receber", ids: [] });
                     }}
                     problemasFiscais={() =>
-                      setFiltroProdutos({
+                      filtrarLista({
                         ...filtroProdutos,
                         pendencias: [...new Set([...filtroProdutos.pendencias, "FISCAL"])],
                       })
@@ -1068,7 +1082,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               </div>
               <FiltrosProdutos
                 filtro={filtroProdutos}
-                setFiltro={setFiltroProdutos}
+                setFiltro={filtrarLista}
                 contexto={contextoFiltro}
                 principais={principais}
                 total={listaProdutos.length}
@@ -1092,7 +1106,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                       role="tab"
                       aria-selected={ativa}
                       className={ativa ? "ativa" : ""}
-                      onClick={() => setFiltroProdutos({ ...filtroProdutos, tipos: t ? [t] : [] })}
+                      onClick={() => filtrarLista({ ...filtroProdutos, tipos: t ? [t] : [] })}
                     >
                       {rotulo}
                       <span>
@@ -1127,7 +1141,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                     : undefined
                 }
                 linhas={listaProdutos}
-                marcados={marcadosProdutos}
+                marcados={marcadosNaLista}
                 setMarcados={setMarcadosProdutos}
                 categorias={data.categorias}
                 embalagens={data.embalagens}

@@ -349,9 +349,15 @@ export default function ProdutosLote({
   const [modoTags, setModoTags] = useState("ADICIONAR");
   const [aviso, setAviso] = useState("");
   const [erroModal, setErroModal] = useState("");
+  const [confirmaQtd, setConfirmaQtd] = useState("");
 
   const todos =
     linhas.length > 0 && linhas.every((p) => marcados.includes(str(p.id)));
+  // Lixeira em 20 ou mais produtos pede para digitar a quantidade (evita o clique por engano).
+  const loteGrande = acao === "EXCLUIR" && alvo.length >= 20;
+  const temKitMarcado = produtos.some(
+    (p) => p.tipo === "KIT" && marcados.includes(str(p.id)),
+  );
   const todosInativos =
     marcados.length > 0 &&
     produtos
@@ -371,6 +377,7 @@ export default function ProdutosLote({
     setAlvo(ids);
     setAviso("");
     setErroModal("");
+    setConfirmaQtd("");
     setValor("");
     setTags("");
     setModo("DEFINIR");
@@ -447,13 +454,15 @@ export default function ProdutosLote({
     }
     const ok = await executar(corpo);
     setAcao(null);
-    if (ok) setMarcados((m) => m.filter((id) => !alvo.includes(id)));
+    // Editar e trocar tags mantêm a seleção (dá para mudar outro campo em seguida).
+    if (ok && acao !== "EDITAR" && acao !== "TAGS")
+      setMarcados((m) => m.filter((id) => !alvo.includes(id)));
   }
 
   const emBreve = (rotulo: string, motivo: string) => (
     <li>
       <button role="menuitem" disabled title={motivo}>
-        {rotulo} <small>({motivo.toLowerCase()})</small>
+        {rotulo} <small>({motivo})</small>
       </button>
     </li>
   );
@@ -751,9 +760,14 @@ export default function ProdutosLote({
                 {item("⇩ Exportar produtos para planilha", () =>
                   exportarProdutos(),
                 )}
-                {item("⇩ Exportar composição de kits para planilha", () =>
-                  exportarKits(),
-                )}
+                {temKitMarcado
+                  ? item("⇩ Exportar composição de kits para planilha", () =>
+                      exportarKits(),
+                    )
+                  : emBreve(
+                      "⇩ Exportar composição de kits para planilha",
+                      "Nenhum kit marcado",
+                    )}
                 {emBreve(
                   "⇩ Exportar estrutura de fabricados para planilha",
                   "Entra junto com o cadastro de produção (fabricados)",
@@ -921,6 +935,17 @@ export default function ProdutosLote({
                 restaurar quando quiser, em &quot;Lixeira&quot;.
               </p>
             )}
+            {loteGrande && (
+              <label className="rd-campo-lote">
+                São {alvo.length} produtos. Para confirmar, digite {alvo.length}
+                :
+                <input
+                  inputMode="numeric"
+                  value={confirmaQtd}
+                  onChange={(e) => setConfirmaQtd(e.target.value)}
+                />
+              </label>
+            )}
             {erroModal && (
               <p className="rd-error" role="alert">
                 {erroModal}
@@ -933,6 +958,9 @@ export default function ProdutosLote({
                   acao === "EXCLUIR" || acao === "EXCLUIR_ANEXOS"
                     ? "perigo"
                     : "primary"
+                }
+                disabled={
+                  loteGrande && confirmaQtd.trim() !== String(alvo.length)
                 }
                 onClick={confirmar}
               >

@@ -4029,3 +4029,18 @@ ul.rd-menu-linha li button,
 .rd-mais-acoes li button {
   white-space: normal;
 }
+
+/* Celular: o "Mais ações" da barra de lote abre com a largura da barra, sem sair pela esquerda
+   (a barra é sticky, então serve de referência para o menu). */
+@media (max-width: 720px) {
+  .rd-barra-lote .rd-mais-acoes {
+    position: static;
+  }
+  .rd-barra-lote .rd-mais-acoes ul.rd-menu-cima {
+    left: 0;
+    right: 0;
+    width: auto;
+    min-width: 0;
+    bottom: calc(100% + 6px);
+  }
+}
