@@ -37,7 +37,9 @@ final class RadarEntrada {
                     Map.entry("custo_unitario", "Custo unitário"),
                     Map.entry("motivo", "Motivo"),
                     Map.entry("titulo", "Título"),
-                    Map.entry("observacoes_internas", "Observações internas"));
+                    Map.entry("observacoes_internas", "Observações internas"),
+                    Map.entry("tags", "tags"),
+                    Map.entry("valor", "valor"));
 
     static String nomeDoCampo(String campo) {
         return NOMES.getOrDefault(campo, campo.replace('_', ' '));
@@ -108,10 +110,10 @@ final class RadarEntrada {
         try {
             BigDecimal v = new BigDecimal(s);
             if (v.signum() < 0 || v.scale() > 2 || v.compareTo(new BigDecimal("999999999")) > 0)
-                erro("Valor inválido em " + nomeDoCampo(campo) + ".");
+                erro("Valor inválido em " + nomeDoCampo(campo) + ": use um número positivo, com até 2 casas decimais.");
             return v.setScale(2);
         } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido em " + nomeDoCampo(campo) + ".");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido em " + nomeDoCampo(campo) + ": use um número positivo, com até 2 casas decimais.");
         }
     }
 
@@ -137,10 +139,10 @@ final class RadarEntrada {
             if (v.signum() < 0
                     || v.scale() > escala
                     || v.compareTo(new BigDecimal("999999999")) > 0)
-                erro("Valor inválido em " + nomeDoCampo(campo) + ".");
+                erro("Valor inválido em " + nomeDoCampo(campo) + ": use um número positivo, com até " + escala + " casas decimais.");
             return v;
         } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido em " + nomeDoCampo(campo) + ".");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido em " + nomeDoCampo(campo) + ": use um número positivo, com até " + escala + " casas decimais.");
         }
     }
 

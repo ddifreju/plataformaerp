@@ -31,6 +31,8 @@ type Props = {
   podeEnviarEstoque: boolean;
   /** Quem vê custo e quem pode mexer em custo. */
   podeCusto: boolean;
+  /** Quem lança entrada e saída de estoque (os outros só consultam). */
+  podeAjustarEstoque: boolean;
   ativo: boolean;
   /** Para o "mais ações" do topo da página usar as mesmas funções, com a lista filtrada. */
   controle?: Ref<ControleLote>;
@@ -322,6 +324,7 @@ export default function ProdutosLote({
   rapido,
   podeEnviarEstoque,
   podeCusto,
+  podeAjustarEstoque,
   ativo,
   controle,
   children,
@@ -336,6 +339,7 @@ export default function ProdutosLote({
   // Esc fecha o "⋯" da linha (o clique fora já fecha pela capa).
   useFecharFora(!!menuLinha, () => setMenuLinha(null));
   const [acao, setAcao] = useState<Acao | null>(null);
+  useFecharFora(!!acao, () => setAcao(null)); // Esc fecha a janela da ação.
   // Produtos que a ação vale: os marcados (barra) ou um só (⋯ da linha).
   const [alvo, setAlvo] = useState<string[]>([]);
   const [campo, setCampo] = useState("preco");
@@ -529,16 +533,18 @@ export default function ProdutosLote({
     const id = str(p.id);
     return (
       <span className="rd-celula-lote">
-        <input
-          type="checkbox"
-          aria-label={`Selecionar ${str(p.nome)}`}
-          checked={marcados.includes(id)}
-          onChange={(e) =>
-            setMarcados((m) =>
-              e.target.checked ? [...m, id] : m.filter((x) => x !== id),
-            )
-          }
-        />
+        {ativo && (
+          <input
+            type="checkbox"
+            aria-label={`Selecionar ${str(p.nome)}`}
+            checked={marcados.includes(id)}
+            onChange={(e) =>
+              setMarcados((m) =>
+                e.target.checked ? [...m, id] : m.filter((x) => x !== id),
+              )
+            }
+          />
+        )}
         <button
           type="button"
           className="rd-linha-mais"
@@ -581,7 +587,8 @@ export default function ProdutosLote({
     <>
       {children({
         cabecalho: ativo ? cabecalho : "",
-        celula: (p) => (ativo ? caixa(p) : ""),
+        // Todo cargo tem o "⋯" (só com o que pode fazer); marcar para o lote é de quem edita.
+        celula: (p) => caixa(p),
       })}
       {menuLinha && produtoLinha && (
         <>
@@ -592,7 +599,7 @@ export default function ProdutosLote({
             style={{ left: menuLinha.x, top: menuLinha.y }}
             aria-label={`Ações de ${str(produtoLinha.nome)}`}
           >
-            {item("⇪ Enviar para o e-commerce", enviarEcommerce)}
+            {anunciar && item("⇪ Enviar para o e-commerce", enviarEcommerce)}
             {anunciar &&
               rapidoItem("$ Enviar preços para o e-commerce", "precos", [
                 menuLinha.id,
@@ -606,9 +613,13 @@ export default function ProdutosLote({
             ])}
             <li className="rd-menu-sep" />
             {produtoLinha.tipo !== "KIT" &&
-              rapidoItem("▦ Gerenciar estoque", "gerenciar-estoque", [
-                menuLinha.id,
-              ])}
+              rapidoItem(
+                podeAjustarEstoque
+                  ? "▦ Gerenciar estoque"
+                  : "▦ Consultar estoque",
+                "gerenciar-estoque",
+                [menuLinha.id],
+              )}
             {rapidoItem("⌕ Consultar estoque multiempresa", "multiempresa", [
               menuLinha.id,
             ])}
@@ -620,14 +631,16 @@ export default function ProdutosLote({
               menuLinha.id,
             ])}
             <li className="rd-menu-sep" />
-            {item("✎ Editar dados", () => abrir("EDITAR", [menuLinha.id]))}
+            {ativo &&
+              item("✎ Editar dados", () => abrir("EDITAR", [menuLinha.id]))}
             {clonar &&
               item("⧉ Clonar produto", () => {
                 const id = menuLinha.id;
                 setMenuLinha(null);
                 clonar(id);
               })}
-            {item("# Alterar tags", () => abrir("TAGS", [menuLinha.id]))}
+            {ativo &&
+              item("# Alterar tags", () => abrir("TAGS", [menuLinha.id]))}
             {produtoLinha.tipo === "VARIACAO" &&
               emBreve("⇄ Tornar produto simples", "Entra com o Bloco 2")}
             {emBreve("⇪ Enviar produto para empresas", "Grupo de empresas")}
@@ -645,18 +658,23 @@ export default function ProdutosLote({
               item("⇩ Exportar composição do kit", () =>
                 exportarKits([menuLinha.id]),
               )}
-            <li className="rd-menu-sep" />
-            {produtoLinha.permite_venda === false
-              ? item("✓ Ativar produto", () => abrir("ATIVAR", [menuLinha.id]))
-              : item("⊘ Inativar produto", () =>
-                  abrir("INATIVAR", [menuLinha.id]),
-                )}
-            {item("🗑 Excluir anexos", () =>
-              abrir("EXCLUIR_ANEXOS", [menuLinha.id]),
-            )}
-            {item("🗑 Mover para a lixeira", () =>
-              abrir("EXCLUIR", [menuLinha.id]),
-            )}
+            {ativo && <li className="rd-menu-sep" />}
+            {ativo &&
+              (produtoLinha.permite_venda === false
+                ? item("✓ Ativar produto", () =>
+                    abrir("ATIVAR", [menuLinha.id]),
+                  )
+                : item("⊘ Inativar produto", () =>
+                    abrir("INATIVAR", [menuLinha.id]),
+                  ))}
+            {ativo &&
+              item("🗑 Excluir anexos", () =>
+                abrir("EXCLUIR_ANEXOS", [menuLinha.id]),
+              )}
+            {ativo &&
+              item("🗑 Mover para a lixeira", () =>
+                abrir("EXCLUIR", [menuLinha.id]),
+              )}
           </ul>
         </>
       )}
@@ -785,11 +803,19 @@ export default function ProdutosLote({
             className="rd-modal lateral"
             role="dialog"
             aria-modal="true"
-            aria-label={titulos[acao]}
+            aria-label={
+              acao === "EDITAR" && alvo.length === 1
+                ? "Editar dados"
+                : titulos[acao]
+            }
             onClick={(e) => e.stopPropagation()}
           >
             <div className="rd-card-head">
-              <h2>{titulos[acao]}</h2>
+              <h2>
+                {acao === "EDITAR" && alvo.length === 1
+                  ? "Editar dados"
+                  : titulos[acao]}
+              </h2>
               <button aria-label="Fechar" onClick={() => setAcao(null)}>
                 ×
               </button>

@@ -292,7 +292,7 @@ public class RadarAnuncios {
                         lojas.toArray(new UUID[0]));
         if (linhas.size() > MAX_IMPORTACAO)
             erro("São mais de " + MAX_IMPORTACAO + " anúncios: escolha menos produtos ou lojas.");
-        int alterados = 0, propostas = 0, abaixoDoCusto = 0;
+        int alterados = 0, propostas = 0, jaPendentes = 0, abaixoDoCusto = 0;
         for (var a : linhas) {
             if (campo.equals("ESTOQUE")) {
                 int disponivel = Math.max(0, ((Number) a.get("disponivel")).intValue());
@@ -348,7 +348,8 @@ public class RadarAnuncios {
                                 novo,
                                 tenant(),
                                 a.get("id"));
-            } else propostas += gravadas;
+            } else if (gravadas > 0) propostas++;
+            else jaPendentes++;
         }
         StringBuilder msg = new StringBuilder();
         if (linhas.isEmpty()) msg.append("Nenhum anúncio destes produtos nas lojas escolhidas.");
@@ -360,6 +361,12 @@ public class RadarAnuncios {
                 msg.append(" ")
                         .append(propostas)
                         .append(" proposta(s) de preço foram para aprovação na Central de ações.");
+            if (jaPendentes > 0)
+                msg.append(" ")
+                        .append(jaPendentes)
+                        .append(
+                                " já tinha(m) proposta com esse preço esperando aprovação na"
+                                        + " Central de ações (não foi repetida).");
             // Só quem vê custo fica sabendo o motivo.
             if (abaixoDoCusto > 0)
                 msg.append(" ")
@@ -375,6 +382,8 @@ public class RadarAnuncios {
         r.put("anuncios", linhas.size());
         r.put("alterados", alterados);
         r.put("propostas", propostas);
+        // Nada mudou nem foi para aprovação: a tela mostra o aviso sem o ✓ de sucesso.
+        r.put("nada", alterados == 0 && propostas == 0);
         r.put("mantidos", abaixoDoCusto);
         r.put("mensagem", msg.toString());
         return r;

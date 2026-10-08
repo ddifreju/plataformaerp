@@ -6,7 +6,8 @@
 
 import { createContext, use, useEffect, useMemo, useState, type ReactNode } from "react";
 import { SIGLA } from "./canais";
-import { Badge, cents, centMoney, date, money, str, type Row } from "./ui";
+import { ORIGENS } from "./produto";
+import { Badge, cents, centMoney, date, money, str, useFecharFora, type Row } from "./ui";
 
 export type TipoRapido =
   | "precos"
@@ -36,6 +37,7 @@ export function Gaveta({
   rodape?: ReactNode;
 }) {
   const erro = use(ErroDoPainel);
+  useFecharFora(true, fechar); // Esc fecha (clicar fora fecha pelo fundo).
   return (
     <div className="rd-gaveta-fundo" onClick={fechar}>
       <aside
@@ -143,7 +145,9 @@ function Painel(props: Props) {
                   <td>{str(p.nome)}</td>
                   <td>{str(p.ncm) || "—"}</td>
                   <td>{str(p.cest) || "—"}</td>
-                  <td>{str(p.origem) || "—"}</td>
+                  <td>
+                    {ORIGENS.find(([v]) => v === str(p.origem))?.[1] ?? (str(p.origem) || "—")}
+                  </td>
                   <td>{str(p.gtin) || (p.motivo_sem_gtin ? "sem código" : "—")}</td>
                 </tr>
               ))}
@@ -411,6 +415,8 @@ function Sincronizar(props: Props & { vendidos: Row[]; nomes: string }) {
               <th>Loja</th>
               <th>Hoje</th>
               <th>Vai ficar</th>
+              {preco && props.financeiro && <th>Custo</th>}
+              {preco && props.financeiro && <th>Margem</th>}
             </tr>
           </thead>
           <tbody>
@@ -427,6 +433,14 @@ function Sincronizar(props: Props & { vendidos: Row[]; nomes: string }) {
                     <Badge tone="red">abaixo do custo</Badge>
                   )}
                 </td>
+                {preco && props.financeiro && <td>{money(p.custo)}</td>}
+                {preco && props.financeiro && (
+                  <td>
+                    {novo > 0 && p.custo != null
+                      ? `${Math.round(((novo - cents(p.custo)) / novo) * 100)}%`
+                      : "—"}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -718,9 +732,14 @@ function CustoVariacoes(props: Props & { escolhidos: Row[] }) {
               inputMode="decimal"
               placeholder="0,00"
               value={custo}
-              onChange={(e) => setCusto(e.target.value.replace(/[^0-9.,]/g, ""))}
+              onChange={(e) => setCusto(e.target.value.replace(/[^0-9.,-]/g, ""))}
             />
           </label>
+          {custo.includes("-") && (
+            <p className="rd-error" role="alert">
+              O custo não pode ser negativo.
+            </p>
+          )}
           <table className="rd-table">
             <thead>
               <tr>

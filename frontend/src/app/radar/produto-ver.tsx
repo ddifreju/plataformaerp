@@ -62,6 +62,7 @@ type Props = {
   podeEditar: boolean;
   podeAnunciar: boolean;
   podeEnviarEstoque: boolean;
+  podeAjustarEstoque: boolean;
   disponivel: (p: Row) => number;
   editar: (aba: Aba) => void;
   anunciar: () => void;
@@ -834,7 +835,10 @@ export default function ProdutoVer(props: Props) {
                   {item("▤ Enviar dados fiscais para o e-commerce", () => props.rapido("fiscais"))}
                   <li className="rd-menu-sep" />
                   {tipo !== "KIT" &&
-                    item("▦ Gerenciar estoque", () => props.rapido("gerenciar-estoque"))}
+                    item(
+                      props.podeAjustarEstoque ? "▦ Gerenciar estoque" : "▦ Consultar estoque",
+                      () => props.rapido("gerenciar-estoque"),
+                    )}
                   {item("⌕ Consultar estoque multiempresa", () => props.rapido("multiempresa"))}
                   {item("🏷 Imprimir etiqueta", () => setErroArquivo(arq.etiquetas([id])))}
                   {item("↙ Visualizar histórico de compras", () => props.rapido("compras"))}

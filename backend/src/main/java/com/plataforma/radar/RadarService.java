@@ -296,7 +296,14 @@ public class RadarService {
         if (!n.path(k).canConvertToInt() || !n.path(k).isIntegralNumber())
             erro("Quantidade inválida: " + k);
         int v = n.path(k).asInt();
-        if (v < min || v > max) erro("Quantidade fora do limite: " + k);
+        if (v < min || v > max)
+            erro(
+                    RadarEntrada.nomeDoCampo(k)
+                            + " fora do limite: de "
+                            + String.format(java.util.Locale.forLanguageTag("pt-BR"), "%,d", min)
+                            + " a "
+                            + String.format(java.util.Locale.forLanguageTag("pt-BR"), "%,d", max)
+                            + ".");
         return v;
     }
 
@@ -786,9 +793,22 @@ public class RadarService {
                 exigirEstoqueProprio(p);
                 int delta = inteiro(n, "quantidade", -100000, 100000);
                 if (delta == 0) erro("Informe uma quantidade diferente de zero.");
-                if (((Number) p.get("fisico")).intValue() + delta
-                        < ((Number) p.get("reservado")).intValue())
-                    erro("O ajuste consumiria estoque reservado.");
+                int fisicoAtual = ((Number) p.get("fisico")).intValue();
+                int reservadoAtual = ((Number) p.get("reservado")).intValue();
+                if (fisicoAtual + delta < 0)
+                    erro(
+                            "A saída ("
+                                    + -delta
+                                    + ") é maior que o estoque físico ("
+                                    + fisicoAtual
+                                    + ").");
+                if (fisicoAtual + delta < reservadoAtual)
+                    erro(
+                            "A saída deixaria menos que o reservado em pedidos ("
+                                    + reservadoAtual
+                                    + "): dá para tirar no máximo "
+                                    + (fisicoAtual - reservadoAtual)
+                                    + ".");
                 String motivo = texto(n, "motivo", 500);
                 db.update(
                         "update radar_produto set fisico=fisico+? where tenant_id=? and id=?",

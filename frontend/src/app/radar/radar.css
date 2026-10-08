@@ -875,6 +875,11 @@
   border: 1px solid #c8efdc;
   color: #1e825a;
 }
+.rd-toast.neutro {
+  background: #fff8e6;
+  border-color: #f3dfa6;
+  color: #8a5a00;
+}
 .rd-error {
   background: #fff0f0;
   border: 1px solid #f7d3d3;
@@ -4004,4 +4009,23 @@ ul.rd-menu-linha li button:disabled {
   display: flex;
   flex-direction: column;
   gap: 7px;
+}
+
+/* Menus longos: sombra embaixo enquanto há itens para rolar (mostra que tem mais). */
+ul.rd-menu-linha,
+.rd-mais-acoes ul.rd-menu-longo,
+.rd-ver-menu {
+  background:
+    linear-gradient(white 30%, rgba(255, 255, 255, 0)) top / 100% 24px no-repeat local,
+    linear-gradient(rgba(255, 255, 255, 0), white 70%) bottom / 100% 24px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(15, 23, 42, 0.16), transparent) top / 100% 10px
+      no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(15, 23, 42, 0.16), transparent) bottom / 100%
+      10px no-repeat scroll,
+    white;
+}
+/* Itens com o motivo entre parênteses quebram a linha inteira, sem cortar no meio. */
+ul.rd-menu-linha li button,
+.rd-mais-acoes li button {
+  white-space: normal;
 }

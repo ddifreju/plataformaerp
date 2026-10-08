@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { TITULO_MAX_RADAR, letras, palavras, regraDe, type Regra } from "./canais";
 import { vinculoDe } from "./categorias";
 import { CHAVE_DA_PENDENCIA, LinhaPreencher, faltasDoCadastro, type Chave } from "./pendencias";
-import { Badge, str, type Row } from "./ui";
+import { Badge, str, useFecharFora, type Row } from "./ui";
 
 type Props = {
   ids: string[];
@@ -38,6 +38,7 @@ const PASSOS = ["Onde anunciar", "Categoria", "Ajustes por loja", "Conferir e sa
 
 export default function Anunciar(props: Props) {
   const { produtos, lojas } = props;
+  useFecharFora(true, () => !props.busy && props.fechar()); // Esc fecha.
   const [passo, setPasso] = useState(0);
   const [escolhidas, setEscolhidas] = useState<string[]>(() =>
     lojas.length === 1 ? [str(lojas[0].id)] : [],

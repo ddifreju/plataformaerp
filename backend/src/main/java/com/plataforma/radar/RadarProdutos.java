@@ -864,6 +864,8 @@ public class RadarProdutos {
                         arr,
                         arr);
         return Map.of(
+                "nada",
+                iniciados == 0,
                 "iniciados",
                 iniciados,
                 "mensagem",
@@ -1415,9 +1417,20 @@ public class RadarProdutos {
                 "mensagem",
                 k
                         + " produto(s) atualizado(s)."
-                        + (campo.equals("custo")
+                        + (campo.equals("custo") && temKit(ids)
                                 ? " O custo de kit vem dos componentes e não muda."
                                 : ""));
+    }
+
+    private boolean temKit(UUID[] ids) {
+        Integer kits =
+                db.queryForObject(
+                        "select count(*) from radar_produto where tenant_id=? and id = any(?) and"
+                                + " tipo='KIT'",
+                        Integer.class,
+                        tenant(),
+                        ids);
+        return kits != null && kits > 0;
     }
 
     /** Valor validado do campo; vazio limpa o campo quando ele é opcional. */
@@ -1734,7 +1747,13 @@ public class RadarProdutos {
         for (JsonNode item : lista) {
             String s = item.asText("").trim();
             if (s.isBlank()) continue;
-            if (s.length() > maxTamanho) erro("Item muito longo em " + campo);
+            if (s.length() > maxTamanho)
+                erro(
+                        "Cada item de "
+                                + RadarEntrada.nomeDoCampo(campo)
+                                + " aceita até "
+                                + maxTamanho
+                                + " caracteres.");
             if (!out.contains(s)) out.add(s);
         }
         return paraJson(out);

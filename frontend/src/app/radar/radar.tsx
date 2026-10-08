@@ -250,6 +250,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(""),
+    // Resposta sem efeito ("nada a iniciar", "nenhum anúncio mudou"): aviso neutro, sem ✓.
+    [noticeNeutro, setNoticeNeutro] = useState(false),
     [error, setError] = useState(""),
     [modal, setModal] = useState<ModalSpec | null>(null),
     [tour, setTour] = useState(0),
@@ -327,6 +329,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     try {
       const r = await call("/comandos", body, crypto.randomUUID());
       setNotice(r.mensagem);
+      setNoticeNeutro(r.nada === true);
       await refresh();
       return true;
     } catch (e) {
@@ -344,6 +347,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     try {
       const r = await call("/comandos", body, crypto.randomUUID());
       setNotice(r.mensagem);
+      setNoticeNeutro(r.nada === true);
       await refresh();
       return r as Record<string, unknown>;
     } catch (e) {
@@ -762,8 +766,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             </div>
           </div>
           {notice && (
-            <div className="rd-toast" role="status">
-              ✓ {notice}
+            <div className={`rd-toast${noticeNeutro ? " neutro" : ""}`} role="status">
+              {noticeNeutro ? "ⓘ" : "✓"} {notice}
               <button aria-label="Fechar aviso" onClick={() => setNotice("")}>
                 ×
               </button>
@@ -986,6 +990,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               podeEditar={can("DONO", "GESTOR")}
               podeAnunciar={can("DONO", "GESTOR", "MARKETING")}
               podeEnviarEstoque={can("DONO", "GESTOR", "MARKETING", "ESTOQUE")}
+              podeAjustarEstoque={can("DONO", "GESTOR", "ESTOQUE")}
               disponivel={disponivel}
               editar={(aba) => setEditando({ id: vendo.id, aba, versao: Date.now() })}
               anunciar={() => setAnunciando([vendo.id])}
@@ -1111,6 +1116,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                 }}
                 podeEnviarEstoque={can("DONO", "GESTOR", "MARKETING", "ESTOQUE")}
                 podeCusto={data.financeiroPermitido && can("DONO", "GESTOR")}
+                podeAjustarEstoque={can("DONO", "GESTOR", "ESTOQUE")}
                 produtos={cadastrados}
                 clonar={
                   can("DONO", "GESTOR")
