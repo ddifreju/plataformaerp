@@ -231,6 +231,29 @@ public class RadarFontes {
                                     c("motivo", "Motivo", "texto"),
                                     c("pedido", "Pedido", "texto"))),
                     new Fonte(
+                            "custos",
+                            "Histórico de custos",
+                            FINANCEIRO,
+                            true,
+                            "select to_char(h.criado_em,'YYYY-MM-DD') data, pr.sku, pr.nome"
+                                    + " produto, h.antes, h.depois, h.depois-h.antes diferenca,"
+                                    + " h.motivo, u.nome usuario from radar_custo_historico h"
+                                    + " join radar_produto pr on pr.tenant_id=h.tenant_id and"
+                                    + " pr.id=h.produto_id left join usuario u on"
+                                    + " u.tenant_id=h.tenant_id and u.id=h.usuario_id where"
+                                    + " h.tenant_id=? and h.criado_em>=? and h.criado_em<?"
+                                    + " order by h.criado_em desc limit ?",
+                            "TDA",
+                            List.of(
+                                    c("data", "Data", "data"),
+                                    c("sku", "SKU", "texto"),
+                                    c("produto", "Produto", "texto"),
+                                    c("antes", "Custo antes", "dinheiro"),
+                                    c("depois", "Custo depois", "dinheiro"),
+                                    c("diferenca", "Diferença", "dinheiro"),
+                                    c("motivo", "Motivo", "texto"),
+                                    c("usuario", "Quem", "texto"))),
+                    new Fonte(
                             "compras",
                             "Compras",
                             Set.of("DONO", "GESTOR", "ESTOQUE", "FINANCEIRO"),

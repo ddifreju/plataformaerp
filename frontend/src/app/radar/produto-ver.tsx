@@ -10,7 +10,7 @@ import { NO_RADAR, verNaCentral } from "./anuncios";
 import { SIGLA } from "./canais";
 import type { TipoRapido } from "./acoes-rapidas";
 import { faltasDoCadastro } from "./pendencias";
-import { ORIGENS, UNIDADES, type Aba } from "./produto";
+import { Historico, ORIGENS, UNIDADES, type Aba } from "./produto";
 import { Badge, Empty, cents, centMoney, date, money, str, type Row } from "./ui";
 
 const MOTIVOS: Record<string, string> = {
@@ -581,6 +581,9 @@ export default function ProdutoVer(props: Props) {
               </Info>
             </div>
           )}
+        </Secao>
+        <Secao titulo="Histórico de custos">
+          <Historico id={str(p.id)} so="CUSTO" />
         </Secao>
         <Secao titulo="Histórico de compras">
           {compras.length ? (

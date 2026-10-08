@@ -3955,3 +3955,33 @@ ul.rd-menu-linha li button:disabled {
   outline: 2px solid #2f5fd0;
   outline-offset: 2px;
 }
+
+/* Abas por tipo na lista de produtos (todos, simples, kits, variações) */
+.rd-abas-tipo {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--rd-line);
+  margin: 10px 0 8px;
+}
+.rd-abas-tipo button {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 8px 18px;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  color: var(--rd-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.rd-abas-tipo button span {
+  font-size: 12px;
+}
+.rd-abas-tipo button.ativa {
+  color: var(--rd-ink);
+  border-bottom-color: var(--rd-ink);
+  font-weight: 600;
+}

@@ -472,6 +472,11 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       c !== "imagem" && colunasProdutos.includes(c) && (c !== "custo" || data.financeiroPermitido),
   );
   const verImagem = colunasProdutos.includes("imagem");
+  // Abas por tipo (todos, simples, kits, variações): contam com os outros filtros aplicados.
+  const semFiltroDeTipo =
+    page === "produtos"
+      ? filtrarProdutos(principais, { ...filtroProdutos, tipos: [] }, contextoFiltro)
+      : [];
   const cfgPedidos = configPedidos(
     {
       produtos: products,
@@ -695,6 +700,14 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                     }
                     podeEditar={can("DONO", "GESTOR")}
                     podeAnuncios={can("DONO", "GESTOR", "MARKETING")}
+                    iniciarCustos={
+                      data.financeiroPermitido && can("DONO", "GESTOR", "FINANCEIRO")
+                        ? (ids) => {
+                            setError("");
+                            setRapido({ tipo: "custos-iniciar", ids });
+                          }
+                        : undefined
+                    }
                     receber={() => {
                       setError("");
                       setRapido({ tipo: "receber", ids: [] });
@@ -993,7 +1006,11 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           {page === "produtos" && !editando && !vendo && !verLixeira && (
             <section className="rd-card">
               <div className="rd-card-head">
-                <h2>{principais.length} produtos</h2>
+                <h2>
+                  {listaProdutos.length === principais.length
+                    ? `${principais.length} produtos`
+                    : `${listaProdutos.length} de ${principais.length} produtos`}
+                </h2>
                 <div className="rd-heading-actions">
                   {naLixeira.length > 0 && (
                     <button type="button" className="text" onClick={() => setVerLixeira(true)}>
@@ -1017,6 +1034,37 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                 principais={principais}
                 total={listaProdutos.length}
               />
+              <div className="rd-abas-tipo" role="tablist" aria-label="Tipo de produto">
+                {(
+                  [
+                    ["", "todos"],
+                    ["SIMPLES", "simples"],
+                    ["KIT", "kits"],
+                    ["VARIACAO", "variações"],
+                  ] as const
+                ).map(([t, rotulo]) => {
+                  const ativa = t
+                    ? filtroProdutos.tipos.length === 1 && filtroProdutos.tipos[0] === t
+                    : filtroProdutos.tipos.length === 0;
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      role="tab"
+                      aria-selected={ativa}
+                      className={ativa ? "ativa" : ""}
+                      onClick={() => setFiltroProdutos({ ...filtroProdutos, tipos: t ? [t] : [] })}
+                    >
+                      {rotulo}
+                      <span>
+                        {t
+                          ? semFiltroDeTipo.filter((p) => (str(p.tipo) || "SIMPLES") === t).length
+                          : semFiltroDeTipo.length}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
               <ProdutosLote
                 ativo={can("DONO", "GESTOR")}
                 controle={controleLote}

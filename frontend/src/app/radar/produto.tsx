@@ -1570,6 +1570,8 @@ export default function ProdutoForm({
         <p className="rd-dica">
           O custo médio muda sozinho a cada compra recebida (Suprimentos → Compras).
         </p>
+        {id && <h3 className="rd-secao">Histórico de custos</h3>}
+        {id && <Historico id={id} so="CUSTO" />}
       </>
     ),
     outros: (
@@ -1757,13 +1759,18 @@ const TIPOS_EVENTO: Record<string, [string, string]> = {
   VENDA: ["Venda", "green"],
   COMPRA: ["Compra", "amber"],
   CADASTRO: ["Cadastro", "gray"],
+  CUSTO: ["Custo", "purple"],
 };
 
-/** Linha do tempo do produto: estoque, vendas, compras e alterações, com quem fez. */
-function Historico({ id }: { id: string }) {
+/**
+ * Linha do tempo do produto: estoque, vendas, compras, custo e alterações, com quem fez. Com
+ * {@code so}, mostra só um tipo (ex.: o histórico de custos na aba "Custo e compras").
+ */
+export function Historico({ id, so }: { id: string; so?: string }) {
   const [eventos, setEventos] = useState<Evento[] | null>(null);
   const [erro, setErro] = useState("");
-  const [filtro, setFiltro] = useState("");
+  const [escolhido, setFiltro] = useState("");
+  const filtro = so ?? escolhido;
 
   useEffect(() => {
     let vivo = true;
@@ -1784,7 +1791,7 @@ function Historico({ id }: { id: string }) {
   const visiveis = filtro ? eventos.filter((e) => e.tipo === filtro) : eventos;
   return (
     <div className="rd-historico">
-      <div className="rd-opcoes" role="group" aria-label="Filtrar histórico">
+      <div className="rd-opcoes" role="group" aria-label="Filtrar histórico" hidden={!!so}>
         {[["", "Tudo"], ...Object.entries(TIPOS_EVENTO).map(([k, [r]]) => [k, r])].map(([k, r]) => (
           <label key={k} className={filtro === k ? "ativo" : ""}>
             <input
@@ -1798,7 +1805,11 @@ function Historico({ id }: { id: string }) {
         ))}
       </div>
       {visiveis.length === 0 ? (
-        <p className="rd-note">Nada registrado ainda.</p>
+        <p className="rd-note">
+          {so === "CUSTO"
+            ? "Nenhuma mudança de custo registrada. Para começar, use “iniciar histórico de custos” no “mais ações” da lista de produtos."
+            : "Nada registrado ainda."}
+        </p>
       ) : (
         <ol className="rd-linha-tempo">
           {visiveis.map((e, i) => (

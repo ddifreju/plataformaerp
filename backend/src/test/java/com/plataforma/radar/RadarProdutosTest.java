@@ -747,6 +747,98 @@ class RadarProdutosTest {
         return (UUID) naEmpresa(empresa, () -> produtos.salvar(json(corpo), "DONO")).get("id");
     }
 
+    @Test
+    void historicoDeCustosRegistraCadaMudancaEIniciaQuemNaoTem() throws SQLException {
+        UUID p = BancoRadarDeTeste.novoProduto(empresaA, "CH-1", "10.00", "20.00");
+        // O cadastro já abre o histórico.
+        assertEquals(List.of("Cadastro do produto"), motivosDeCusto(p));
+        // Edição em lote do custo.
+        lote(
+                "{\"acao\":\"EDITAR\",\"campo\":\"custo\",\"modo\":\"DEFINIR\",\"valor\":\"12\","
+                        + "\"ids\":[\""
+                        + p
+                        + "\"]}");
+        // Recebimento de compra: soma ao físico e recalcula o custo médio no mesmo UPDATE.
+        BancoRadarDeTeste.executarComoDono(
+                "update radar_produto set fisico=fisico+5, custo=11 where id=?", p);
+        // Salvar sem mudar o custo não registra nada.
+        BancoRadarDeTeste.executarComoDono("update radar_produto set custo=11 where id=?", p);
+        assertEquals(
+                List.of("Cadastro do produto", "Alteração do custo", "Compra recebida (custo médio)"),
+                motivosDeCusto(p));
+        var alteracao =
+                linha(
+                        empresaA,
+                        "select antes, depois, usuario_id from radar_custo_historico where"
+                                + " produto_id=? and motivo='Alteração do custo'",
+                        p);
+        assertEquals(0, new BigDecimal("10.00").compareTo((BigDecimal) alteracao.get("antes")));
+        assertEquals(0, new BigDecimal("12.00").compareTo((BigDecimal) alteracao.get("depois")));
+
+        // Produto antigo, de antes do histórico: "iniciar" grava o custo de hoje, uma vez só.
+        UUID antigo = BancoRadarDeTeste.novoProduto(empresaA, "CH-2", "7.50", "15.00");
+        BancoRadarDeTeste.executarComoDono(
+                "delete from radar_custo_historico where produto_id=?", antigo);
+        String corpo = "{\"ids\":[\"" + p + "\",\"" + antigo + "\"]}";
+        var r = naEmpresa(empresaA, () -> produtos.iniciarCustos(json(corpo), "DONO"));
+        assertEquals(1, r.get("iniciados"));
+        assertEquals(List.of("Início do histórico"), motivosDeCusto(antigo));
+        assertEquals(
+                0, naEmpresa(empresaA, () -> produtos.iniciarCustos(json(corpo), "GESTOR")).get("iniciados"));
+        // Cargo sem acesso a custo não inicia.
+        assertThrows(
+                ResponseStatusException.class,
+                () -> naEmpresa(empresaA, () -> produtos.iniciarCustos(json(corpo), "MARKETING")));
+        // Outra empresa: os ids não são dela, nada é gravado.
+        BancoRadarDeTeste.executarComoDono(
+                "delete from radar_custo_historico where produto_id=?", antigo);
+        assertEquals(
+                0, naEmpresa(empresaB, () -> produtos.iniciarCustos(json(corpo), "DONO")).get("iniciados"));
+
+        // Isolamento: a outra empresa não vê o histórico, e ninguém altera nem apaga linhas.
+        assertEquals(
+                0,
+                naEmpresa(
+                        empresaB,
+                        () ->
+                                db.queryForObject(
+                                        "select count(*) from radar_custo_historico where produto_id=?",
+                                        Integer.class,
+                                        p)));
+        assertThrows(
+                Exception.class,
+                () ->
+                        naEmpresa(
+                                empresaA,
+                                () ->
+                                        db.update(
+                                                "update radar_custo_historico set depois=0 where produto_id=?",
+                                                p)));
+        assertThrows(
+                Exception.class,
+                () ->
+                        naEmpresa(
+                                empresaA,
+                                () -> db.update("delete from radar_custo_historico where produto_id=?", p)));
+
+        // Linha do tempo: custo só para quem vê o financeiro.
+        var comCusto = naEmpresa(empresaA, () -> produtos.historico(p, "DONO", true));
+        assertTrue(((List<?>) comCusto.get("eventos")).stream().anyMatch(e -> ((Map<?, ?>) e).get("tipo").equals("CUSTO")));
+        var semCusto = naEmpresa(empresaA, () -> produtos.historico(p, "GESTOR", false));
+        assertFalse(((List<?>) semCusto.get("eventos")).stream().anyMatch(e -> ((Map<?, ?>) e).get("tipo").equals("CUSTO")));
+    }
+
+    private static List<String> motivosDeCusto(UUID produto) {
+        return naEmpresa(
+                empresaA,
+                () ->
+                        db.queryForList(
+                                "select motivo from radar_custo_historico where produto_id=?"
+                                        + " order by criado_em, motivo",
+                                String.class,
+                                produto));
+    }
+
     private static Map<String, Object> linha(UUID empresa, String sql, Object id) {
         return naEmpresa(empresa, () -> db.queryForMap(sql, id));
     }

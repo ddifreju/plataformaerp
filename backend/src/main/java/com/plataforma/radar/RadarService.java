@@ -648,6 +648,9 @@ public class RadarService {
     public Map<String, Object> comando(UUID chave, JsonNode n) {
         // Serialize commands per tenant; protects idempotency and shared-stock transitions.
         db.queryForList("select pg_advisory_xact_lock(hashtextextended(?,0))", tenant().toString());
+        // Quem fez: o gatilho do histórico de custos (V035) lê daqui. Vale só nesta transação.
+        db.queryForList(
+                "select set_config('app.usuario_id', ?, true)", user().usuarioId().toString());
         String op = texto(n, "op", 80);
         String hash;
         try {
@@ -1081,6 +1084,8 @@ public class RadarService {
                     result.putAll(clientes.salvar(n, papel()));
                 else if (op.equals("produtos_lote")) result.putAll(produtos.lote(n, papel()));
                 else if (op.equals("produto_clonar")) result.putAll(produtos.clonar(n, papel()));
+                else if (op.equals("custos_iniciar"))
+                    result.putAll(produtos.iniciarCustos(n, papel()));
                 else if (RadarProdutos.OPERACOES.contains(op))
                     result.putAll(produtos.salvar(n, papel()));
                 else if (RadarConfiguracao.OPERACOES.contains(op))
