@@ -77,16 +77,16 @@ const TIPOS_VARIACAO = [
   "Cor da cobertura",
 ];
 
+// As mesmas abas da visualização (produto-ver.tsx): cadastro novo, edição e visualização iguais.
 const ABAS = [
-  ["geral", "Dados gerais"],
-  ["composicao", "Variações / Kit"],
-  ["imagens", "Imagens"],
+  ["gerais", "Dados gerais"],
+  ["descricao", "Descrição e imagens"],
   ["fiscal", "Fiscal"],
   ["anuncios", "Anúncios"],
-  ["seo", "Conferência e SEO"],
-  ["fornecedores", "Fornecedores"],
-  ["observacoes", "Observações"],
-  ["historico", "Histórico"],
+  ["variacoes", "Variações / Kit"],
+  ["precos", "Preço e promoções"],
+  ["custos", "Custo e compras"],
+  ["outros", "Fornecedores e observações"],
 ] as const;
 
 export type Aba = (typeof ABAS)[number][0];
@@ -248,7 +248,7 @@ export default function ProdutoForm({
   abrirModal,
   voltar,
   aoSalvar,
-  abaInicial = "geral",
+  abaInicial = "gerais",
   config = {},
 }: Props) {
   const novo = !produto;
@@ -426,16 +426,16 @@ export default function ProdutoForm({
     const f: [string, Aba][] = [];
     const vazio = (k: string) => !str(v[k]).trim();
     if (vazio("gtin") && vazio("motivo_sem_gtin"))
-      f.push(["Código de barras ou motivo de não ter", "geral"]);
-    if (vazio("marca")) f.push(["Marca", "geral"]);
-    if (vazio("origem")) f.push(["Origem (ICMS)", "geral"]);
-    if (vazio("ncm")) f.push(["NCM", "geral"]);
-    if (!categoriaTexto.trim()) f.push(["Categoria", "geral"]);
-    if (vazio("descricao")) f.push(["Descrição", "geral"]);
-    if (!(cents(v.preco) > 0)) f.push(["Preço de venda", "geral"]);
-    if (vazio("peso_bruto_kg")) f.push(["Peso bruto", "geral"]);
+      f.push(["Código de barras ou motivo de não ter", "gerais"]);
+    if (vazio("marca")) f.push(["Marca", "gerais"]);
+    if (vazio("origem")) f.push(["Origem (ICMS)", "fiscal"]);
+    if (vazio("ncm")) f.push(["NCM", "fiscal"]);
+    if (!categoriaTexto.trim()) f.push(["Categoria", "gerais"]);
+    if (vazio("descricao")) f.push(["Descrição", "descricao"]);
+    if (!(cents(v.preco) > 0)) f.push(["Preço de venda", "precos"]);
+    if (vazio("peso_bruto_kg")) f.push(["Peso bruto", "gerais"]);
     const medidas = !vazio("largura_cm") && !vazio("altura_cm") && !vazio("comprimento_cm");
-    if (!medidas && !v.embalagem_id && !embalagemNova) f.push(["Medidas ou embalagem", "geral"]);
+    if (!medidas && !v.embalagem_id && !embalagemNova) f.push(["Medidas ou embalagem", "gerais"]);
     return f;
   }
 
@@ -443,14 +443,14 @@ export default function ProdutoForm({
     setErro("");
     if (!str(v.nome).trim()) {
       setErro("Dê um nome ao produto para salvar.");
-      setAba("geral");
+      setAba("gerais");
       return;
     }
     if (!skuAutomatico && !str(v.sku).trim()) {
       setErro(
         "Informe o código (SKU). Para o Radar gerar sozinho, ligue o SKU automático em Configurações → cadastros.",
       );
-      setAba("geral");
+      setAba("gerais");
       return;
     }
     setSalvando(true);
@@ -546,8 +546,181 @@ export default function ProdutoForm({
     }),
   );
 
-  // Preço, estoque, dimensões e embalagem moram dentro de "Dados gerais" (uma página só).
-  const conteudo: Record<Aba | "preco" | "dimensoes", ReactNode> = {
+  // Pedaços do formulário, montados abaixo nas abas (as mesmas da visualização).
+  const fiscalBase = (
+    <div className="rd-form-grid">
+      <Campo rotulo="Origem do produto conforme ICMS" obrigatorio largo>
+        <select id="produto-origem" value={str(v.origem)} onChange={set("origem")}>
+          {ORIGENS.map(([valor, rotulo]) => (
+            <option key={valor} value={valor}>
+              {rotulo}
+            </option>
+          ))}
+        </select>
+      </Campo>
+      <Campo rotulo="NCM - Nomenclatura Comum do Mercosul" obrigatorio dica="Ex.: 6303.12.00">
+        {entrada("ncm", { maxLength: 10, inputMode: "numeric" })}
+      </Campo>
+      <Campo rotulo="Código CEST" dica="Ex.: 10.045.01">
+        {entrada("cest", { maxLength: 9, inputMode: "numeric" })}
+      </Campo>
+    </div>
+  );
+  const descricaoTexto = (
+    <div className="rd-form-grid">
+      <Campo rotulo="Descrição" obrigatorio largo>
+        <textarea
+          id="produto-descricao"
+          rows={6}
+          value={str(v.descricao)}
+          onChange={set("descricao")}
+        />
+      </Campo>
+    </div>
+  );
+  const custoCampo = (
+    <div className="rd-form-grid">
+      {veCusto && (
+        <Campo
+          rotulo="Custo (R$)"
+          dica={tipo === "KIT" ? "Calculado pela soma dos componentes" : undefined}
+        >
+          {tipo === "KIT" ? (
+            <input value={centMoney(custoKit)} disabled />
+          ) : (
+            entrada("custo", { type: "number", step: "0.01", min: "0" })
+          )}
+        </Campo>
+      )}
+    </div>
+  );
+  const outrosCampos = (
+    <div className="rd-form-grid">
+      <Campo rotulo="Unidades por caixa (itens por embalagem)">
+        {entrada("unidades_por_caixa", { type: "number", min: "1", step: "1" })}
+      </Campo>
+      <Campo rotulo="Garantia">
+        <div className="rd-inline">
+          <select
+            id="produto-garantia_tipo"
+            value={str(v.garantia_tipo)}
+            onChange={set("garantia_tipo")}
+          >
+            <option value="">Não informada</option>
+            <option value="VENDEDOR">Do vendedor</option>
+            <option value="FABRICANTE">De fábrica</option>
+            <option value="SEM_GARANTIA">Sem garantia</option>
+          </select>
+          {entrada("garantia_meses", {
+            type: "number",
+            min: "0",
+            step: "1",
+            placeholder: "meses",
+            "aria-label": "Meses de garantia",
+          })}
+        </div>
+      </Campo>
+      <label className="rd-check">
+        <input
+          type="checkbox"
+          checked={v.permite_venda === true}
+          onChange={marca("permite_venda")}
+        />
+        Permitir inclusão nas vendas
+      </label>
+      {produto && (
+        <Campo rotulo="Data de criação">
+          <input value={new Date(str(produto.criado_em)).toLocaleString("pt-BR")} disabled />
+        </Campo>
+      )}
+    </div>
+  );
+  const estoqueBloco = (
+    <>
+      <h3 className="rd-secao">Estoque</h3>
+      <div className="rd-form-grid">
+        {novo && tipo === "SIMPLES" ? (
+          <Campo
+            rotulo="Estoque inicial"
+            dica="Só no cadastro. Depois, o estoque muda pela tela de Estoque ou por compras."
+          >
+            {entrada("saldo", { type: "number", min: "0", step: "1" })}
+          </Campo>
+        ) : (
+          <Campo rotulo="Estoque">
+            <input
+              value={
+                tipo === "KIT"
+                  ? "Calculado pelos componentes"
+                  : tipo === "VARIACAO"
+                    ? "Em cada variação"
+                    : `${Number(produto?.fisico ?? 0) - Number(produto?.reservado ?? 0)} disponíveis (altere na tela de Estoque)`
+              }
+              disabled
+            />
+          </Campo>
+        )}
+        <label className="rd-check">
+          <input
+            type="checkbox"
+            checked={v.controla_estoque === true}
+            onChange={marca("controla_estoque")}
+          />
+          Controlar estoque
+        </label>
+        <Campo rotulo="Estoque mínimo">
+          {entrada("minimo", { type: "number", min: "0", step: "1" })}
+        </Campo>
+        <Campo rotulo="Estoque máximo">
+          {entrada("maximo", { type: "number", min: "0", step: "1" })}
+        </Campo>
+        <label className="rd-check">
+          <input
+            type="checkbox"
+            checked={v.sob_encomenda === true}
+            onChange={marca("sob_encomenda")}
+          />
+          Sob encomenda
+        </label>
+        <Campo rotulo="Dias para preparação">
+          {entrada("dias_preparacao", { type: "number", min: "0", max: "90", step: "1" })}
+        </Campo>
+      </div>
+    </>
+  );
+  const prontoBloco = (
+    <>
+      <section className="rd-card rd-pronto">
+        <h3>Pronto para anunciar?</h3>
+        <p className="rd-note">
+          Requisitos comuns de cada canal. As regras exatas variam por categoria do marketplace.
+        </p>
+        <div className="rd-pronto-grade">
+          {CANAIS.map((canal) => {
+            const itens = porCanal[canal];
+            const faltam = itens.filter(([, ok]) => !ok);
+            return (
+              <div key={canal}>
+                <strong>{canal}</strong>
+                <Badge tone={faltam.length ? "amber" : "green"}>
+                  {faltam.length ? `Faltam ${faltam.length}` : "Completo"}
+                </Badge>
+                <ul>
+                  {itens.map(([rotulo, ok]) => (
+                    <li key={rotulo} className={ok ? "ok" : "falta"}>
+                      {ok ? "✓" : "○"} {rotulo}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    </>
+  );
+
+  const blocos: Record<string, ReactNode> = {
     geral: (
       <div className="rd-form-grid">
         <Campo rotulo="Tipo do produto" largo>
@@ -627,21 +800,6 @@ export default function ProdutoForm({
             ))}
           </select>
         </Campo>
-        <Campo rotulo="Origem do produto conforme ICMS" obrigatorio largo>
-          <select id="produto-origem" value={str(v.origem)} onChange={set("origem")}>
-            {ORIGENS.map(([valor, rotulo]) => (
-              <option key={valor} value={valor}>
-                {rotulo}
-              </option>
-            ))}
-          </select>
-        </Campo>
-        <Campo rotulo="NCM - Nomenclatura Comum do Mercosul" obrigatorio dica="Ex.: 6303.12.00">
-          {entrada("ncm", { maxLength: 10, inputMode: "numeric" })}
-        </Campo>
-        <Campo rotulo="Código CEST" dica="Ex.: 10.045.01">
-          {entrada("cest", { maxLength: 9, inputMode: "numeric" })}
-        </Campo>
         <Campo
           rotulo="Categoria"
           obrigatorio
@@ -660,27 +818,6 @@ export default function ProdutoForm({
           </datalist>
         </Campo>
         <Campo rotulo="Linha de produto">{entrada("linha_produto", { maxLength: 120 })}</Campo>
-        <Campo rotulo="Descrição" obrigatorio largo>
-          <textarea
-            id="produto-descricao"
-            rows={6}
-            value={str(v.descricao)}
-            onChange={set("descricao")}
-          />
-        </Campo>
-        <label className="rd-check">
-          <input
-            type="checkbox"
-            checked={v.permite_venda === true}
-            onChange={marca("permite_venda")}
-          />
-          Permitir inclusão nas vendas
-        </label>
-        {produto && (
-          <Campo rotulo="Data de criação">
-            <input value={new Date(str(produto.criado_em)).toLocaleString("pt-BR")} disabled />
-          </Campo>
-        )}
       </div>
     ),
     preco: (
@@ -692,18 +829,6 @@ export default function ProdutoForm({
           <Campo rotulo="Preço promocional (R$)" dica="Opcional">
             {entrada("preco_promocional", { type: "number", step: "0.01", min: "0" })}
           </Campo>
-          {veCusto && (
-            <Campo
-              rotulo="Custo (R$)"
-              dica={tipo === "KIT" ? "Calculado pela soma dos componentes" : undefined}
-            >
-              {tipo === "KIT" ? (
-                <input value={centMoney(custoKit)} disabled />
-              ) : (
-                entrada("custo", { type: "number", step: "0.01", min: "0" })
-              )}
-            </Campo>
-          )}
           {veCusto && (
             <Campo rotulo="Markup" dica="Preço de venda ÷ custo">
               <div className="rd-inline">
@@ -733,79 +858,6 @@ export default function ProdutoForm({
               </div>
             </Campo>
           )}
-          <Campo rotulo="Unidades por caixa (itens por embalagem)">
-            {entrada("unidades_por_caixa", { type: "number", min: "1", step: "1" })}
-          </Campo>
-          <Campo rotulo="Garantia">
-            <div className="rd-inline">
-              <select
-                id="produto-garantia_tipo"
-                value={str(v.garantia_tipo)}
-                onChange={set("garantia_tipo")}
-              >
-                <option value="">Não informada</option>
-                <option value="VENDEDOR">Do vendedor</option>
-                <option value="FABRICANTE">De fábrica</option>
-                <option value="SEM_GARANTIA">Sem garantia</option>
-              </select>
-              {entrada("garantia_meses", {
-                type: "number",
-                min: "0",
-                step: "1",
-                placeholder: "meses",
-                "aria-label": "Meses de garantia",
-              })}
-            </div>
-          </Campo>
-        </div>
-        <h3 className="rd-secao">Estoque</h3>
-        <div className="rd-form-grid">
-          {novo && tipo === "SIMPLES" ? (
-            <Campo
-              rotulo="Estoque inicial"
-              dica="Só no cadastro. Depois, o estoque muda pela tela de Estoque ou por compras."
-            >
-              {entrada("saldo", { type: "number", min: "0", step: "1" })}
-            </Campo>
-          ) : (
-            <Campo rotulo="Estoque">
-              <input
-                value={
-                  tipo === "KIT"
-                    ? "Calculado pelos componentes"
-                    : tipo === "VARIACAO"
-                      ? "Em cada variação"
-                      : `${Number(produto?.fisico ?? 0) - Number(produto?.reservado ?? 0)} disponíveis (altere na tela de Estoque)`
-                }
-                disabled
-              />
-            </Campo>
-          )}
-          <label className="rd-check">
-            <input
-              type="checkbox"
-              checked={v.controla_estoque === true}
-              onChange={marca("controla_estoque")}
-            />
-            Controlar estoque
-          </label>
-          <Campo rotulo="Estoque mínimo">
-            {entrada("minimo", { type: "number", min: "0", step: "1" })}
-          </Campo>
-          <Campo rotulo="Estoque máximo">
-            {entrada("maximo", { type: "number", min: "0", step: "1" })}
-          </Campo>
-          <label className="rd-check">
-            <input
-              type="checkbox"
-              checked={v.sob_encomenda === true}
-              onChange={marca("sob_encomenda")}
-            />
-            Sob encomenda
-          </label>
-          <Campo rotulo="Dias para preparação">
-            {entrada("dias_preparacao", { type: "number", min: "0", max: "90", step: "1" })}
-          </Campo>
         </div>
       </>
     ),
@@ -1367,33 +1419,6 @@ export default function ProdutoForm({
     ),
     seo: (
       <>
-        <section className="rd-card rd-pronto">
-          <h3>Pronto para anunciar?</h3>
-          <p className="rd-note">
-            Requisitos comuns de cada canal. As regras exatas variam por categoria do marketplace.
-          </p>
-          <div className="rd-pronto-grade">
-            {CANAIS.map((canal) => {
-              const itens = porCanal[canal];
-              const faltam = itens.filter(([, ok]) => !ok);
-              return (
-                <div key={canal}>
-                  <strong>{canal}</strong>
-                  <Badge tone={faltam.length ? "amber" : "green"}>
-                    {faltam.length ? `Faltam ${faltam.length}` : "Completo"}
-                  </Badge>
-                  <ul>
-                    {itens.map(([rotulo, ok]) => (
-                      <li key={rotulo} className={ok ? "ok" : "falta"}>
-                        {ok ? "✓" : "○"} {rotulo}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-        </section>
         <h3 className="rd-secao">SEO e classificação</h3>
         <div className="rd-form-grid">
           <Campo rotulo="Keywords" dica="Palavras separadas por vírgula" largo>
@@ -1507,13 +1532,65 @@ export default function ProdutoForm({
       <p className="rd-note">Salve o produto para começar o histórico.</p>
     ),
   };
+
+  const conteudo: Record<Aba, ReactNode> = {
+    gerais: (
+      <>
+        {blocos.geral}
+        {blocos.dimensoes}
+        {estoqueBloco}
+      </>
+    ),
+    descricao: (
+      <>
+        {descricaoTexto}
+        <h3 className="rd-secao">Imagens</h3>
+        {blocos.imagens}
+        {blocos.seo}
+      </>
+    ),
+    fiscal: (
+      <>
+        {fiscalBase}
+        <h3 className="rd-secao">Informações tributárias adicionais</h3>
+        {blocos.fiscal}
+      </>
+    ),
+    anuncios: (
+      <>
+        {prontoBloco}
+        {blocos.anuncios}
+      </>
+    ),
+    variacoes: blocos.composicao,
+    precos: blocos.preco,
+    custos: (
+      <>
+        {custoCampo}
+        <p className="rd-dica">
+          O custo médio muda sozinho a cada compra recebida (Suprimentos → Compras).
+        </p>
+      </>
+    ),
+    outros: (
+      <>
+        {outrosCampos}
+        <h3 className="rd-secao">Fornecedores</h3>
+        {blocos.fornecedores}
+        <h3 className="rd-secao">Observações</h3>
+        {blocos.observacoes}
+        {id && <h3 className="rd-secao">Histórico de alterações</h3>}
+        {blocos.historico}
+      </>
+    ),
+  };
   const pendentes = faltando();
 
   async function clonar() {
     if (!id || !clonando) return;
     const r = await executar({ op: "produto_clonar", id, imagens: clonando.imagens });
     setClonando(null);
-    if (r) aoSalvar(str(r.id), "geral");
+    if (r) aoSalvar(str(r.id), "gerais");
   }
 
   return (
@@ -1592,35 +1669,25 @@ export default function ProdutoForm({
         </div>
       )}
       <div className="rd-tabs" role="tablist" aria-label="Seções do cadastro do produto">
-        {ABAS.filter(([chave]) => chave !== "composicao" || tipo !== "SIMPLES").map(
-          ([chave, rotulo]) => (
-            <button
-              key={chave}
-              role="tab"
-              aria-selected={aba === chave}
-              className={aba === chave ? "active" : ""}
-              onClick={() => setAba(chave)}
-            >
-              {rotulo}
-              {chave === "anuncios" &&
-                anunciosDoProduto.length > 0 &&
-                ` (${anunciosDoProduto.length})`}
-            </button>
-          ),
-        )}
+        {ABAS.filter(
+          ([chave]) =>
+            (chave !== "variacoes" || tipo !== "SIMPLES") && (chave !== "custos" || veCusto),
+        ).map(([chave, rotulo]) => (
+          <button
+            key={chave}
+            role="tab"
+            aria-selected={aba === chave}
+            className={aba === chave ? "active" : ""}
+            onClick={() => setAba(chave)}
+          >
+            {chave === "variacoes" ? (tipo === "KIT" ? "Kit" : "Variações") : rotulo}
+            {chave === "anuncios" &&
+              anunciosDoProduto.length > 0 &&
+              ` (${anunciosDoProduto.length})`}
+          </button>
+        ))}
       </div>
-      <section className="rd-card">
-        {aba === "geral" ? (
-          <>
-            {conteudo.geral}
-            <h3 className="rd-secao">Preço e estoque</h3>
-            {conteudo.preco}
-            {conteudo.dimensoes}
-          </>
-        ) : (
-          conteudo[aba]
-        )}
-      </section>
+      <section className="rd-card">{conteudo[aba]}</section>
       <div className="rd-actions rd-produto-rodape">
         <button type="button" onClick={voltar}>
           Voltar

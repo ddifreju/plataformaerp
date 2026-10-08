@@ -185,10 +185,18 @@ restaurar, clonar e aba Histórico. Ficam na fila:
         na NF-e.
 - [x] **Quem apaga produto de vez e muda a configuração de SKU** (respondido
       pela Jéssica em 07/10/2026): de fábrica, dono e gestor (como já está).
+- [ ] **Devolução (quando chegarmos em Vendas)** — ideia da Jéssica em
+      08/10/2026: botão "Devolver produto" gera um pedido de devolução, ligado
+      ao pedido, à nota fiscal e ao produto; ali a pessoa define tudo e, ao
+      salvar, escolhe o que estornar (hoje a devolução estorna receita,
+      desconto e custo; comissão, frete, imposto e embalagem ficam como
+      prejuízo).
 - [ ] **Permissões liberadas pelo gestor.** A Jéssica quer que o dono e o
       gestor possam liberar ações para outras pessoas (ex.: um
       "administrativo" poder apagar produto de vez). Hoje a permissão é fixa
-      por cargo no código. Proposta enviada a ela; aguardando o escopo.
+      por cargo no código. Decidido em 08/10/2026: o gestor **não** pode
+      liberar o que ele mesmo não tem. Falta ela dizer quando fazer e se cria
+      o cargo "Administrativo".
 - [x] **Anunciar por loja** (07/10/2026, decisão 0036): lojas do cliente em
       Integrações, passo a passo com conferência e coluna "Cadastro" com o que
       falta. Marketplaces: Mercado Livre, Shopee, TikTok Shop e AliExpress.

@@ -9,23 +9,8 @@ import { useState, type ReactNode } from "react";
 import { NO_RADAR, verNaCentral } from "./anuncios";
 import { SIGLA } from "./canais";
 import { faltasDoCadastro } from "./pendencias";
-import { ORIGENS, UNIDADES, type Aba as AbaForm } from "./produto";
+import { ORIGENS, UNIDADES, type Aba } from "./produto";
 import { Badge, Empty, cents, centMoney, date, money, str, type Row } from "./ui";
-
-type Aba =
-  "gerais" | "descricao" | "fiscal" | "anuncios" | "variacoes" | "precos" | "custos" | "outros";
-
-// Onde cada aba da visualização é editada no formulário.
-const EDITAR_EM: Record<Aba, AbaForm> = {
-  gerais: "geral",
-  descricao: "geral",
-  fiscal: "fiscal",
-  anuncios: "anuncios",
-  variacoes: "composicao",
-  precos: "geral",
-  custos: "geral",
-  outros: "fornecedores",
-};
 
 const MOTIVOS: Record<string, string> = {
   PRODUTO_ARTESANAL: "Produto artesanal ou feito sob medida",
@@ -64,7 +49,7 @@ type Props = {
   podeEditar: boolean;
   podeAnunciar: boolean;
   disponivel: (p: Row) => number;
-  editar: (aba: AbaForm) => void;
+  editar: (aba: Aba) => void;
   anunciar: () => void;
   clonar?: () => void;
   paraLixeira?: () => void;
@@ -226,14 +211,6 @@ export default function ProdutoVer(props: Props) {
             <Info rotulo="Linha de produto">{texto(p.linha_produto)}</Info>
           </div>
         </Secao>
-        <Secao>
-          <div className="rd-ver-grade">
-            <Info rotulo="Preço de venda">{money(p.preco)}</Info>
-            <Info rotulo="Preço promocional">
-              {vazio(p.preco_promocional) ? "—" : money(p.preco_promocional)}
-            </Info>
-          </div>
-        </Secao>
         <Secao titulo="Dimensões e peso">
           <div className="rd-ver-medidas">
             <div className="rd-ver-grade">
@@ -284,7 +261,7 @@ export default function ProdutoVer(props: Props) {
             ))}
             {!fotos.length && <span className="rd-dica">Sem imagens.</span>}
             {props.podeEditar && (
-              <button onClick={() => props.editar("imagens")}>Gerenciar imagens</button>
+              <button onClick={() => props.editar("descricao")}>Gerenciar imagens</button>
             )}
           </div>
         </Secao>
@@ -721,7 +698,7 @@ export default function ProdutoVer(props: Props) {
           <p>{texto(p.observacoes_internas)}</p>
         </Secao>
         {props.podeEditar && (
-          <button className="text" onClick={() => props.editar("historico")}>
+          <button className="text" onClick={() => props.editar("outros")}>
             Ver histórico de alterações →
           </button>
         )}
@@ -783,7 +760,7 @@ export default function ProdutoVer(props: Props) {
             <button onClick={props.anunciar}>⇪ Enviar para o e-commerce</button>
           )}
           {props.podeEditar && (
-            <button className="primary" onClick={() => props.editar(EDITAR_EM[aba])}>
+            <button className="primary" onClick={() => props.editar(aba)}>
               ✎ Editar
             </button>
           )}
@@ -807,7 +784,7 @@ export default function ProdutoVer(props: Props) {
                   {item("↗ Ver últimas vendas", () => setAba("outros"))}
                   <li className="rd-menu-sep" />
                   {props.clonar && item("⧉ Clonar produto", props.clonar)}
-                  {props.podeEditar && item("# Editar tags", () => props.editar("seo"))}
+                  {props.podeEditar && item("# Editar tags", () => props.editar("descricao"))}
                   {tipo === "VARIACAO" && emBreve("⇄ Tornar produto simples", "em breve")}
                   {props.paraLixeira && item("🗑 Mover para a lixeira", props.paraLixeira)}
                 </ul>
