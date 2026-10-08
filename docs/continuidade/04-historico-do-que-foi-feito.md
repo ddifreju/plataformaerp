@@ -104,6 +104,13 @@ fases 0 a 3 (agosto), descritas em `docs/ESTADO.md`.
     - clonar;
     - aba Histórico.
 
+## Sessão local (a partir de 07/10/2026)
+- [#33](https://github.com/ddifreju/plataformaerp/pull/33): anunciar por loja
+  (lojas do cliente em Integrações, passo a passo com conferência das regras
+  oficiais, coluna Cadastro e Anúncios, aba Anúncios no produto). V033,
+  decisão 0036. Marketplaces: Mercado Livre, Shopee, TikTok Shop, AliExpress.
+- #34: dados de exemplo na empresa de demonstração (decisão 0037).
+
 ## Decisões de negócio tomadas pela Jéssica nesta sessão
 - Nada de loja física (sem PDV e sem NFC-e).
 - Grupo de empresas é um diferencial; vale começar pela arquitetura

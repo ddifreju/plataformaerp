@@ -3391,3 +3391,14 @@ ul.rd-menu-linha li button:disabled {
   color: #1d4ed8;
   text-decoration: underline;
 }
+/* Dados de exemplo (Painel) */
+.rd-exemplo-progresso {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+}
+.rd-exemplo-progresso progress {
+  width: 100%;
+  height: 10px;
+  accent-color: #1d4ed8;
+}

@@ -37,6 +37,7 @@ import Pendencias, { faltasDoCadastro } from "./pendencias";
 import Anuncios from "./anuncios";
 import Anunciar from "./anunciar";
 import Lojas from "./lojas";
+import DadosExemplo, { type EstadoExemplo } from "./exemplo";
 import Categorias from "./categorias";
 import Embalagens from "./embalagens";
 
@@ -52,6 +53,7 @@ type Data = {
   produtos: Row[];
   anuncios: Row[];
   lojas?: Row[];
+  exemplo?: EstadoExemplo;
   pedidos: Row[];
   movimentos: Row[];
   lancamentos: Row[];
@@ -404,39 +406,6 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       ],
     });
   }
-  async function seed() {
-    setBusy(true);
-    try {
-      for (const [sku, nome, custo, preco, saldo] of [
-        ["PERS-01", "Persiana blackout areia", "42.00", "89.90", 32],
-        ["PERS-02", "Persiana romana cinza", "68.00", "149.90", 4],
-        ["CORT-01", "Cortina linho natural", "85.00", "189.90", 18],
-        ["TRIL-01", "Trilho duplo 2 metros", "22.00", "59.90", 48],
-      ])
-        await call(
-          "/comandos",
-          {
-            op: "produto",
-            sku,
-            nome,
-            custo,
-            preco,
-            saldo,
-            marca: "Casa Clara",
-            descricao: "Produto fictício para explorar o Radar.",
-          },
-          crypto.randomUUID(),
-        );
-      await refresh();
-      setNotice(
-        "Catálogo de exemplo criado. Agora você pode preparar anúncios e criar pedidos locais.",
-      );
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
   if (loading)
     return (
       <div className="rd-loading">
@@ -786,22 +755,19 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   </div>
                 </section>
               </div>
-              {!products.length && (
-                <section className="rd-card rd-start">
-                  <div>
-                    <h2>Quer explorar com um exemplo?</h2>
-                    <p>
-                      Crie quatro produtos fictícios da loja Casa Clara. Nenhuma venda ou publicação
-                      externa será feita.
-                    </p>
-                  </div>
-                  {can("DONO", "GESTOR") && (
-                    <button disabled={busy} className="primary" onClick={seed}>
-                      Carregar catálogo de exemplo
-                    </button>
-                  )}
-                </section>
-              )}
+              <DadosExemplo
+                estado={data.exemplo}
+                podeCarregar={can("DONO")}
+                passo={(etapa) =>
+                  call("/comandos", { op: "dados_exemplo", etapa }, crypto.randomUUID())
+                }
+                aoConcluir={async () => {
+                  await refresh();
+                  setNotice(
+                    "Dados de exemplo carregados. Explore Produtos, Anúncios, Pedidos, Estoque, Financeiro e Relatórios.",
+                  );
+                }}
+              />
               <section className="rd-card">
                 <div className="rd-card-head">
                   <h2>Canais da operação</h2>
