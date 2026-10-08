@@ -401,6 +401,229 @@ class RadarAnunciosTest {
 
     // ---- apoio -----------------------------------------------------------------------------
 
+    @Test
+    void variasLojasNoMesmoMarketplaceComNomesDiferentes() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID x = novaLoja(empresa, "Mercado Livre", "ML Loja X");
+        novaLoja(empresa, "Mercado Livre", "ML Loja Y");
+        var repetida =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> novaLoja(empresa, "Shopee", "ml loja x"));
+        assertTrue(repetida.getReason().contains("Já existe"));
+        assertThrows(
+                ResponseStatusException.class, () -> novaLoja(empresa, "SHEIN", "Loja SHEIN"));
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                empresa,
+                                () ->
+                                        anuncios.executar(
+                                                "loja_salvar",
+                                                json("{\"marketplace\":\"Shopee\",\"nome\":\"S\"}"),
+                                                "MARKETING")));
+        naEmpresa(
+                empresa,
+                () ->
+                        anuncios.executar(
+                                "loja_remover", json("{\"id\":\"" + x + "\"}"), "GESTOR"));
+        // Removida, o nome fica livre de novo.
+        novaLoja(empresa, "Mercado Livre", "ML Loja X");
+        assertEquals(2, naEmpresa(empresa, () -> anuncios.lojas()).size());
+    }
+
+    @Test
+    void lojaDeOutraEmpresaNaoApareceNemPodeSerUsada() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID outra = BancoRadarDeTeste.novaEmpresa();
+        UUID lojaDaOutra = novaLoja(outra, "Shopee", "Shopee da outra");
+        assertTrue(naEmpresa(empresa, () -> anuncios.lojas()).isEmpty());
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                empresa,
+                                () ->
+                                        anuncios.executar(
+                                                "loja_salvar",
+                                                json(
+                                                        "{\"id\":\""
+                                                                + lojaDaOutra
+                                                                + "\",\"nome\":\"Minha\"}"),
+                                                "DONO")));
+        UUID produto = produtoCompleto(empresa, "Shopee");
+        assertThrows(
+                ResponseStatusException.class,
+                () -> anunciar(empresa, produto, lojaDaOutra, "Cortina blackout azul", "5"));
+    }
+
+    @Test
+    void anunciarCriaAnuncioProntoNaLojaComEstoqueLivre() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID loja = novaLoja(empresa, "Mercado Livre", "ML Loja X");
+        UUID produto = produtoCompleto(empresa, "Mercado Livre");
+        // Estoque físico do produto é zero: a quantidade anunciada é escolha da lojista.
+        var r = anunciar(empresa, produto, loja, "Cortina blackout azul", "50000");
+        assertEquals(1, r.get("criados"));
+        var a =
+                naEmpresa(
+                        empresa,
+                        () ->
+                                db.queryForMap(
+                                        "select * from radar_anuncio where produto_id=?",
+                                        produto));
+        assertEquals("PRONTO", a.get("estado"));
+        assertEquals("Mercado Livre", a.get("canal"));
+        assertEquals(loja, a.get("loja_id"));
+        assertEquals(50000, a.get("estoque"));
+        assertEquals("NAO_PUBLICADO", a.get("situacao_ecommerce"));
+        var repetido =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> anunciar(empresa, produto, loja, "Outro título", "1"));
+        assertTrue(repetido.getReason().contains("já tem anúncio"));
+    }
+
+    @Test
+    void anunciarConfereTituloCadastroImagemECategoria() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID ml = novaLoja(empresa, "Mercado Livre", "ML");
+        UUID tiktok = novaLoja(empresa, "TikTok Shop", "TikTok");
+        UUID produto = produtoCompleto(empresa, "Mercado Livre");
+
+        var longo =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> anunciar(empresa, produto, ml, "x".repeat(61), "1"));
+        assertTrue(longo.getReason().contains("de 1 a 60 letras"));
+        // Categoria ligada só ao Mercado Livre: no TikTok Shop falta o vínculo.
+        var semVinculo =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                anunciar(
+                                        empresa,
+                                        produto,
+                                        tiktok,
+                                        "Cortina blackout azul para quarto",
+                                        "1"));
+        assertTrue(semVinculo.getReason().contains("ligue a categoria"));
+
+        BancoRadarDeTeste.executarComoDono(
+                "delete from radar_produto_imagem where produto_id=?", produto);
+        var semImagem =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> anunciar(empresa, produto, ml, "Cortina", "1"));
+        assertTrue(semImagem.getReason().contains("imagem"));
+
+        BancoRadarDeTeste.executarComoDono("update radar_produto set ncm='' where id=?", produto);
+        var incompleto =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> anunciar(empresa, produto, ml, "Cortina", "1"));
+        assertTrue(incompleto.getReason().contains("NCM"));
+    }
+
+    @Test
+    void anunciarRespeitaPrecoEQuantidadeDeCadaMarketplace() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID tiktok = novaLoja(empresa, "TikTok Shop", "TikTok");
+        UUID produto = produtoCompleto(empresa, "TikTok Shop");
+        String titulo = "Cortina blackout azul para quarto";
+        var curto =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> anunciar(empresa, produto, tiktok, "Cortina azul", "1"));
+        assertTrue(curto.getReason().contains("de 25 a 200 letras"));
+        var demais =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> anunciar(empresa, produto, tiktok, titulo, "100000"));
+        assertTrue(demais.getReason().contains("no máximo 99999"));
+        assertEquals(1, anunciar(empresa, produto, tiktok, titulo, "99999").get("criados"));
+
+        UUID ml = novaLoja(empresa, "Mercado Livre", "ML");
+        BancoRadarDeTeste.executarComoDono(
+                "insert into radar_categoria_canal(tenant_id,categoria_id,canal,codigo_externo,"
+                        + "nome_externo) select tenant_id,categoria_id,'Mercado Livre','M','M'"
+                        + " from radar_categoria_canal where tenant_id=?",
+                empresa);
+        var zero =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () -> anunciar(empresa, produto, ml, "Cortina", "0"));
+        assertTrue(zero.getReason().contains("pelo menos 1"));
+    }
+
+    private static UUID novaLoja(UUID empresa, String marketplace, String nome) {
+        var r =
+                naEmpresa(
+                        empresa,
+                        () ->
+                                anuncios.executar(
+                                        "loja_salvar",
+                                        json(
+                                                "{\"marketplace\":\""
+                                                        + marketplace
+                                                        + "\",\"nome\":\""
+                                                        + nome
+                                                        + "\"}"),
+                                        "DONO"));
+        return (UUID) r.get("id");
+    }
+
+    private static Map<String, Object> anunciar(
+            UUID empresa, UUID produto, UUID loja, String titulo, String estoque) {
+        String corpo =
+                "{\"itens\":[{\"produto_id\":\""
+                        + produto
+                        + "\",\"loja_id\":\""
+                        + loja
+                        + "\",\"titulo\":\""
+                        + titulo
+                        + "\",\"preco\":\"89.90\",\"estoque\":\""
+                        + estoque
+                        + "\"}]}";
+        return naEmpresa(empresa, () -> anuncios.executar("anunciar", json(corpo), "MARKETING"));
+    }
+
+    /** Produto sem pendência, com uma imagem e categoria ligada ao marketplace informado. */
+    private static UUID produtoCompleto(UUID empresa, String marketplace) throws SQLException {
+        UUID produto =
+                BancoRadarDeTeste.novoProduto(
+                        empresa, "CORT-" + UUID.randomUUID().toString().substring(0, 6), "30", "90");
+        UUID categoria = UUID.randomUUID();
+        BancoRadarDeTeste.executarComoDono(
+                "insert into radar_categoria(id,tenant_id,nome) values(?,?,'Cortinas')",
+                categoria,
+                empresa);
+        BancoRadarDeTeste.executarComoDono(
+                "insert into radar_categoria_canal(tenant_id,categoria_id,canal,codigo_externo,"
+                        + "nome_externo) values(?,?,?,'C1','Casa > Cortinas')",
+                empresa,
+                categoria,
+                marketplace);
+        BancoRadarDeTeste.executarComoDono(
+                "update radar_produto set ncm='63039200', origem=0, gtin='4006381333931',"
+                        + " marca='Lar', categoria_id=?, descricao=?,"
+                        + " peso_bruto_kg=1.2, largura_cm=10, altura_cm=10, comprimento_cm=30"
+                        + " where id=?",
+                categoria,
+                // 30 palavras: o mínimo do TikTok Shop.
+                "Cortina blackout azul " + "que bloqueia a luz ".repeat(7) + "e dura muito tempo",
+                produto);
+        BancoRadarDeTeste.executarComoDono(
+                "insert into radar_produto_imagem(id,tenant_id,produto_id,tipo_conteudo,dados)"
+                        + " values(?,?,?,'image/png',?)",
+                UUID.randomUUID(),
+                empresa,
+                produto,
+                new byte[] {1, 2, 3});
+        return produto;
+    }
+
     private static Map<String, Object> importar(UUID empresa, String itens) {
         return naEmpresa(empresa, () -> anuncios.importar("Mercado Livre", json(itens)));
     }

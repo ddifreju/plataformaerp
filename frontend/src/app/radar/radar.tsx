@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable react/jsx-key -- Table wraps each supplied cell in a keyed td; these arrays are table data, not rendered sibling lists. */
 
+import { CANAIS as canais, SIGLA } from "./canais";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import "./radar.css";
 import {
@@ -32,8 +33,10 @@ import FiltrosProdutos, {
   filtroInicial,
   type FiltroProdutos,
 } from "./produtos-filtros";
-import Pendencias from "./pendencias";
+import Pendencias, { faltasDoCadastro } from "./pendencias";
 import Anuncios from "./anuncios";
+import Anunciar from "./anunciar";
+import Lojas from "./lojas";
 import Categorias from "./categorias";
 import Embalagens from "./embalagens";
 
@@ -48,6 +51,7 @@ type Data = {
   divergencias: Row[];
   produtos: Row[];
   anuncios: Row[];
+  lojas?: Row[];
   pedidos: Row[];
   movimentos: Row[];
   lancamentos: Row[];
@@ -69,7 +73,6 @@ type Data = {
   produtoFornecedores: Row[];
   imagens: Row[];
 };
-const canais = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
 // "Loja da Ana" vira "LA"; um nome só vira as duas primeiras letras.
 function iniciaisEmpresa(nome: string) {
   const partes = nome.split(/\s+/).filter((p) => p.length > 2 || /^[A-Z0-9]/.test(p));
@@ -227,6 +230,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     // null até a lista de produtos abrir: aí lê o último filtro deste navegador.
     [filtroProdutosSalvo, setFiltroProdutos] = useState<FiltroProdutos | null>(null),
     [verLixeira, setVerLixeira] = useState(false),
+    // Produtos abertos no passo a passo "Anunciar".
+    [anunciando, setAnunciando] = useState<string[] | null>(null),
     [filtroPedidosAtual, setFiltroPedidos] = useState<Filtro | null>(null);
   const refresh = useCallback(async () => {
     const d = await call("");
@@ -805,19 +810,26 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   </button>
                 </div>
                 <div className="rd-channels">
-                  {canais.map((c, i) => (
-                    <div key={c}>
-                      <span className={`rd-channel c${i}`}>
-                        {c
-                          .split(" ")
-                          .map((s) => s[0])
-                          .join("")}
-                      </span>
-                      <strong>{c}</strong>
-                      <small>{listings.filter((a) => a.canal === c).length} anúncios locais</small>
-                      <Badge>Não conectado</Badge>
+                  {(data.lojas ?? []).map((l, i) => (
+                    <div key={str(l.id)}>
+                      <span className={`rd-channel c${i % 4}`}>{SIGLA[str(l.marketplace)]}</span>
+                      <strong>{str(l.nome)}</strong>
+                      <small>
+                        {str(l.marketplace)} · {listings.filter((a) => a.loja_id === l.id).length}{" "}
+                        anúncios
+                      </small>
+                      {l.conectada_em ? (
+                        <Badge tone="green">Conectada</Badge>
+                      ) : (
+                        <Badge tone="amber">Aguardando conexão</Badge>
+                      )}
                     </div>
                   ))}
+                  {!(data.lojas ?? []).length && (
+                    <p className="rd-dica">
+                      Nenhuma loja cadastrada. Cadastre suas contas dos marketplaces em Integrações.
+                    </p>
+                  )}
                 </div>
               </section>
             </>
@@ -840,6 +852,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               }}
               veCusto={data.financeiroPermitido}
               podeAnunciar={can("DONO", "GESTOR", "MARKETING")}
+              anunciar={(id) => setAnunciando([id])}
               executar={commandResult}
               recarregar={refresh}
               abrirModal={setModal}
@@ -886,6 +899,9 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               />
               <ProdutosLote
                 ativo={can("DONO", "GESTOR")}
+                anunciar={
+                  can("DONO", "GESTOR", "MARKETING") ? (ids) => setAnunciando(ids) : undefined
+                }
                 produtos={cadastrados}
                 clonar={
                   can("DONO", "GESTOR")
@@ -951,9 +967,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                           {money(p.preco)}
                         </>,
                         p.controla_estoque === false ? "Sem controle" : disponivel(p),
-                        <Badge tone={p.ncm ? "green" : "amber"}>
-                          {p.ncm ? "NCM preenchido" : "Falta NCM"}
-                        </Badge>,
+                        <Cadastro produto={p} variacoes={products} />,
                         <div className="rd-row-actions">
                           <button
                             onClick={() =>
@@ -963,11 +977,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                             {can("DONO", "GESTOR") ? "Editar" : "Ver"}
                           </button>
                           {can("DONO", "GESTOR", "MARKETING") && (
-                            <button
-                              disabled={busy}
-                              onClick={() => command({ op: "anuncios_lote", produto_id: p.id })}
-                            >
-                              Preparar 4 canais
+                            <button disabled={busy} onClick={() => setAnunciando([str(p.id)])}>
+                              Anunciar
                             </button>
                           )}
                         </div>,
@@ -992,6 +1003,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               categorias={data.categorias}
               categoriaCanais={data.categoriaCanais ?? []}
               imagens={data.imagens}
+              lojas={data.lojas ?? []}
               abrirProduto={(id) => {
                 setPage("produtos");
                 setEditando({ id, aba: "geral", versao: Date.now() });
@@ -1900,9 +1912,14 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           )}
           {page === "integracoes" && (
             <>
+              <Lojas
+                lojas={data.lojas ?? []}
+                anuncios={listings}
+                podeEditar={can("DONO", "GESTOR")}
+                executar={command}
+              />
               <div className="rd-integration-grid">
                 {[
-                  ...canais,
                   "Emissor de NF-e",
                   "WhatsApp",
                   "Instagram",
@@ -1914,11 +1931,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                     <span className={`rd-channel c${i % 4}`}>{c.slice(0, 2)}</span>
                     <h2>{c}</h2>
                     <Badge>Não conectado</Badge>
-                    <p>
-                      {i < 4
-                        ? "App, autorização do vendedor e homologação por capacidade são necessários."
-                        : "Configuração de provedor e credenciais ainda não realizadas."}
-                    </p>
+                    <p>Configuração de provedor e credenciais ainda não realizadas.</p>
                     <button
                       onClick={() =>
                         setNotice(
@@ -1982,6 +1995,33 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           </footer>
         </main>
       </div>
+      {anunciando && data && (
+        <Anunciar
+          ids={anunciando}
+          produtos={products}
+          lojas={data.lojas ?? []}
+          anuncios={listings}
+          categorias={data.categorias}
+          categoriaCanais={data.categoriaCanais ?? []}
+          imagens={data.imagens}
+          fornecedores={data.fornecedores ?? []}
+          produtoFornecedores={data.produtoFornecedores}
+          disponivel={disponivel}
+          podeCadastrarLojas={can("DONO", "GESTOR")}
+          erro={error}
+          busy={busy}
+          executar={command}
+          recarregar={refresh}
+          irParaLojas={() => {
+            setAnunciando(null);
+            go("integracoes");
+          }}
+          fechar={() => {
+            setAnunciando(null);
+            setError("");
+          }}
+        />
+      )}
       {modal && (
         <div className="rd-modal-backdrop" onClick={() => !busy && setModal(null)}>
           <section
@@ -2895,5 +2935,32 @@ function Lixeira({
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Coluna "Cadastro" da lista de produtos: um ✓ quando está completo; quando não, o que falta (a
+ * mesma regra que trava o anúncio e a nota). No produto com variações, conta também as variações.
+ */
+function Cadastro({ produto, variacoes }: { produto: Row; variacoes: Row[] }) {
+  const faltas = faltasDoCadastro(produto);
+  const filhasIncompletas = variacoes.filter(
+    (v) => v.pai_id === produto.id && !v.excluido_em && faltasDoCadastro(v).length,
+  ).length;
+  if (!faltas.length && !filhasIncompletas)
+    return (
+      <span className="rd-cadastro-ok" title="Cadastro completo" aria-label="Cadastro completo">
+        ✓
+      </span>
+    );
+  const lista = [
+    ...faltas,
+    ...(filhasIncompletas ? [`${filhasIncompletas} variação(ões) incompleta(s)`] : []),
+  ];
+  return (
+    <span className="rd-cadastro-falta" title={`Falta: ${lista.join(", ")}`}>
+      Falta: {lista.slice(0, 3).join(", ")}
+      {lista.length > 3 && ` e mais ${lista.length - 3}`}
+    </span>
   );
 }

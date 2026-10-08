@@ -9,6 +9,7 @@
 import { useState, type ReactNode } from "react";
 import { Badge, Empty, Table, money, str, type ModalSpec, type Row } from "./ui";
 import { vinculoDe } from "./categorias";
+import { CANAIS, CENTRAL, SIGLA, canaisCom } from "./canais";
 import FiltrosAnuncios, {
   ANUNCIOS_VAZIO,
   filtrarAnuncios,
@@ -26,23 +27,10 @@ type Props = {
   categorias: Row[];
   categoriaCanais: Row[];
   imagens: Row[];
+  /** Lojas da empresa: o anúncio mostra em qual delas vai subir. */
+  lojas: Row[];
 };
 
-const CANAIS = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
-
-// Central do vendedor de cada marketplace. A lojista entra com o próprio login.
-export const CENTRAL: Record<string, string> = {
-  "Mercado Livre": "https://www.mercadolivre.com.br/anuncios",
-  Shopee: "https://seller.shopee.com.br",
-  "TikTok Shop": "https://seller-br.tiktok.com",
-  SHEIN: "https://sellerhub.shein.com",
-};
-const SIGLA: Record<string, string> = {
-  "Mercado Livre": "ML",
-  Shopee: "SP",
-  "TikTok Shop": "TT",
-  SHEIN: "SH",
-};
 const NO_MARKETPLACE: Record<string, [string, string]> = {
   NAO_PUBLICADO: ["Não publicado", "gray"],
   ATIVO: ["Ativo", "green"],
@@ -52,6 +40,7 @@ const NO_MARKETPLACE: Record<string, [string, string]> = {
 };
 const NO_RADAR: Record<string, string> = {
   RASCUNHO: "Rascunho",
+  PRONTO: "Pronto para publicar",
   SIMULADO: "Simulado",
   PAUSADO: "Pausado",
 };
@@ -75,7 +64,9 @@ type AcaoLote = "relacionar" | "precos" | "excluir" | "criar";
  */
 export function verNaCentral(a: Row): string {
   const codigo = str(a.id_externo);
-  window.open(CENTRAL[str(a.canal)], "_blank", "noopener,noreferrer");
+  const central = CENTRAL[str(a.canal)];
+  if (!central) return "O endereço da central do vendedor deste marketplace entra com a conexão.";
+  window.open(central, "_blank", "noopener,noreferrer");
   if (!codigo) return "Este anúncio foi criado no Radar e ainda não tem código no marketplace.";
   navigator.clipboard?.writeText(codigo).catch(() => {});
   return `Código ${codigo} copiado: cole na busca da central do vendedor.`;
@@ -125,7 +116,7 @@ export default function Anuncios(props: Props) {
       </>
     );
 
-  const lojas = CANAIS.filter((c) => props.anuncios.some((a) => a.canal === c));
+  const lojas = canaisCom(props.anuncios).filter((c) => props.anuncios.some((a) => a.canal === c));
   return (
     <>
       <div className="rd-toolbar">
@@ -168,9 +159,11 @@ export default function Anuncios(props: Props) {
                   <span className="rd-loja-alerta">⚠ {problemas} precisam de atenção</span>
                 )}
                 <footer>
-                  <a href={CENTRAL[c]} target="_blank" rel="noopener noreferrer">
-                    Abrir central do vendedor ↗
-                  </a>
+                  {CENTRAL[c] && (
+                    <a href={CENTRAL[c]} target="_blank" rel="noopener noreferrer">
+                      Abrir central do vendedor ↗
+                    </a>
+                  )}
                   <button onClick={() => setLoja(c)}>Gerenciar</button>
                 </footer>
               </article>
@@ -198,6 +191,7 @@ function ListaDaLoja({
   categorias,
   categoriaCanais,
   imagens,
+  lojas,
 }: Props & {
   canal: string;
   voltar: () => void;
@@ -286,9 +280,11 @@ function ListaDaLoja({
           </span>
           {canal}
         </h2>
-        <a href={CENTRAL[canal]} target="_blank" rel="noopener noreferrer">
-          Abrir central do vendedor ↗
-        </a>
+        {CENTRAL[canal] && (
+          <a href={CENTRAL[canal]} target="_blank" rel="noopener noreferrer">
+            Abrir central do vendedor ↗
+          </a>
+        )}
         {podeEditar && (
           <div className="rd-acoes-loja">
             <button className="primary" onClick={novoAnuncio}>
@@ -403,6 +399,7 @@ function ListaDaLoja({
                     {a.id_externo
                       ? `Código no marketplace: ${str(a.id_externo)}`
                       : "Criado no Radar"}
+                    {a.loja_id && ` · ${str(lojas.find((l) => l.id === a.loja_id)?.nome)}`}
                   </small>
                   {motivos.map((m) => (
                     <small key={m} className="rd-motivo">

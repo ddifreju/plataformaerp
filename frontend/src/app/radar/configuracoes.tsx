@@ -784,7 +784,7 @@ const ITENS: Record<string, Item[]> = {
       id: "integracoes",
       titulo: "Integrações",
       descricao:
-        "Conectar marketplaces e lojas virtuais (Mercado Livre, Shopee, TikTok Shop, SHEIN...).",
+        "Minhas lojas nos marketplaces (Mercado Livre, Shopee, TikTok Shop, AliExpress), quantas tiver, e as conexões.",
       chaves: "integracao marketplace conectar loja",
       selo: "funciona",
       pagina: "integracoes",

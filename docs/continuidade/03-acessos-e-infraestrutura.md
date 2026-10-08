@@ -1,7 +1,7 @@
 # Acessos e infraestrutura
 
 Aqui ficam onde está cada coisa e como entrar, **sem senhas**. As senhas
-ficam no `ACESSOS-LOCAL.md`, que a Juliana preenche no computador dela e o
+ficam no `ACESSOS-LOCAL.md`, que a Jéssica preenche no computador dela e o
 git ignora (modelo em `ACESSOS-LOCAL.exemplo.md`).
 
 ## Mapa
@@ -35,20 +35,20 @@ Navegador ──► Vercel (frontend Next.js)  https://plataformaerp.vercel.app/
 |---|---|---|
 | Radar (demonstração, pode compartilhar) | `dono@demo.plataforma` | `demo1234` |
 | Radar, outros perfis de demonstração | `gestor@`, `analista@`, `financeiro@`, `estoque@`, `atendimento@`, `marketing@` `demo.plataforma` | `demo1234` (definidos em `infra/dados-demo.sql`) |
-| GitHub, Vercel, Render, Supabase | Conta da Juliana | No `ACESSOS-LOCAL.md` |
+| GitHub, Vercel, Render, Supabase | Conta da Jéssica | No `ACESSOS-LOCAL.md` |
 
 ## Como a sessão local acessa cada serviço
 
-- **GitHub:** git com a conta da Juliana (`gh auth login` ou credencial do
+- **GitHub:** git com a conta da Jéssica (`gh auth login` ou credencial do
   git). Na nuvem a sessão usava as ferramentas `mcp__github__*`; na local, o
   `gh` CLI faz o mesmo (PR: `gh pr create`; merge: `gh pr merge --squash`).
 - **Supabase:** três caminhos.
-  - O MCP do Supabase, se a Juliana conectar no Claude local.
+  - O MCP do Supabase, se a Jéssica conectar no Claude local.
   - O SQL Editor no painel, colando o SQL da migration.
   - `psql` com a connection string do painel (Project Settings → Database).
     A connection string é segredo e vai no `ACESSOS-LOCAL.md`.
 - **Vercel e Render:** publicam sozinhos a partir da `main`. Para ver logs ou
-  mudar variáveis, use o painel; a Juliana entra e você orienta. A Vercel
+  mudar variáveis, use o painel; a Jéssica entra e você orienta. A Vercel
   também tem MCP, se ela conectar.
 - **Conferir que publicou** (sem navegador):
   - Backend: faça login e veja se a resposta de `GET /api/radar` tem o campo

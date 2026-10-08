@@ -54,7 +54,8 @@ export const FILTRO_VAZIO: FiltroProdutos = {
 };
 
 // Só os marketplaces que o Radar já sabe ler. Os outros entram com as integrações.
-export const CANAIS_FILTRO = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
+export { CANAIS as CANAIS_FILTRO } from "./canais";
+import { CANAIS as CANAIS_FILTRO } from "./canais";
 const SEM_ANUNCIO = "SEM";
 
 const CAMPOS: [FiltroProdutos["campo"], string][] = [

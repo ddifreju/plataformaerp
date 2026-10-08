@@ -24,7 +24,7 @@ cd backend && mvn test -Dtest=RadarProdutosTest   # uma classe
 cd frontend && npx tsc --noEmit -p . && npx eslint src/app/radar/
 ```
 
-## Publicar (o fluxo que a Juliana espera)
+## Publicar (o fluxo que a Jéssica espera)
 
 1. Trabalhe numa branch e faça commit em português, no imperativo.
 2. **Migration nova?** Aplique no **Supabase antes do merge**, senão o
@@ -40,7 +40,7 @@ cd frontend && npx tsc --noEmit -p . && npx eslint src/app/radar/
    --squash`).
 4. O Render e a Vercel publicam sozinhos a partir da `main`. O backend leva
    de 5 a 10 minutos.
-5. **Confira que está no ar** antes de avisar a Juliana:
+5. **Confira que está no ar** antes de avisar a Jéssica:
 
 ```bash
 U=https://plataformaerp.vercel.app; C=/tmp/cj.txt

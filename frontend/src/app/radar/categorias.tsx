@@ -10,7 +10,8 @@ import { Badge, Empty, Table, str, type Row } from "./ui";
 import { configCategorias } from "./catalogo-filtros";
 import FiltrosGenericos, { filtrar, filtroVazio, type Filtro } from "./filtros-genericos";
 
-export const CANAIS = ["Mercado Livre", "Shopee", "TikTok Shop", "SHEIN"];
+export { CANAIS } from "./canais";
+import { CANAIS } from "./canais";
 
 type Props = {
   categorias: Row[];

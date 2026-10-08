@@ -19,7 +19,7 @@ type Props = {
   marcarParaLote: (ids: string[]) => void;
 };
 
-type Chave =
+export type Chave =
   | "ncm"
   | "origem"
   | "marca"
@@ -31,6 +31,23 @@ type Chave =
   | "gtin"
   | "imagem"
   | "fornecedor";
+
+// O que falta, como o servidor descreve (RadarProdutos.pendencias), para o campo que resolve.
+// "Código (SKU)" não entra: SKU se corrige no cadastro completo.
+/** O que falta no cadastro, como o servidor calculou (vem pronto em cada produto). */
+export const faltasDoCadastro = (p: Row) => (p.pendencias as unknown as string[] | undefined) ?? [];
+
+export const CHAVE_DA_PENDENCIA: Record<string, Chave> = {
+  "Origem (ICMS)": "origem",
+  NCM: "ncm",
+  "Código de barras ou motivo de não ter": "gtin",
+  "Preço de venda": "preco",
+  Marca: "marca",
+  Categoria: "categoria",
+  Descrição: "descricao",
+  "Peso bruto": "peso",
+  "Medidas (largura, altura e comprimento) ou embalagem": "medidas",
+};
 
 const ORIGENS: [string, string][] = [
   ["0", "0 - Nacional"],
@@ -138,7 +155,7 @@ export default function Pendencias(props: Props) {
   );
 }
 
-function LinhaPreencher({
+export function LinhaPreencher({
   produto,
   chave,
   imagens,
@@ -147,7 +164,10 @@ function LinhaPreencher({
   produtoFornecedores,
   executar,
   recarregar,
-}: Props & { produto: Row; chave: Chave }) {
+}: Pick<
+  Props,
+  "imagens" | "categorias" | "fornecedores" | "produtoFornecedores" | "executar" | "recarregar"
+> & { produto: Row; chave: Chave }) {
   const id = str(produto.id);
   const capa = imagens.find((i) => i.produto_id === produto.id);
   const inicial = (k: string) => (produto[k] == null ? "" : str(produto[k]));
