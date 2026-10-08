@@ -3544,11 +3544,9 @@ ul.rd-menu-linha li button:disabled {
   flex-wrap: wrap;
 }
 .rd-ver-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
   min-width: 290px;
-  z-index: 30;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 .rd-ver-menu button:disabled {
   opacity: 0.55;

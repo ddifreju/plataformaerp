@@ -1005,6 +1005,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                     }
                   : undefined
               }
+              executar={command}
               voltar={() => setVendo(null)}
             />
           )}

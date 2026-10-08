@@ -148,7 +148,12 @@ ${estilo}</style></head><body>${corpo}
 
 // Planilha CSV com ";" e BOM: abre certo no Excel em português.
 function baixarCsv(nome: string, linhas: (string | number)[][]) {
-  const celula = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  // Texto que começa com = + - @ viraria fórmula no Excel: vai com ' na frente.
+  const celula = (v: string | number) => {
+    const t =
+      typeof v === "string" && /^[=+\-@\t\r]/.test(v) ? `'${v}` : String(v);
+    return `"${t.replace(/"/g, '""')}"`;
+  };
   const csv = linhas.map((l) => l.map(celula).join(";")).join("\n");
   const url = URL.createObjectURL(
     new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }),
@@ -160,98 +165,29 @@ function baixarCsv(nome: string, linhas: (string | number)[][]) {
   URL.revokeObjectURL(url);
 }
 
-export default function ProdutosLote({
-  produtos,
-  linhas,
-  marcados,
-  setMarcados,
-  categorias,
-  embalagens,
-  kitItens,
-  veCusto,
-  disponivel,
-  executar,
-  clonar,
-  anunciar,
-  rapido,
-  podeEnviarEstoque,
-  podeCusto,
-  ativo,
-  controle,
-  children,
-}: Props) {
-  const [menu, setMenu] = useState(false);
-  const caixaMenu = useFecharFora<HTMLDivElement>(menu, () => setMenu(false));
-  const [menuLinha, setMenuLinha] = useState<{
-    id: string;
-    x: number;
-    y: number;
-  } | null>(null);
-  const [acao, setAcao] = useState<Acao | null>(null);
-  // Produtos que a ação vale: os marcados (barra) ou um só (⋯ da linha).
-  const [alvo, setAlvo] = useState<string[]>([]);
-  const [campo, setCampo] = useState("preco");
-  const [modo, setModo] = useState("DEFINIR");
-  const [valor, setValor] = useState("");
-  const [tags, setTags] = useState("");
-  const [modoTags, setModoTags] = useState("ADICIONAR");
-  const [aviso, setAviso] = useState("");
-  const [erroModal, setErroModal] = useState("");
-
-  const todos =
-    linhas.length > 0 && linhas.every((p) => marcados.includes(str(p.id)));
-  // Relatórios e planilhas levam também as variações dos escolhidos.
+/**
+ * Imprimir relatório e etiquetas e baixar planilhas de produtos (com as variações dos
+ * escolhidos). Usado pela lista e pela visualização do produto. Cada função devolve o aviso
+ * para a tela, ou "" quando deu certo.
+ */
+export function arquivosDeProdutos(c: {
+  produtos: Row[];
+  categorias: Row[];
+  kitItens: Row[];
+  veCusto: boolean;
+  disponivel: (p: Row) => number;
+}) {
+  const { produtos, categorias, kitItens, veCusto, disponivel } = c;
+  const BLOQUEADO =
+    "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.";
   const comVariacoes = (ids: string[]) =>
     produtos.filter(
       (p) => ids.includes(str(p.id)) || ids.includes(str(p.pai_id)),
     );
-  const todosInativos =
-    marcados.length > 0 &&
-    produtos
-      .filter((p) => marcados.includes(str(p.id)))
-      .every((p) => p.permite_venda === false);
-  const tipoCampo = CAMPOS.find(([c]) => c === campo)?.[2] ?? "TEXTO";
   const nomeCategoria = (id: unknown) =>
-    str(categorias.find((c) => c.id === id)?.nome);
+    str(categorias.find((x) => x.id === id)?.nome);
 
-  // Toda ação começa limpando o aviso da anterior (ex.: "Nenhum kit…" não fica na tela).
-  function fecharMenus() {
-    setMenu(false);
-    setMenuLinha(null);
-    setAviso("");
-  }
-
-  function abrir(a: Acao, ids: string[] = marcados) {
-    fecharMenus();
-    setAlvo(ids);
-    setAviso("");
-    setErroModal("");
-    setValor("");
-    setTags("");
-    setModo("DEFINIR");
-    setAcao(a);
-  }
-
-  useImperativeHandle(controle, () => ({
-    relatorio,
-    exportarProdutos,
-    exportarKits,
-    editarCampo: (c, m, ids) => {
-      abrir("EDITAR", ids);
-      setCampo(c);
-      setModo(m);
-    },
-  }));
-
-  function enviarEcommerce() {
-    const ids = menuLinha ? [menuLinha.id] : marcados;
-    fecharMenus();
-    if (anunciar) anunciar(ids);
-    else setAviso("Seu cargo não permite anunciar.");
-  }
-
-  function relatorio(ids: string[] = marcados) {
-    fecharMenus();
+  function relatorio(ids: string[]) {
     const lista = comVariacoes(ids);
     const linhasHtml = lista
       .map(
@@ -271,14 +207,10 @@ ${veCusto ? `<td class="n">${esc(money(p.custo))}</td>` : ""}<td class="n">${esc
 ${veCusto ? "<th>Custo</th>" : ""}<th>Preço</th><th>Disponível</th><th>Situação</th></tr></thead><tbody>${linhasHtml}</tbody></table>`,
       "table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}td.n{text-align:right}th{background:#f3f4f6}",
     );
-    if (!ok)
-      setAviso(
-        "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.",
-      );
+    return ok ? "" : BLOQUEADO;
   }
 
-  function etiquetas(ids: string[] = marcados) {
-    fecharMenus();
+  function etiquetas(ids: string[]) {
     const html = comVariacoes(ids)
       .filter((p) => p.tipo !== "VARIACAO")
       .map(
@@ -293,14 +225,10 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
       `<div class="grade">${html}</div>`,
       ".grade{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm}.etq{border:1px dashed #999;border-radius:2mm;padding:3mm;display:flex;flex-direction:column;gap:1mm;break-inside:avoid}.gtin{font-family:monospace;letter-spacing:2px}.preco{font-size:13pt;font-weight:bold}",
     );
-    if (!ok)
-      setAviso(
-        "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.",
-      );
+    return ok ? "" : BLOQUEADO;
   }
 
-  function exportarProdutos(ids: string[] = marcados) {
-    fecharMenus();
+  function exportarProdutos(ids: string[]) {
     const cab = [
       "SKU",
       "Nome",
@@ -347,16 +275,15 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
         p.permite_venda === false ? "Inativo" : "Ativo",
       ]),
     ]);
+    return "";
   }
 
-  function exportarKits(ids: string[] = marcados) {
-    fecharMenus();
+  function exportarKits(ids: string[]) {
     const kits = produtos.filter(
       (p) => ids.includes(str(p.id)) && p.tipo === "KIT",
     );
     if (!kits.length) {
-      setAviso("Nenhum kit entre os produtos escolhidos.");
-      return;
+      return "Nenhum kit entre os produtos escolhidos.";
     }
     const prod = (id: unknown) => produtos.find((p) => p.id === id);
     baixarCsv("composicao-de-kits", [
@@ -373,6 +300,114 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
           ]),
       ),
     ]);
+    return "";
+  }
+
+  return { relatorio, etiquetas, exportarProdutos, exportarKits };
+}
+
+export default function ProdutosLote({
+  produtos,
+  linhas,
+  marcados,
+  setMarcados,
+  categorias,
+  embalagens,
+  kitItens,
+  veCusto,
+  disponivel,
+  executar,
+  clonar,
+  anunciar,
+  rapido,
+  podeEnviarEstoque,
+  podeCusto,
+  ativo,
+  controle,
+  children,
+}: Props) {
+  const [menu, setMenu] = useState(false);
+  const caixaMenu = useFecharFora<HTMLDivElement>(menu, () => setMenu(false));
+  const [menuLinha, setMenuLinha] = useState<{
+    id: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  // Esc fecha o "⋯" da linha (o clique fora já fecha pela capa).
+  useFecharFora(!!menuLinha, () => setMenuLinha(null));
+  const [acao, setAcao] = useState<Acao | null>(null);
+  // Produtos que a ação vale: os marcados (barra) ou um só (⋯ da linha).
+  const [alvo, setAlvo] = useState<string[]>([]);
+  const [campo, setCampo] = useState("preco");
+  const [modo, setModo] = useState("DEFINIR");
+  const [valor, setValor] = useState("");
+  const [tags, setTags] = useState("");
+  const [modoTags, setModoTags] = useState("ADICIONAR");
+  const [aviso, setAviso] = useState("");
+  const [erroModal, setErroModal] = useState("");
+
+  const todos =
+    linhas.length > 0 && linhas.every((p) => marcados.includes(str(p.id)));
+  const todosInativos =
+    marcados.length > 0 &&
+    produtos
+      .filter((p) => marcados.includes(str(p.id)))
+      .every((p) => p.permite_venda === false);
+  const tipoCampo = CAMPOS.find(([c]) => c === campo)?.[2] ?? "TEXTO";
+
+  // Toda ação começa limpando o aviso da anterior (ex.: "Nenhum kit…" não fica na tela).
+  function fecharMenus() {
+    setMenu(false);
+    setMenuLinha(null);
+    setAviso("");
+  }
+
+  function abrir(a: Acao, ids: string[] = marcados) {
+    fecharMenus();
+    setAlvo(ids);
+    setAviso("");
+    setErroModal("");
+    setValor("");
+    setTags("");
+    setModo("DEFINIR");
+    setAcao(a);
+  }
+
+  // Impressão e planilhas: as mesmas funções da visualização do produto (arquivosDeProdutos).
+  const arq = arquivosDeProdutos({
+    produtos,
+    categorias,
+    kitItens,
+    veCusto,
+    disponivel,
+  });
+  const rodar =
+    (f: (ids: string[]) => string) =>
+    (ids: string[] = marcados) => {
+      fecharMenus();
+      setAviso(f(ids));
+    };
+  const relatorio = rodar(arq.relatorio);
+  const etiquetas = rodar(arq.etiquetas);
+  const exportarProdutos = rodar(arq.exportarProdutos);
+  const exportarKits = rodar(arq.exportarKits);
+
+  useImperativeHandle(controle, () => ({
+    relatorio,
+    exportarProdutos,
+    exportarKits,
+    editarCampo: (c, m, ids) => {
+      abrir("EDITAR", ids);
+      setCampo(c);
+      setModo(m);
+    },
+  }));
+
+  function enviarEcommerce() {
+    const ids = menuLinha ? [menuLinha.id] : marcados;
+    fecharMenus();
+    if (anunciar) anunciar(ids);
+    else setAviso("Seu cargo não permite anunciar.");
   }
 
   async function confirmar() {

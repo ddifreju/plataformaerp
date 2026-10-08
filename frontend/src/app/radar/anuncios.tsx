@@ -211,6 +211,8 @@ function ListaDaLoja({
     x: number;
     y: number;
   } | null>(null);
+  // Esc fecha o "⋯" da linha (o clique fora já fecha pela capa).
+  useFecharFora(!!menuLinha, () => setMenuLinha(null));
   const [aviso, setAviso] = useState("");
   const [avisoOk, setAvisoOk] = useState("");
 
