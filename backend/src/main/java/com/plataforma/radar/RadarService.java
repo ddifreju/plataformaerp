@@ -409,7 +409,12 @@ public class RadarService {
                                 + " tem_historico_custo from radar_produto p where p.tenant_id=?"
                                 + " order by p.criado_em desc limit 50000",
                         tenant());
-        if (!f) produtos.forEach(x -> x.remove("custo"));
+        if (!f)
+            produtos.forEach(
+                    x -> {
+                        x.remove("custo");
+                        x.remove("tem_historico_custo");
+                    });
         // O que falta no cadastro vai pronto para a coluna "Cadastro" da lista (mesma regra da nota).
         produtos.forEach(x -> x.put("pendencias", RadarProdutos.pendencias(x)));
         out.put("produtos", produtos);
