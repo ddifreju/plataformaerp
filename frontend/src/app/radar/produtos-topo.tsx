@@ -6,6 +6,7 @@
 
 import { useState, type RefObject } from "react";
 import { Gaveta } from "./acoes-rapidas";
+import { useFecharFora } from "./ui";
 import { gravar, ler } from "./produtos-filtros";
 import type { ControleLote } from "./produtos-lote";
 
@@ -121,6 +122,7 @@ export function MaisAcoesProdutos(props: {
   ir: (pagina: string) => void;
 }) {
   const [aberto, setAberto] = useState(false);
+  const caixa = useFecharFora<HTMLDivElement>(aberto, () => setAberto(false));
   const item = (rotulo: string, acao: () => void) => (
     <li>
       <button
@@ -143,7 +145,7 @@ export function MaisAcoesProdutos(props: {
   );
   const lista = () => props.controle.current;
   return (
-    <div className="rd-mais-acoes">
+    <div className="rd-mais-acoes" ref={caixa}>
       <button type="button" aria-expanded={aberto} onClick={() => setAberto(!aberto)}>
         mais ações{" "}
         <span className="rd-circulo" aria-hidden="true">
@@ -152,10 +154,9 @@ export function MaisAcoesProdutos(props: {
       </button>
       {aberto && (
         <>
-          <div className="rd-menu-fundo" onClick={() => setAberto(false)} />
           <ul role="menu" className="rd-menu-longo">
-            {item("⇩ receber produtos do e-commerce", props.receber)}
-            <li className="rd-menu-sep" />
+            {props.podeEditar && item("⇩ receber produtos do e-commerce", props.receber)}
+            {props.podeEditar && <li className="rd-menu-sep" />}
             {item("🖨 imprimir relatório", () => lista()?.relatorio(props.ids()))}
             {props.iniciarCustos &&
               item("☰ iniciar histórico de custos", () => props.iniciarCustos?.(props.ids()))}

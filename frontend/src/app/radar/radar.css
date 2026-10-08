@@ -875,6 +875,11 @@
   border: 1px solid #c8efdc;
   color: #1e825a;
 }
+.rd-toast.neutro {
+  background: #fff8e6;
+  border-color: #f3dfa6;
+  color: #8a5a00;
+}
 .rd-error {
   background: #fff0f0;
   border: 1px solid #f7d3d3;
@@ -2168,10 +2173,11 @@ img.rd-product-thumb {
   position: relative;
 }
 .rd-mais-acoes ul {
+  /* acima da capa dos menus (.rd-menu-fundo, z 29) */
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
-  z-index: 20;
+  z-index: 31;
   list-style: none;
   margin: 0;
   padding: 6px;
@@ -3543,11 +3549,9 @@ ul.rd-menu-linha li button:disabled {
   flex-wrap: wrap;
 }
 .rd-ver-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
   min-width: 290px;
-  z-index: 30;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 .rd-ver-menu button:disabled {
   opacity: 0.55;
@@ -3984,4 +3988,89 @@ ul.rd-menu-linha li button:disabled {
   color: var(--rd-ink);
   border-bottom-color: var(--rd-ink);
   font-weight: 600;
+}
+
+/* Rodapé da lista de produtos: quantos aparecem e "mostrar mais" */
+.rd-lista-rodape {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 0 4px;
+  font-size: 13px;
+  color: var(--rd-muted);
+}
+
+/* Campo com vários controles (rádios, select + número): mesmo visual do rótulo comum */
+.radar-app .rd-campo-grupo {
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+/* Menus longos: sombra embaixo enquanto há itens para rolar (mostra que tem mais). */
+ul.rd-menu-linha,
+.rd-mais-acoes ul.rd-menu-longo,
+.rd-ver-menu {
+  background:
+    linear-gradient(white 30%, rgba(255, 255, 255, 0)) top / 100% 24px no-repeat local,
+    linear-gradient(rgba(255, 255, 255, 0), white 70%) bottom / 100% 24px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(15, 23, 42, 0.16), transparent) top / 100% 10px
+      no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(15, 23, 42, 0.16), transparent) bottom / 100%
+      10px no-repeat scroll,
+    white;
+}
+/* Itens com o motivo entre parênteses quebram a linha inteira, sem cortar no meio. */
+ul.rd-menu-linha li button,
+.rd-mais-acoes li button {
+  white-space: normal;
+}
+
+/* Celular: o "Mais ações" da barra de lote abre com a largura da barra, sem sair pela esquerda
+   (a barra é sticky, então serve de referência para o menu). */
+@media (max-width: 720px) {
+  .rd-barra-lote .rd-mais-acoes {
+    position: static;
+  }
+  .rd-barra-lote .rd-mais-acoes ul.rd-menu-cima {
+    left: 0;
+    right: 0;
+    width: auto;
+    min-width: 0;
+    bottom: calc(100% + 6px);
+  }
+}
+
+/* Anunciar: lojas agrupadas por marketplace, problemas embaixo de cada loja (passo 3) */
+.rd-anunciar-grupo {
+  margin-bottom: 14px;
+}
+.rd-anunciar-grupo-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.rd-anunciar-problemas {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: #b13737;
+  font-size: 12px;
+}
+.rd-anunciar-margem {
+  grid-column: 1 / -1;
+}
+/* Janela lateral: botões do rodapé sempre à vista (no celular a lista é longa). */
+.rd-modal.lateral .rd-modal-foot {
+  position: sticky;
+  bottom: -27px;
+  background: white;
+  padding: 12px 0;
+  margin-bottom: -27px;
+  z-index: 2;
 }

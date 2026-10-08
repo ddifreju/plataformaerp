@@ -743,6 +743,83 @@ class RadarProdutosTest {
                 + "\"largura_cm\":\"10\",\"altura_cm\":\"10\",\"comprimento_cm\":\"10\"";
     }
 
+    @Test
+    void precoPromocionalTemQueSerMenorQueOPreco() throws SQLException {
+        var acima =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                salvar(
+                                        empresaA,
+                                        "{\"nome\":\"Promo acima\",\"sku\":\"PROMO-1\",\"tipo\":\"SIMPLES\","
+                                                + "\"preco\":\"100\",\"preco_promocional\":\"180\"}"));
+        assertTrue(acima.getReason().contains("promocional"));
+        // Lote: reduzir o preço abaixo do promocional desfaz o lote inteiro.
+        UUID p = BancoRadarDeTeste.novoProduto(empresaA, "PROMO-2", "10.00", "100.00");
+        BancoRadarDeTeste.executarComoDono(
+                "update radar_produto set preco_promocional=90 where id=?", p);
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        lote(
+                                "{\"acao\":\"EDITAR\",\"campo\":\"preco\",\"modo\":\"REDUZIR_PCT\","
+                                        + "\"valor\":\"20\",\"ids\":[\""
+                                        + p
+                                        + "\"]}"));
+        assertEquals(
+                0,
+                new BigDecimal("100.00")
+                        .compareTo(
+                                (BigDecimal)
+                                        linha(empresaA, "select preco from radar_produto where id=?", p)
+                                                .get("preco")));
+    }
+
+    @Test
+    void lixeiraApagaDeVezOQuePodeEDeixaOsComHistorico() {
+        UUID livre = salvar(empresaA, "{" + base("LIXP-1") + "}");
+        UUID comEstoque = salvar(empresaA, "{" + base("LIXP-2") + ",\"saldo\":\"3\"}");
+        String ids = "\"ids\":[\"" + livre + "\",\"" + comEstoque + "\"]";
+        lote("{\"acao\":\"EXCLUIR\"," + ids + "}");
+        var r = naEmpresa(empresaA, () -> produtos.lote(json("{\"acao\":\"EXCLUIR_DEFINITIVO\"," + ids + "}"), "DONO"));
+        assertTrue(String.valueOf(r.get("mensagem")).contains("1 produto(s) apagado(s) de vez"));
+        assertTrue(String.valueOf(r.get("mensagem")).contains("LIXP-2"));
+        assertEquals(
+                1L,
+                naEmpresa(
+                        empresaA,
+                        () ->
+                                db.queryForObject(
+                                        "select count(*) from radar_produto where id in (?,?)",
+                                        Long.class,
+                                        livre,
+                                        comEstoque)));
+    }
+
+    @Test
+    void salvarComFormularioDesatualizadoERecusado() {
+        UUID id = salvar(empresaA, "{" + base("CONC-1") + "}");
+        Object lido =
+                linha(empresaA, "select atualizado_em from radar_produto where id=?", id)
+                        .get("atualizado_em");
+        String versao =
+                lido instanceof java.sql.Timestamp t
+                        ? t.toInstant().toString()
+                        : ((java.time.OffsetDateTime) lido).toInstant().toString();
+        // O formulário com a versão certa salva; depois disso a mesma versão está velha.
+        salvar(empresaA, "{\"id\":\"" + id + "\",\"versao_lida\":\"" + versao + "\"," + base("CONC-1") + "}");
+        var conflito =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                salvar(
+                                        empresaA,
+                                        "{\"id\":\"" + id + "\",\"versao_lida\":\"" + versao + "\","
+                                                + base("CONC-1")
+                                                + "}"));
+        assertEquals(HttpStatus.CONFLICT, conflito.getStatusCode());
+    }
+
     private static UUID salvar(UUID empresa, String corpo) {
         return (UUID) naEmpresa(empresa, () -> produtos.salvar(json(corpo), "DONO")).get("id");
     }

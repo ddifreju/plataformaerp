@@ -7,7 +7,7 @@
 // cabeçalho e a de cada linha.
 
 import { useImperativeHandle, useState, type ReactNode, type Ref } from "react";
-import { money, str, type Row } from "./ui";
+import { money, str, useFecharFora, type Row } from "./ui";
 import type { TipoRapido } from "./acoes-rapidas";
 
 type Props = {
@@ -31,6 +31,8 @@ type Props = {
   podeEnviarEstoque: boolean;
   /** Quem vê custo e quem pode mexer em custo. */
   podeCusto: boolean;
+  /** Quem lança entrada e saída de estoque (os outros só consultam). */
+  podeAjustarEstoque: boolean;
   ativo: boolean;
   /** Para o "mais ações" do topo da página usar as mesmas funções, com a lista filtrada. */
   controle?: Ref<ControleLote>;
@@ -148,7 +150,12 @@ ${estilo}</style></head><body>${corpo}
 
 // Planilha CSV com ";" e BOM: abre certo no Excel em português.
 function baixarCsv(nome: string, linhas: (string | number)[][]) {
-  const celula = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  // Texto que começa com = + - @ viraria fórmula no Excel: vai com ' na frente.
+  const celula = (v: string | number) => {
+    const t =
+      typeof v === "string" && /^[=+\-@\t\r]/.test(v) ? `'${v}` : String(v);
+    return `"${t.replace(/"/g, '""')}"`;
+  };
   const csv = linhas.map((l) => l.map(celula).join(";")).join("\n");
   const url = URL.createObjectURL(
     new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }),
@@ -160,93 +167,29 @@ function baixarCsv(nome: string, linhas: (string | number)[][]) {
   URL.revokeObjectURL(url);
 }
 
-export default function ProdutosLote({
-  produtos,
-  linhas,
-  marcados,
-  setMarcados,
-  categorias,
-  embalagens,
-  kitItens,
-  veCusto,
-  disponivel,
-  executar,
-  clonar,
-  anunciar,
-  rapido,
-  podeEnviarEstoque,
-  podeCusto,
-  ativo,
-  controle,
-  children,
-}: Props) {
-  const [menu, setMenu] = useState(false);
-  const [menuLinha, setMenuLinha] = useState<{
-    id: string;
-    x: number;
-    y: number;
-  } | null>(null);
-  const [acao, setAcao] = useState<Acao | null>(null);
-  // Produtos que a ação vale: os marcados (barra) ou um só (⋯ da linha).
-  const [alvo, setAlvo] = useState<string[]>([]);
-  const [campo, setCampo] = useState("preco");
-  const [modo, setModo] = useState("DEFINIR");
-  const [valor, setValor] = useState("");
-  const [tags, setTags] = useState("");
-  const [modoTags, setModoTags] = useState("ADICIONAR");
-  const [aviso, setAviso] = useState("");
-
-  const todos =
-    linhas.length > 0 && linhas.every((p) => marcados.includes(str(p.id)));
-  // Relatórios e planilhas levam também as variações dos escolhidos.
+/**
+ * Imprimir relatório e etiquetas e baixar planilhas de produtos (com as variações dos
+ * escolhidos). Usado pela lista e pela visualização do produto. Cada função devolve o aviso
+ * para a tela, ou "" quando deu certo.
+ */
+export function arquivosDeProdutos(c: {
+  produtos: Row[];
+  categorias: Row[];
+  kitItens: Row[];
+  veCusto: boolean;
+  disponivel: (p: Row) => number;
+}) {
+  const { produtos, categorias, kitItens, veCusto, disponivel } = c;
+  const BLOQUEADO =
+    "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.";
   const comVariacoes = (ids: string[]) =>
     produtos.filter(
       (p) => ids.includes(str(p.id)) || ids.includes(str(p.pai_id)),
     );
-  const todosInativos =
-    marcados.length > 0 &&
-    produtos
-      .filter((p) => marcados.includes(str(p.id)))
-      .every((p) => p.permite_venda === false);
-  const tipoCampo = CAMPOS.find(([c]) => c === campo)?.[2] ?? "TEXTO";
   const nomeCategoria = (id: unknown) =>
-    str(categorias.find((c) => c.id === id)?.nome);
+    str(categorias.find((x) => x.id === id)?.nome);
 
-  function fecharMenus() {
-    setMenu(false);
-    setMenuLinha(null);
-  }
-
-  function abrir(a: Acao, ids: string[] = marcados) {
-    fecharMenus();
-    setAlvo(ids);
-    setAviso("");
-    setValor("");
-    setTags("");
-    setModo("DEFINIR");
-    setAcao(a);
-  }
-
-  useImperativeHandle(controle, () => ({
-    relatorio,
-    exportarProdutos,
-    exportarKits,
-    editarCampo: (c, m, ids) => {
-      abrir("EDITAR", ids);
-      setCampo(c);
-      setModo(m);
-    },
-  }));
-
-  function enviarEcommerce() {
-    const ids = menuLinha ? [menuLinha.id] : marcados;
-    fecharMenus();
-    if (anunciar) anunciar(ids);
-    else setAviso("Seu cargo não permite anunciar.");
-  }
-
-  function relatorio(ids: string[] = marcados) {
-    fecharMenus();
+  function relatorio(ids: string[]) {
     const lista = comVariacoes(ids);
     const linhasHtml = lista
       .map(
@@ -266,14 +209,10 @@ ${veCusto ? `<td class="n">${esc(money(p.custo))}</td>` : ""}<td class="n">${esc
 ${veCusto ? "<th>Custo</th>" : ""}<th>Preço</th><th>Disponível</th><th>Situação</th></tr></thead><tbody>${linhasHtml}</tbody></table>`,
       "table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}td.n{text-align:right}th{background:#f3f4f6}",
     );
-    if (!ok)
-      setAviso(
-        "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.",
-      );
+    return ok ? "" : BLOQUEADO;
   }
 
-  function etiquetas(ids: string[] = marcados) {
-    fecharMenus();
+  function etiquetas(ids: string[]) {
     const html = comVariacoes(ids)
       .filter((p) => p.tipo !== "VARIACAO")
       .map(
@@ -288,14 +227,10 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
       `<div class="grade">${html}</div>`,
       ".grade{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm}.etq{border:1px dashed #999;border-radius:2mm;padding:3mm;display:flex;flex-direction:column;gap:1mm;break-inside:avoid}.gtin{font-family:monospace;letter-spacing:2px}.preco{font-size:13pt;font-weight:bold}",
     );
-    if (!ok)
-      setAviso(
-        "O navegador bloqueou a janela de impressão. Libere pop-ups para este site.",
-      );
+    return ok ? "" : BLOQUEADO;
   }
 
-  function exportarProdutos(ids: string[] = marcados) {
-    fecharMenus();
+  function exportarProdutos(ids: string[]) {
     const cab = [
       "SKU",
       "Nome",
@@ -342,16 +277,15 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
         p.permite_venda === false ? "Inativo" : "Ativo",
       ]),
     ]);
+    return "";
   }
 
-  function exportarKits(ids: string[] = marcados) {
-    fecharMenus();
+  function exportarKits(ids: string[]) {
     const kits = produtos.filter(
       (p) => ids.includes(str(p.id)) && p.tipo === "KIT",
     );
     if (!kits.length) {
-      setAviso("Nenhum kit entre os produtos escolhidos.");
-      return;
+      return "Nenhum kit entre os produtos escolhidos.";
     }
     const prod = (id: unknown) => produtos.find((p) => p.id === id);
     baixarCsv("composicao-de-kits", [
@@ -368,6 +302,125 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
           ]),
       ),
     ]);
+    return "";
+  }
+
+  return { relatorio, etiquetas, exportarProdutos, exportarKits };
+}
+
+export default function ProdutosLote({
+  produtos,
+  linhas,
+  marcados,
+  setMarcados,
+  categorias,
+  embalagens,
+  kitItens,
+  veCusto,
+  disponivel,
+  executar,
+  clonar,
+  anunciar,
+  rapido,
+  podeEnviarEstoque,
+  podeCusto,
+  podeAjustarEstoque,
+  ativo,
+  controle,
+  children,
+}: Props) {
+  const [menu, setMenu] = useState(false);
+  const caixaMenu = useFecharFora<HTMLDivElement>(menu, () => setMenu(false));
+  const [menuLinha, setMenuLinha] = useState<{
+    id: string;
+    x: number;
+    y: number;
+  } | null>(null);
+  // Esc fecha o "⋯" da linha (o clique fora já fecha pela capa).
+  useFecharFora(!!menuLinha, () => setMenuLinha(null));
+  const [acao, setAcao] = useState<Acao | null>(null);
+  useFecharFora(!!acao, () => setAcao(null)); // Esc fecha a janela da ação.
+  // Produtos que a ação vale: os marcados (barra) ou um só (⋯ da linha).
+  const [alvo, setAlvo] = useState<string[]>([]);
+  const [campo, setCampo] = useState("preco");
+  const [modo, setModo] = useState("DEFINIR");
+  const [valor, setValor] = useState("");
+  const [tags, setTags] = useState("");
+  const [modoTags, setModoTags] = useState("ADICIONAR");
+  const [aviso, setAviso] = useState("");
+  const [erroModal, setErroModal] = useState("");
+  const [confirmaQtd, setConfirmaQtd] = useState("");
+
+  const todos =
+    linhas.length > 0 && linhas.every((p) => marcados.includes(str(p.id)));
+  // Lixeira em 20 ou mais produtos pede para digitar a quantidade (evita o clique por engano).
+  const loteGrande = acao === "EXCLUIR" && alvo.length >= 20;
+  // Marcar vários: quem edita, quem anuncia (marketing) e quem envia estoque (estoque).
+  const podeMarcar = ativo || !!anunciar || podeEnviarEstoque;
+  const temKitMarcado = produtos.some(
+    (p) => p.tipo === "KIT" && marcados.includes(str(p.id)),
+  );
+  const todosInativos =
+    marcados.length > 0 &&
+    produtos
+      .filter((p) => marcados.includes(str(p.id)))
+      .every((p) => p.permite_venda === false);
+  const tipoCampo = CAMPOS.find(([c]) => c === campo)?.[2] ?? "TEXTO";
+
+  // Toda ação começa limpando o aviso da anterior (ex.: "Nenhum kit…" não fica na tela).
+  function fecharMenus() {
+    setMenu(false);
+    setMenuLinha(null);
+    setAviso("");
+  }
+
+  function abrir(a: Acao, ids: string[] = marcados) {
+    fecharMenus();
+    setAlvo(ids);
+    setAviso("");
+    setErroModal("");
+    setConfirmaQtd("");
+    setValor("");
+    setTags("");
+    setModo("DEFINIR");
+    setAcao(a);
+  }
+
+  // Impressão e planilhas: as mesmas funções da visualização do produto (arquivosDeProdutos).
+  const arq = arquivosDeProdutos({
+    produtos,
+    categorias,
+    kitItens,
+    veCusto,
+    disponivel,
+  });
+  const rodar =
+    (f: (ids: string[]) => string) =>
+    (ids: string[] = marcados) => {
+      fecharMenus();
+      setAviso(f(ids));
+    };
+  const relatorio = rodar(arq.relatorio);
+  const etiquetas = rodar(arq.etiquetas);
+  const exportarProdutos = rodar(arq.exportarProdutos);
+  const exportarKits = rodar(arq.exportarKits);
+
+  useImperativeHandle(controle, () => ({
+    relatorio,
+    exportarProdutos,
+    exportarKits,
+    editarCampo: (c, m, ids) => {
+      abrir("EDITAR", ids);
+      setCampo(c);
+      setModo(m);
+    },
+  }));
+
+  function enviarEcommerce() {
+    const ids = menuLinha ? [menuLinha.id] : marcados;
+    fecharMenus();
+    if (anunciar) anunciar(ids);
+    else setAviso("Seu cargo não permite anunciar.");
   }
 
   async function confirmar() {
@@ -380,8 +433,19 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
       corpo.campo = campo;
       corpo.valor = valor.trim().replace(",", ".");
       if (tipoCampo === "DINHEIRO") corpo.modo = modo;
-      if (tipoCampo === "TEXTO" && (campo === "ncm" || campo === "cest"))
-        corpo.valor = valor.replace(/\D/g, "");
+      if (tipoCampo === "TEXTO" && (campo === "ncm" || campo === "cest")) {
+        // Pontos, traços e espaços saem; letra é erro (antes virava "" e apagava o campo).
+        const digitos = campo === "ncm" ? 8 : 7;
+        const nome = campo === "ncm" ? "NCM" : "CEST";
+        const limpo = valor.replace(/[\s.-]/g, "");
+        if (!/^\d*$/.test(limpo) || (limpo && limpo.length !== digitos)) {
+          setErroModal(
+            `${nome} deve ter ${digitos} números. Para apagar o ${nome}, deixe em branco.`,
+          );
+          return;
+        }
+        corpo.valor = limpo;
+      }
     }
     if (acao === "TAGS") {
       corpo.modo = modoTags;
@@ -392,13 +456,15 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
     }
     const ok = await executar(corpo);
     setAcao(null);
-    if (ok) setMarcados((m) => m.filter((id) => !alvo.includes(id)));
+    // Editar e trocar tags mantêm a seleção (dá para mudar outro campo em seguida).
+    if (ok && acao !== "EDITAR" && acao !== "TAGS")
+      setMarcados((m) => m.filter((id) => !alvo.includes(id)));
   }
 
   const emBreve = (rotulo: string, motivo: string) => (
     <li>
       <button role="menuitem" disabled title={motivo}>
-        {rotulo} <small>({motivo.toLowerCase()})</small>
+        {rotulo} <small>({motivo})</small>
       </button>
     </li>
   );
@@ -478,16 +544,18 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
     const id = str(p.id);
     return (
       <span className="rd-celula-lote">
-        <input
-          type="checkbox"
-          aria-label={`Selecionar ${str(p.nome)}`}
-          checked={marcados.includes(id)}
-          onChange={(e) =>
-            setMarcados((m) =>
-              e.target.checked ? [...m, id] : m.filter((x) => x !== id),
-            )
-          }
-        />
+        {podeMarcar && (
+          <input
+            type="checkbox"
+            aria-label={`Selecionar ${str(p.nome)}`}
+            checked={marcados.includes(id)}
+            onChange={(e) =>
+              setMarcados((m) =>
+                e.target.checked ? [...m, id] : m.filter((x) => x !== id),
+              )
+            }
+          />
+        )}
         <button
           type="button"
           className="rd-linha-mais"
@@ -529,8 +597,9 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
   return (
     <>
       {children({
-        cabecalho: ativo ? cabecalho : "",
-        celula: (p) => (ativo ? caixa(p) : ""),
+        cabecalho: podeMarcar ? cabecalho : "",
+        // Todo cargo tem o "⋯" (só com o que pode fazer); marcar para o lote é de quem edita.
+        celula: (p) => caixa(p),
       })}
       {menuLinha && produtoLinha && (
         <>
@@ -541,7 +610,7 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             style={{ left: menuLinha.x, top: menuLinha.y }}
             aria-label={`Ações de ${str(produtoLinha.nome)}`}
           >
-            {item("⇪ Enviar para o e-commerce", enviarEcommerce)}
+            {anunciar && item("⇪ Enviar para o e-commerce", enviarEcommerce)}
             {anunciar &&
               rapidoItem("$ Enviar preços para o e-commerce", "precos", [
                 menuLinha.id,
@@ -555,9 +624,13 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             ])}
             <li className="rd-menu-sep" />
             {produtoLinha.tipo !== "KIT" &&
-              rapidoItem("▦ Gerenciar estoque", "gerenciar-estoque", [
-                menuLinha.id,
-              ])}
+              rapidoItem(
+                podeAjustarEstoque
+                  ? "▦ Gerenciar estoque"
+                  : "▦ Consultar estoque",
+                "gerenciar-estoque",
+                [menuLinha.id],
+              )}
             {rapidoItem("⌕ Consultar estoque multiempresa", "multiempresa", [
               menuLinha.id,
             ])}
@@ -569,14 +642,16 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
               menuLinha.id,
             ])}
             <li className="rd-menu-sep" />
-            {item("✎ Editar dados", () => abrir("EDITAR", [menuLinha.id]))}
+            {ativo &&
+              item("✎ Editar dados", () => abrir("EDITAR", [menuLinha.id]))}
             {clonar &&
               item("⧉ Clonar produto", () => {
                 const id = menuLinha.id;
                 setMenuLinha(null);
                 clonar(id);
               })}
-            {item("# Alterar tags", () => abrir("TAGS", [menuLinha.id]))}
+            {ativo &&
+              item("# Alterar tags", () => abrir("TAGS", [menuLinha.id]))}
             {produtoLinha.tipo === "VARIACAO" &&
               emBreve("⇄ Tornar produto simples", "Entra com o Bloco 2")}
             {emBreve("⇪ Enviar produto para empresas", "Grupo de empresas")}
@@ -594,18 +669,23 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
               item("⇩ Exportar composição do kit", () =>
                 exportarKits([menuLinha.id]),
               )}
-            <li className="rd-menu-sep" />
-            {produtoLinha.permite_venda === false
-              ? item("✓ Ativar produto", () => abrir("ATIVAR", [menuLinha.id]))
-              : item("⊘ Inativar produto", () =>
-                  abrir("INATIVAR", [menuLinha.id]),
-                )}
-            {item("🗑 Excluir anexos", () =>
-              abrir("EXCLUIR_ANEXOS", [menuLinha.id]),
-            )}
-            {item("🗑 Mover para a lixeira", () =>
-              abrir("EXCLUIR", [menuLinha.id]),
-            )}
+            {ativo && <li className="rd-menu-sep" />}
+            {ativo &&
+              (produtoLinha.permite_venda === false
+                ? item("✓ Ativar produto", () =>
+                    abrir("ATIVAR", [menuLinha.id]),
+                  )
+                : item("⊘ Inativar produto", () =>
+                    abrir("INATIVAR", [menuLinha.id]),
+                  ))}
+            {ativo &&
+              item("🗑 Excluir anexos", () =>
+                abrir("EXCLUIR_ANEXOS", [menuLinha.id]),
+              )}
+            {ativo &&
+              item("🗑 Mover para a lixeira", () =>
+                abrir("EXCLUIR", [menuLinha.id]),
+              )}
           </ul>
         </>
       )}
@@ -614,7 +694,7 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
           {aviso}
         </div>
       )}
-      {ativo && marcados.length > 0 && (
+      {podeMarcar && marcados.length > 0 && (
         <div
           className="rd-barra-lote"
           role="region"
@@ -632,13 +712,17 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
               ✕
             </button>
           </span>
-          <button type="button" className="primary" onClick={enviarEcommerce}>
-            ⇪ Enviar para o e-commerce
-          </button>
-          <button type="button" onClick={() => abrir("EDITAR")}>
-            ✎ Editar dados em massa
-          </button>
-          <div className="rd-mais-acoes">
+          {anunciar && (
+            <button type="button" className="primary" onClick={enviarEcommerce}>
+              ⇪ Enviar para o e-commerce
+            </button>
+          )}
+          {ativo && (
+            <button type="button" onClick={() => abrir("EDITAR")}>
+              ✎ Editar dados em massa
+            </button>
+          )}
+          <div className="rd-mais-acoes" ref={caixaMenu}>
             <button
               type="button"
               aria-expanded={menu}
@@ -654,7 +738,8 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             </button>
             {menu && (
               <ul role="menu" className="rd-menu-cima rd-menu-longo">
-                {item("⇪ Enviar para o e-commerce", enviarEcommerce)}
+                {anunciar &&
+                  item("⇪ Enviar para o e-commerce", enviarEcommerce)}
                 {anunciar &&
                   rapidoItem(
                     "$ Enviar preços para o e-commerce",
@@ -682,17 +767,23 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
                 {item("⇩ Exportar produtos para planilha", () =>
                   exportarProdutos(),
                 )}
-                {item("⇩ Exportar composição de kits para planilha", () =>
-                  exportarKits(),
-                )}
+                {temKitMarcado
+                  ? item("⇩ Exportar composição de kits para planilha", () =>
+                      exportarKits(),
+                    )
+                  : emBreve(
+                      "⇩ Exportar composição de kits para planilha",
+                      "Nenhum kit marcado",
+                    )}
                 {emBreve(
                   "⇩ Exportar estrutura de fabricados para planilha",
                   "Entra junto com o cadastro de produção (fabricados)",
                 )}
                 <li className="rd-menu-sep" />
-                {item("✎ Editar dados em massa", () => abrir("EDITAR"))}
+                {ativo &&
+                  item("✎ Editar dados em massa", () => abrir("EDITAR"))}
                 {item("🏷 Imprimir etiquetas", () => etiquetas())}
-                {item("# Alterar tags", () => abrir("TAGS"))}
+                {ativo && item("# Alterar tags", () => abrir("TAGS"))}
                 {emBreve(
                   "⇆ Unificar cadastros",
                   "Precisa juntar estoque e histórico; vem numa próxima etapa",
@@ -712,14 +803,18 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
                   "✦ Sugerir NCM",
                   "Sugestão por IA, sempre revisada por você; vem numa próxima etapa",
                 )}
-                <li className="rd-menu-sep" />
-                {todosInativos
-                  ? item("✓ Ativar produtos", () => abrir("ATIVAR"))
-                  : item("⊘ Inativar produtos", () => abrir("INATIVAR"))}
-                {item("🗑 Excluir anexos dos produtos", () =>
-                  abrir("EXCLUIR_ANEXOS"),
+                {ativo && (
+                  <>
+                    <li className="rd-menu-sep" />
+                    {todosInativos
+                      ? item("✓ Ativar produtos", () => abrir("ATIVAR"))
+                      : item("⊘ Inativar produtos", () => abrir("INATIVAR"))}
+                    {item("🗑 Excluir anexos dos produtos", () =>
+                      abrir("EXCLUIR_ANEXOS"),
+                    )}
+                    {item("🗑 Mover para a lixeira", () => abrir("EXCLUIR"))}
+                  </>
                 )}
-                {item("🗑 Mover para a lixeira", () => abrir("EXCLUIR"))}
               </ul>
             )}
           </div>
@@ -734,11 +829,19 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             className="rd-modal lateral"
             role="dialog"
             aria-modal="true"
-            aria-label={titulos[acao]}
+            aria-label={
+              acao === "EDITAR" && alvo.length === 1
+                ? "Editar dados"
+                : titulos[acao]
+            }
             onClick={(e) => e.stopPropagation()}
           >
             <div className="rd-card-head">
-              <h2>{titulos[acao]}</h2>
+              <h2>
+                {acao === "EDITAR" && alvo.length === 1
+                  ? "Editar dados"
+                  : titulos[acao]}
+              </h2>
               <button aria-label="Fechar" onClick={() => setAcao(null)}>
                 ×
               </button>
@@ -844,6 +947,22 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
                 restaurar quando quiser, em &quot;Lixeira&quot;.
               </p>
             )}
+            {loteGrande && (
+              <label className="rd-campo-lote">
+                São {alvo.length} produtos. Para confirmar, digite {alvo.length}
+                :
+                <input
+                  inputMode="numeric"
+                  value={confirmaQtd}
+                  onChange={(e) => setConfirmaQtd(e.target.value)}
+                />
+              </label>
+            )}
+            {erroModal && (
+              <p className="rd-error" role="alert">
+                {erroModal}
+              </p>
+            )}
             <div className="rd-modal-foot">
               <button onClick={() => setAcao(null)}>Cancelar</button>
               <button
@@ -851,6 +970,9 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
                   acao === "EXCLUIR" || acao === "EXCLUIR_ANEXOS"
                     ? "perigo"
                     : "primary"
+                }
+                disabled={
+                  loteGrande && confirmaQtd.trim() !== String(alvo.length)
                 }
                 onClick={confirmar}
               >

@@ -69,7 +69,8 @@ const MOTIVOS: [string, string][] = [
 
 export default function Pendencias(props: Props) {
   const [aberta, setAberta] = useState<{ chave: Chave; ids: string[] } | null>(null);
-  const principais = props.produtos.filter((p) => !p.pai_id);
+  // Só os ativos, como a lista abre ("produtos ativos"): os números batem com o filtro.
+  const principais = props.produtos.filter((p) => !p.pai_id && p.permite_venda !== false);
   const temImagem = (id: unknown) => props.imagens.some((i) => i.produto_id === id);
   const temFornecedor = (id: unknown) => props.produtoFornecedores.some((f) => f.produto_id === id);
 

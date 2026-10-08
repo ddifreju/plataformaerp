@@ -274,7 +274,9 @@ public class RadarService {
 
     private String texto(JsonNode n, String k, int max) {
         String s = n.path(k).asText("").trim();
-        if (s.isBlank() || s.length() > max) erro("Confira o campo " + k + ".");
+        if (s.isBlank()) erro("Preencha o campo " + RadarEntrada.nomeDoCampo(k) + ".");
+        if (s.length() > max)
+            erro(RadarEntrada.nomeDoCampo(k) + " aceita até " + max + " caracteres.");
         return s;
     }
 
@@ -294,7 +296,14 @@ public class RadarService {
         if (!n.path(k).canConvertToInt() || !n.path(k).isIntegralNumber())
             erro("Quantidade inválida: " + k);
         int v = n.path(k).asInt();
-        if (v < min || v > max) erro("Quantidade fora do limite: " + k);
+        if (v < min || v > max)
+            erro(
+                    RadarEntrada.nomeDoCampo(k)
+                            + " fora do limite: de "
+                            + String.format(java.util.Locale.forLanguageTag("pt-BR"), "%,d", min)
+                            + " a "
+                            + String.format(java.util.Locale.forLanguageTag("pt-BR"), "%,d", max)
+                            + ".");
         return v;
     }
 
@@ -302,10 +311,10 @@ public class RadarService {
         try {
             BigDecimal v = new BigDecimal(n.path(k).asText("0"));
             if (v.signum() < 0 || v.compareTo(new BigDecimal("999999999")) > 0 || v.scale() > 2)
-                erro("Valor inválido: " + k);
+                erro("Valor inválido em " + RadarEntrada.nomeDoCampo(k) + ".");
             return v.setScale(2);
         } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido: " + k);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido em " + RadarEntrada.nomeDoCampo(k) + ".");
         }
     }
 
@@ -448,7 +457,11 @@ public class RadarService {
                 };
         for (var r : rows("radar_registro"))
             if (tipos.contains(r.get("tipo"))) {
-                r.put("dados", dec(r.get("dados").toString()));
+                var dados = dec(r.get("dados").toString());
+                // Custo da compra só para quem vê o financeiro (decisão da Jéssica: o cargo
+                // Estoque registra e recebe compras, mas não vê o custo).
+                if (!f && "COMPRA".equals(r.get("tipo"))) dados.remove("custo_unitario");
+                r.put("dados", dados);
                 registros.add(r);
             }
         out.put("registros", registros);
@@ -780,9 +793,22 @@ public class RadarService {
                 exigirEstoqueProprio(p);
                 int delta = inteiro(n, "quantidade", -100000, 100000);
                 if (delta == 0) erro("Informe uma quantidade diferente de zero.");
-                if (((Number) p.get("fisico")).intValue() + delta
-                        < ((Number) p.get("reservado")).intValue())
-                    erro("O ajuste consumiria estoque reservado.");
+                int fisicoAtual = ((Number) p.get("fisico")).intValue();
+                int reservadoAtual = ((Number) p.get("reservado")).intValue();
+                if (fisicoAtual + delta < 0)
+                    erro(
+                            "A saída ("
+                                    + -delta
+                                    + ") é maior que o estoque físico ("
+                                    + fisicoAtual
+                                    + ").");
+                if (fisicoAtual + delta < reservadoAtual)
+                    erro(
+                            "A saída deixaria menos que o reservado em pedidos ("
+                                    + reservadoAtual
+                                    + "): dá para tirar no máximo "
+                                    + (fisicoAtual - reservadoAtual)
+                                    + ".");
                 String motivo = texto(n, "motivo", 500);
                 db.update(
                         "update radar_produto set fisico=fisico+? where tenant_id=? and id=?",

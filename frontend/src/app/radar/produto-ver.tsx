@@ -9,9 +9,21 @@ import { useState, type ReactNode } from "react";
 import { NO_RADAR, verNaCentral } from "./anuncios";
 import { SIGLA } from "./canais";
 import type { TipoRapido } from "./acoes-rapidas";
+import { arquivosDeProdutos } from "./produtos-lote";
 import { faltasDoCadastro } from "./pendencias";
 import { Historico, ORIGENS, UNIDADES, type Aba } from "./produto";
-import { Badge, Empty, cents, centMoney, date, money, str, type Row } from "./ui";
+import {
+  Badge,
+  Empty,
+  cents,
+  centMoney,
+  date,
+  money,
+  ordenarVariacoes,
+  str,
+  useFecharFora,
+  type Row,
+} from "./ui";
 
 const MOTIVOS: Record<string, string> = {
   PRODUTO_ARTESANAL: "Produto artesanal ou feito sob medida",
@@ -50,6 +62,7 @@ type Props = {
   podeEditar: boolean;
   podeAnunciar: boolean;
   podeEnviarEstoque: boolean;
+  podeAjustarEstoque: boolean;
   disponivel: (p: Row) => number;
   editar: (aba: Aba) => void;
   anunciar: () => void;
@@ -57,7 +70,11 @@ type Props = {
   rapido: (tipo: TipoRapido) => void;
   clonar?: () => void;
   paraLixeira?: () => void;
+  /** Executa um comando (inativar, excluir anexos) e diz se deu certo. */
+  executar: (corpo: Record<string, unknown>) => Promise<boolean>;
   voltar: () => void;
+  /** Avisa a aba escolhida: o próximo produto aberto abre nela. */
+  aoTrocarAba?: (aba: Aba) => void;
 };
 
 const vazio = (v: unknown) => v == null || str(v).trim() === "";
@@ -127,11 +144,25 @@ export default function ProdutoVer(props: Props) {
   const p = props.produto;
   const id = str(p.id);
   const tipo = str(p.tipo);
+  // Impressão e planilhas: as mesmas funções do "⋯" da lista.
+  const arq = arquivosDeProdutos({
+    produtos: props.produtos,
+    categorias: props.categorias,
+    kitItens: props.kitItens,
+    veCusto: props.financeiro,
+    disponivel: props.disponivel,
+  });
   const [aba, setAba] = useState<Aba>(props.abaInicial ?? "gerais");
   const [menu, setMenu] = useState(false);
+  const caixaMenu = useFecharFora<HTMLDivElement>(menu, () => setMenu(false));
   const [aviso, setAviso] = useState("");
+  const [erroArquivo, setErroArquivo] = useState("");
 
-  const filhas = props.produtos.filter((f) => f.pai_id === p.id && !f.excluido_em);
+  const filhas = ordenarVariacoes(
+    props.produtos.filter((f) => f.pai_id === p.id && !f.excluido_em),
+    lista<string>(p.tipos_variacao),
+  );
+  const foraDeVenda = filhas.filter((f) => f.permite_venda === false).length;
   const fotos = props.imagens.filter((i) => i.produto_id === p.id);
   const capa = fotos[0];
   const anunciosDoProduto = props.anuncios.filter(
@@ -243,7 +274,12 @@ export default function ProdutoVer(props: Props) {
             <Info rotulo="Estoque máximo">{texto(p.maximo)}</Info>
             <Info rotulo="Dias para preparação">{texto(p.dias_preparacao)}</Info>
           </div>
-          {tipo === "VARIACAO" && <p className="rd-dica">Somando as {filhas.length} variações.</p>}
+          {tipo === "VARIACAO" && (
+            <p className="rd-dica">
+              Somando as {filhas.length} variações
+              {foraDeVenda > 0 && ` (${foraDeVenda} fora de venda)`}.
+            </p>
+          )}
           {tipo === "KIT" && <p className="rd-dica">O estoque do kit vem dos componentes.</p>}
         </Secao>
       </>
@@ -470,6 +506,7 @@ export default function ProdutoVer(props: Props) {
                     <th>Disponível</th>
                     <th>Imagens</th>
                     <th>Cadastro</th>
+                    <th>À venda</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -490,6 +527,7 @@ export default function ProdutoVer(props: Props) {
                       <td>
                         {faltasDoCadastro(f).length ? `Falta ${faltasDoCadastro(f).length}` : "✓"}
                       </td>
+                      <td>{f.permite_venda === false ? <Badge>fora de venda</Badge> : "Sim"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -504,7 +542,13 @@ export default function ProdutoVer(props: Props) {
           <div className="rd-ver-grade">
             <Info rotulo="Preço de venda">{money(p.preco)}</Info>
             <Info rotulo="Preço promocional">
-              {vazio(p.preco_promocional) ? "—" : money(p.preco_promocional)}
+              {vazio(p.preco_promocional)
+                ? "—"
+                : `${money(p.preco_promocional)}${
+                    preco > 0
+                      ? ` · −${Math.round((1 - cents(p.preco_promocional) / preco) * 100)}%`
+                      : ""
+                  }`}
             </Info>
             {props.financeiro && (
               <Info rotulo="Markup (preço ÷ custo)">
@@ -716,7 +760,7 @@ export default function ProdutoVer(props: Props) {
   // Itens que dependem da conexão com o marketplace aparecem, mas desligados e explicados.
   const emBreve = (rotulo: string, motivo: string) => (
     <li>
-      <button disabled title={motivo}>
+      <button role="menuitem" disabled title={motivo}>
         {rotulo} <small>{motivo}</small>
       </button>
     </li>
@@ -724,8 +768,10 @@ export default function ProdutoVer(props: Props) {
   const item = (rotulo: string, acao: () => void) => (
     <li>
       <button
+        role="menuitem"
         onClick={() => {
           setMenu(false);
+          setErroArquivo("");
           acao();
         }}
       >
@@ -771,7 +817,7 @@ export default function ProdutoVer(props: Props) {
               ✎ Editar
             </button>
           )}
-          <div className="rd-mais-acoes">
+          <div className="rd-mais-acoes" ref={caixaMenu}>
             <button aria-expanded={menu} onClick={() => setMenu(!menu)}>
               Mais ações{" "}
               <span className="rd-circulo" aria-hidden="true">
@@ -780,8 +826,7 @@ export default function ProdutoVer(props: Props) {
             </button>
             {menu && (
               <>
-                <div className="rd-menu-fundo" onClick={() => setMenu(false)} />
-                <ul role="menu" className="rd-menu-linha rd-ver-menu">
+                <ul role="menu" className="rd-ver-menu">
                   {props.podeAnunciar && item("⇪ Enviar para o e-commerce", props.anunciar)}
                   {props.podeAnunciar &&
                     item("$ Enviar preços para o e-commerce", () => props.rapido("precos"))}
@@ -790,13 +835,18 @@ export default function ProdutoVer(props: Props) {
                   {item("▤ Enviar dados fiscais para o e-commerce", () => props.rapido("fiscais"))}
                   <li className="rd-menu-sep" />
                   {tipo !== "KIT" &&
-                    item("▦ Gerenciar estoque", () => props.rapido("gerenciar-estoque"))}
+                    item(
+                      props.podeAjustarEstoque ? "▦ Gerenciar estoque" : "▦ Consultar estoque",
+                      () => props.rapido("gerenciar-estoque"),
+                    )}
                   {item("⌕ Consultar estoque multiempresa", () => props.rapido("multiempresa"))}
+                  {item("🏷 Imprimir etiqueta", () => setErroArquivo(arq.etiquetas([id])))}
                   {item("↙ Visualizar histórico de compras", () => props.rapido("compras"))}
                   {item("↗ Visualizar histórico de vendas", () => props.rapido("vendas"))}
                   <li className="rd-menu-sep" />
+                  {props.podeEditar && item("✎ Editar dados", () => props.editar(aba))}
                   {props.clonar && item("⧉ Clonar produto", props.clonar)}
-                  {props.podeEditar && item("# Editar tags", () => props.editar("descricao"))}
+                  {props.podeEditar && item("# Alterar tags", () => props.editar("descricao"))}
                   {tipo === "VARIACAO" &&
                     emBreve("⇄ Tornar produto simples", "entra com o Bloco 2")}
                   {emBreve("⇪ Enviar produto para empresas", "grupo de empresas")}
@@ -804,7 +854,39 @@ export default function ProdutoVer(props: Props) {
                     props.financeiro &&
                     props.podeEditar &&
                     item("$ Atualizar custo das variações", () => props.rapido("custo-variacoes"))}
-                  {props.paraLixeira && <li className="rd-menu-sep" />}
+                  <li className="rd-menu-sep" />
+                  {item("🖨 Imprimir relatório", () => setErroArquivo(arq.relatorio([id])))}
+                  {item("⇩ Exportar para planilha", () =>
+                    setErroArquivo(arq.exportarProdutos([id])),
+                  )}
+                  {tipo === "KIT" &&
+                    item("⇩ Exportar composição do kit", () =>
+                      setErroArquivo(arq.exportarKits([id])),
+                    )}
+                  {props.podeEditar && <li className="rd-menu-sep" />}
+                  {props.podeEditar &&
+                    item(
+                      p.permite_venda === false ? "✓ Ativar produto" : "⊘ Inativar produto",
+                      () =>
+                        void props.executar({
+                          op: "produtos_lote",
+                          acao: p.permite_venda === false ? "ATIVAR" : "INATIVAR",
+                          ids: [id],
+                        }),
+                    )}
+                  {props.podeEditar &&
+                    item("🗑 Excluir anexos", () => {
+                      if (
+                        window.confirm(
+                          "Excluir todas as imagens deste produto (e das variações)? Não dá para desfazer.",
+                        )
+                      )
+                        void props.executar({
+                          op: "produtos_lote",
+                          acao: "EXCLUIR_ANEXOS",
+                          ids: [id],
+                        });
+                    })}
                   {props.paraLixeira && item("🗑 Mover para a lixeira", props.paraLixeira)}
                 </ul>
               </>
@@ -817,6 +899,11 @@ export default function ProdutoVer(props: Props) {
           {aviso}
         </p>
       )}
+      {erroArquivo && (
+        <p className="rd-error" role="alert">
+          {erroArquivo}
+        </p>
+      )}
       <nav className="rd-ver-abas" role="tablist" aria-label="Seções do produto">
         {abas.map(([chave, rotulo]) => (
           <button
@@ -824,7 +911,10 @@ export default function ProdutoVer(props: Props) {
             role="tab"
             aria-selected={aba === chave}
             className={aba === chave ? "ativa" : ""}
-            onClick={() => setAba(chave)}
+            onClick={() => {
+              setAba(chave);
+              props.aoTrocarAba?.(chave);
+            }}
           >
             {rotulo}
           </button>

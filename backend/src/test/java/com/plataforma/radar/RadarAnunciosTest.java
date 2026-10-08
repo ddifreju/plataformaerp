@@ -535,7 +535,7 @@ class RadarAnunciosTest {
                 assertThrows(
                         ResponseStatusException.class,
                         () -> anunciar(empresa, produto, loja, "Cortina", "1"));
-        assertTrue(abaixo.getReason().contains("abaixo do custo"));
+        assertTrue(abaixo.getReason().contains("política de preço")); // marketing não fica sabendo que o motivo é o custo
         BancoRadarDeTeste.executarComoDono("update radar_produto set custo=30 where id=?", produto);
         anunciar(empresa, produto, loja, "Cortina", "1");
         naEmpresa(
@@ -643,7 +643,7 @@ class RadarAnunciosTest {
                 assertThrows(
                         ResponseStatusException.class,
                         () -> anunciar(empresa, produto, tiktok, titulo, "100000"));
-        assertTrue(demais.getReason().contains("no máximo 99999"));
+        assertTrue(demais.getReason().contains("no máximo 99.999"));
         assertEquals(1, anunciar(empresa, produto, tiktok, titulo, "99999").get("criados"));
 
         UUID ml = novaLoja(empresa, "Mercado Livre", "ML");

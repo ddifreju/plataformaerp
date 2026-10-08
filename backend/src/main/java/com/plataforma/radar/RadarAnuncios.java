@@ -21,6 +21,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -124,7 +125,7 @@ public class RadarAnuncios {
                 permitir(papel, "DONO", "GESTOR");
                 yield removerLoja(n);
             }
-            case "anunciar" -> anunciar(n);
+            case "anunciar" -> anunciar(n, papel);
             case "anuncios_sincronizar" -> sincronizar(n, papel);
             case "anuncio_relacionar" -> relacionar(n);
             case "anuncios_precos" -> proporPrecos(n);
@@ -260,6 +261,11 @@ public class RadarAnuncios {
      * sai do Radar: vale para quando a loja for conectada. Preço segue a regra de sempre: dono e
      * gestor aplicam (nunca abaixo do custo); os outros cargos geram proposta para aprovação.
      */
+    /** R$ no formato brasileiro (R$ 10.000,00). */
+    private static String reais(BigDecimal v) {
+        return v == null ? "—" : String.format(Locale.forLanguageTag("pt-BR"), "R$ %,.2f", v);
+    }
+
     private Map<String, Object> sincronizar(JsonNode n, String papel) {
         String campo = n.path("campo").asText("");
         if (!Set.of("PRECO", "ESTOQUE").contains(campo)) erro("Escolha preço ou estoque.");
@@ -292,7 +298,7 @@ public class RadarAnuncios {
                         lojas.toArray(new UUID[0]));
         if (linhas.size() > MAX_IMPORTACAO)
             erro("São mais de " + MAX_IMPORTACAO + " anúncios: escolha menos produtos ou lojas.");
-        int alterados = 0, propostas = 0, abaixoDoCusto = 0;
+        int alterados = 0, propostas = 0, jaPendentes = 0, abaixoDoCusto = 0;
         for (var a : linhas) {
             if (campo.equals("ESTOQUE")) {
                 int disponivel = Math.max(0, ((Number) a.get("disponivel")).intValue());
@@ -348,7 +354,8 @@ public class RadarAnuncios {
                                 novo,
                                 tenant(),
                                 a.get("id"));
-            } else propostas += gravadas;
+            } else if (gravadas > 0) propostas++;
+            else jaPendentes++;
         }
         StringBuilder msg = new StringBuilder();
         if (linhas.isEmpty()) msg.append("Nenhum anúncio destes produtos nas lojas escolhidas.");
@@ -360,6 +367,12 @@ public class RadarAnuncios {
                 msg.append(" ")
                         .append(propostas)
                         .append(" proposta(s) de preço foram para aprovação na Central de ações.");
+            if (jaPendentes > 0)
+                msg.append(" ")
+                        .append(jaPendentes)
+                        .append(
+                                " já tinha(m) proposta com esse preço esperando aprovação na"
+                                        + " Central de ações (não foi repetida).");
             // Só quem vê custo fica sabendo o motivo.
             if (abaixoDoCusto > 0)
                 msg.append(" ")
@@ -375,7 +388,9 @@ public class RadarAnuncios {
         r.put("anuncios", linhas.size());
         r.put("alterados", alterados);
         r.put("propostas", propostas);
-        r.put("mantidos", abaixoDoCusto);
+        // Nada mudou nem foi para aprovação: a tela mostra o aviso sem o ✓ de sucesso.
+        r.put("nada", alterados == 0 && propostas == 0);
+        if (aprova) r.put("mantidos", abaixoDoCusto);
         r.put("mensagem", msg.toString());
         return r;
     }
@@ -764,7 +779,9 @@ public class RadarAnuncios {
      * e título dentro das regras do marketplace e categoria ligada à do marketplace. Um erro
      * cancela o lote inteiro (o comando é uma transação só).
      */
-    private Map<String, Object> anunciar(JsonNode n) {
+    private Map<String, Object> anunciar(JsonNode n, String papel) {
+        // Quem não vê custo não fica sabendo que o motivo é o custo (senão descobriria o custo).
+        boolean veCusto = Set.of("DONO", "GESTOR", "FINANCEIRO").contains(papel);
         JsonNode itens = n.path("itens");
         if (!itens.isArray() || itens.isEmpty() || itens.size() > MAX_LOTE)
             erro("Escolha entre 1 e " + MAX_LOTE + " anúncios.");
@@ -803,7 +820,7 @@ public class RadarAnuncios {
                                 + marketplace
                                 + " precisa ter pelo menos "
                                 + regra.tituloMin()
-                                + " letras (tem "
+                                + (regra.tituloMin() == 1 ? " letra (tem " : " letras (tem ")
                                 + letras
                                 + ")");
             else if (letras > maximo)
@@ -816,30 +833,52 @@ public class RadarAnuncios {
                                 + letras
                                 + ")");
 
-            BigDecimal preco = valor(item, "preco");
-            if (preco.signum() <= 0) problemas.add("o preço precisa ser maior que zero");
-            if ((regra.precoMin() != null && preco.compareTo(regra.precoMin()) < 0)
-                    || (regra.precoMax() != null && preco.compareTo(regra.precoMax()) > 0))
+            // Preço ou quantidade fora do formato entram na lista de problemas (com SKU e loja),
+            // em vez de recusar o lote inteiro sem dizer onde.
+            BigDecimal preco = null;
+            try {
+                preco = valor(item, "preco");
+            } catch (ResponseStatusException e) {
+                problemas.add("preço inválido: use um número positivo, com até 2 casas decimais");
+            }
+            if (preco != null && preco.signum() <= 0)
+                problemas.add("o preço precisa ser maior que zero");
+            if (preco != null
+                    && ((regra.precoMin() != null && preco.compareTo(regra.precoMin()) < 0)
+                            || (regra.precoMax() != null && preco.compareTo(regra.precoMax()) > 0)))
                 problemas.add(
                         "o preço no "
                                 + marketplace
-                                + " vai de R$ "
-                                + regra.precoMin()
-                                + " a R$ "
-                                + regra.precoMax());
+                                + " vai de "
+                                + reais(regra.precoMin())
+                                + " a "
+                                + reais(regra.precoMax()));
             // Mesma política da aprovação de preço: anúncio pronto não sobe abaixo do custo.
-            if (preco.compareTo((BigDecimal) p.get("custo")) < 0)
-                problemas.add("preço abaixo do custo do produto (política local: bloqueado)");
+            if (preco != null && preco.compareTo((BigDecimal) p.get("custo")) < 0)
+                problemas.add(
+                        veCusto
+                                ? "preço abaixo do custo do produto (política local: bloqueado)"
+                                : "preço não permitido pela política de preço; fale com o dono ou o"
+                                        + " gestor");
 
             // Quantidade livre, por decisão da lojista: não é limitada pelo estoque físico. Mas
             // anúncio com zero não está pronto para vender em marketplace nenhum.
-            Integer estoque = inteiroOpcional(item, "estoque", 0, 9_999_999);
-            if (estoque == null) erro(sku + ": informe a quantidade a anunciar.");
+            Integer estoque = null;
+            try {
+                estoque = inteiroOpcional(item, "estoque", 0, 9_999_999);
+                if (estoque == null) problemas.add("informe a quantidade a anunciar");
+            } catch (ResponseStatusException e) {
+                problemas.add("a quantidade vai de 0 a 9.999.999 (número inteiro)");
+            }
             int minimo = regra.estoqueMin() == null ? 1 : Math.max(1, regra.estoqueMin());
-            if (estoque < minimo) problemas.add("a quantidade precisa ser pelo menos " + minimo);
-            if (regra.estoqueMax() != null && estoque > regra.estoqueMax())
+            if (estoque != null && estoque < minimo)
+                problemas.add("a quantidade precisa ser pelo menos " + minimo);
+            if (estoque != null && regra.estoqueMax() != null && estoque > regra.estoqueMax())
                 problemas.add(
-                        "o " + marketplace + " aceita quantidade de no máximo " + regra.estoqueMax());
+                        "o "
+                                + marketplace
+                                + " aceita quantidade de no máximo "
+                                + String.format(Locale.forLanguageTag("pt-BR"), "%,d", regra.estoqueMax()));
 
             String descricao = p.get("descricao") == null ? "" : String.valueOf(p.get("descricao")).strip();
             if (regra.descricaoMinPalavras() != null
@@ -888,7 +927,8 @@ public class RadarAnuncios {
                             p.get("categoria_id"));
             if (ligada == null || ligada == 0)
                 problemas.add("ligue a categoria do produto a uma categoria do " + marketplace);
-            if (!problemas.isEmpty()) erro(sku + ": " + String.join("; ", problemas) + ".");
+            if (!problemas.isEmpty())
+                erro(sku + " em " + loja.get("nome") + ": " + String.join("; ", problemas) + ".");
             // Quantos anúncios o lojista quiser do mesmo produto na mesma loja (decisão dela:
             // teste de título, estratégia de ads, mais catálogo).
             db.update(

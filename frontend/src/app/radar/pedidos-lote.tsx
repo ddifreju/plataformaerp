@@ -8,7 +8,7 @@
 
 import { useState, type ReactNode } from "react";
 import { esc, imprimir } from "./produtos-lote";
-import { cents, centMoney, str, type Row } from "./ui";
+import { cents, centMoney, str, useFecharFora, type Row } from "./ui";
 
 type Props = {
   pedidos: Row[];
@@ -50,7 +50,10 @@ export default function PedidosLote({
   children,
 }: Props) {
   const [menu, setMenu] = useState(false);
+  const caixaMenu = useFecharFora<HTMLDivElement>(menu, () => setMenu(false));
   const [menuLinha, setMenuLinha] = useState<{ id: string; x: number; y: number } | null>(null);
+  // Esc fecha o "⋯" da linha (o clique fora já fecha pela capa).
+  useFecharFora(!!menuLinha, () => setMenuLinha(null));
   const [acao, setAcao] = useState<Acao | null>(null);
   const [alvo, setAlvo] = useState<string[]>([]);
   const [aviso, setAviso] = useState("");
@@ -320,7 +323,7 @@ export default function PedidosLote({
           <button type="button" onClick={() => imprimirEtiquetas()}>
             🖨 Imprimir etiqueta
           </button>
-          <div className="rd-mais-acoes">
+          <div className="rd-mais-acoes" ref={caixaMenu}>
             <button
               type="button"
               aria-expanded={menu}

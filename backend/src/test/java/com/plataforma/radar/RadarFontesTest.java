@@ -52,6 +52,16 @@ class RadarFontesTest {
         UUID a = BancoRadarDeTeste.novaEmpresa();
         UUID p = BancoRadarDeTeste.novoProduto(a, "REL-C", "10.00", "50.00");
         BancoRadarDeTeste.novoPedido(a, p, "Mercado Livre", "Ana", "50.00", "10.00");
+        BancoRadarDeTeste.executarComoDono(
+                "insert into radar_registro(id,tenant_id,tipo,dados) values(?,?,'COMPRA',"
+                        + "jsonb_build_object('produto_id',?::text,'quantidade','2',"
+                        + "'custo_unitario','9.50','fornecedor','F'))",
+                UUID.randomUUID(), a, p.toString());
+        assertTrue(linhas(a, "DONO", "compras").getFirst().containsKey("custo_unitario"));
+        // O cargo Estoque registra e recebe compras, mas não vê o custo (decisão da Jéssica).
+        var compraEstoque = linhas(a, "ESTOQUE", "compras").getFirst();
+        assertFalse(compraEstoque.containsKey("custo_unitario"));
+        assertFalse(compraEstoque.containsKey("total"));
         var dono = linhas(a, "DONO", "pedidos").getFirst();
         assertTrue(dono.containsKey("resultado"));
         assertTrue(dono.containsKey("custo_produtos"));

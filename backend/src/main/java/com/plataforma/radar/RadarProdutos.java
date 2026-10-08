@@ -44,7 +44,7 @@ public class RadarProdutos {
 
     static final Set<String> OPERACOES = Set.of("produto_salvar", "produto_clonar");
 
-    private static final int MAX_LOTE = 500;
+    private static final int MAX_LOTE = 5000;
 
     /** Campos que "editar dados em massa" pode mudar, com o tipo de valor de cada um. */
     private static final Map<String, String> CAMPOS_LOTE =
@@ -116,6 +116,24 @@ public class RadarProdutos {
         return out;
     }
 
+    /** Data e hora vindas do banco ou do formulário (texto ISO); null quando não há. */
+    private static java.time.Instant instante(Object v) {
+        if (v instanceof java.sql.Timestamp t) return t.toInstant();
+        if (v instanceof java.time.OffsetDateTime o) return o.toInstant();
+        if (v instanceof java.time.Instant i) return i;
+        String t = v == null ? "" : v.toString().trim();
+        if (t.isEmpty()) return null;
+        try {
+            return java.time.OffsetDateTime.parse(t).toInstant();
+        } catch (java.time.format.DateTimeParseException e) {
+            try {
+                return java.time.Instant.ofEpochMilli(Long.parseLong(t));
+            } catch (NumberFormatException e2) {
+                return null;
+            }
+        }
+    }
+
     /** Cria ou atualiza o produto com tudo o que o formulário envia. */
     Map<String, Object> salvar(JsonNode n, String papel) {
         permitir(papel, "DONO", "GESTOR");
@@ -132,6 +150,17 @@ public class RadarProdutos {
             if (antes.get("pai_id") != null) erro("Edite a variação pelo produto principal.");
             if (!antes.get("tipo").equals(tipo))
                 erro("O tipo do produto não muda depois de criado. Cadastre um novo produto.");
+            // Outra pessoa salvou depois que este formulário abriu: não sobrescreve sem avisar.
+            java.time.Instant lido = instante(n.path("versao_lida").asText(""));
+            java.time.Instant atual = instante(antes.get("atualizado_em"));
+            // Compara em milissegundos: o texto que a tela recebeu pode vir com menos casas.
+            var ms = java.time.temporal.ChronoUnit.MILLIS;
+            if (lido != null && atual != null && atual.truncatedTo(ms).isAfter(lido.truncatedTo(ms)))
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Outra pessoa salvou este produto depois que você abriu. Para não apagar o"
+                                + " que ela mudou, volte para a lista, abra o produto de novo e"
+                                + " refaça a sua alteração.");
         }
 
         Map<String, Object> c = colunasComuns(n);
@@ -259,16 +288,22 @@ public class RadarProdutos {
     /** Recalcula a coluna incompleto depois de mudanças fora do formulário (lote, importação). */
     void recalcularPendencias(List<UUID> ids) {
         if (ids.isEmpty()) return;
+        // Duas gravações para o lote inteiro (uma por produto ficaria lenta com catálogo grande).
+        List<UUID> incompletos = new ArrayList<>(), completos = new ArrayList<>();
         for (var linha :
                 db.queryForList(
                         "select * from radar_produto where tenant_id=? and id = any(?)",
                         tenant(),
                         ids.toArray(UUID[]::new)))
+            (pendencias(linha).isEmpty() ? completos : incompletos).add((UUID) linha.get("id"));
+        for (boolean incompleto : List.of(true, false))
             db.update(
-                    "update radar_produto set incompleto=? where tenant_id=? and id=?",
-                    !pendencias(linha).isEmpty(),
+                    "update radar_produto set incompleto=? where tenant_id=? and id = any(?)"
+                            + " and incompleto is distinct from ?",
+                    incompleto,
                     tenant(),
-                    linha.get("id"));
+                    (incompleto ? incompletos : completos).toArray(UUID[]::new),
+                    incompleto);
     }
 
     /** SKU automático conforme Configurações do cadastro de produtos. Manual: SKU obrigatório. */
@@ -432,6 +467,11 @@ public class RadarProdutos {
         c.put("descricao", textoOuVazio(n, "descricao", 20000));
         BigDecimal promocional = valorOpcional(n, "preco_promocional");
         if (promocional != null && promocional.signum() == 0) promocional = null;
+        BigDecimal precoVenda = valorOuZero(n, "preco");
+        if (promocional != null
+                && precoVenda.signum() > 0
+                && promocional.compareTo(precoVenda) >= 0)
+            erro("Preço promocional deve ser menor que o preço de venda.");
         c.put("preco_promocional", promocional);
         c.put("peso_liquido_kg", decimalOpcional(n, "peso_liquido_kg", 3));
         c.put("peso_bruto_kg", decimalOpcional(n, "peso_bruto_kg", 3));
@@ -624,6 +664,14 @@ public class RadarProdutos {
                     v.has("preco_promocional")
                             ? valorOpcional(v, "preco_promocional")
                             : pai.get("preco_promocional"));
+            if (c.get("preco_promocional") instanceof BigDecimal promo
+                    && c.get("preco") instanceof BigDecimal precoVar
+                    && precoVar.signum() > 0
+                    && promo.compareTo(precoVar) >= 0)
+                erro(
+                        "Na variação "
+                                + c.get("sku")
+                                + ", o preço promocional deve ser menor que o preço de venda.");
             String gtin = opcional(v, "gtin", 14);
             if (gtin != null && !gtinValido(gtin))
                 erro("GTIN inválido na variação " + c.get("sku") + ".");
@@ -851,11 +899,14 @@ public class RadarProdutos {
                         arr,
                         arr);
         return Map.of(
+                "nada",
+                iniciados == 0,
                 "iniciados",
                 iniciados,
                 "mensagem",
                 iniciados == 0
-                        ? "Esses produtos já têm histórico de custos (ou estão sem custo)."
+                        ? "Nada a iniciar: esses produtos já têm histórico de custos (ele começa"
+                                + " sozinho no cadastro e a cada mudança de custo) ou estão sem custo."
                         : iniciados
                                 + " produto(s) com o histórico de custos iniciado. Cada mudança de"
                                 + " custo fica registrada daqui em diante.");
@@ -1153,7 +1204,11 @@ public class RadarProdutos {
         List<UUID> marcados = new ArrayList<>();
         JsonNode lista = n.path("ids");
         if (!lista.isArray() || lista.isEmpty() || lista.size() > MAX_LOTE)
-            erro("Escolha entre 1 e " + MAX_LOTE + " produtos.");
+            erro(
+                    "São "
+                            + lista.size()
+                            + " produtos marcados: dá para até 5.000 por vez. Use um filtro ou faça"
+                            + " em partes.");
         for (JsonNode i : lista) {
             try {
                 UUID u = UUID.fromString(i.asText());
@@ -1188,6 +1243,10 @@ public class RadarProdutos {
                 "select id from radar_produto where tenant_id=? and id = any(?) for update",
                 tenant(),
                 alvo.toArray(UUID[]::new));
+        // Com as variações, o lote não passa de 20 mil linhas; e cada comando tem tempo máximo.
+        if (alvo.size() > 20_000)
+            erro("Contando as variações, são mais de 20.000 produtos. Faça em partes menores.");
+        db.execute("set local statement_timeout = '30s'");
         if (alvo.isEmpty())
             erro(
                     daLixeira
@@ -1367,6 +1426,7 @@ public class RadarProdutos {
                             fator);
             if (invalidos != null && invalidos > 0)
                 erro("O reajuste deixaria " + invalidos + " produto(s) com valor inválido.");
+            promocionalAcima(campo, "round(" + expressao + ", 2)", fator, ids);
             k =
                     db.update(
                             "update radar_produto set "
@@ -1383,6 +1443,7 @@ public class RadarProdutos {
                             ids);
         } else {
             Object valor = valorDoLote(n, campo, tipo);
+            if (valor != null) promocionalAcima(campo, "?", valor, ids);
             String filtroKit = campo.equals("custo") ? " and tipo<>'KIT'" : "";
             // campo vem só de CAMPOS_LOTE (chaves fixas), nunca do texto da requisição.
             k =
@@ -1399,9 +1460,20 @@ public class RadarProdutos {
                 "mensagem",
                 k
                         + " produto(s) atualizado(s)."
-                        + (campo.equals("custo")
+                        + (campo.equals("custo") && temKit(ids)
                                 ? " O custo de kit vem dos componentes e não muda."
                                 : ""));
+    }
+
+    private boolean temKit(UUID[] ids) {
+        Integer kits =
+                db.queryForObject(
+                        "select count(*) from radar_produto where tenant_id=? and id = any(?) and"
+                                + " tipo='KIT'",
+                        Integer.class,
+                        tenant(),
+                        ids);
+        return kits != null && kits > 0;
     }
 
     /** Valor validado do campo; vazio limpa o campo quando ele é opcional. */
@@ -1472,6 +1544,34 @@ public class RadarProdutos {
                 yield null;
             }
         };
+    }
+
+    /**
+     * Antes de gravar preço ou promocional em lote: promoção igual ou acima do preço confunde o
+     * cliente e o marketplace recusa. {@code novo} é a expressão SQL do valor novo (com um "?").
+     */
+    private void promocionalAcima(String campo, String novo, Object parametro, UUID[] ids) {
+        String condicao =
+                switch (campo) {
+                    case "preco" ->
+                            "preco_promocional is not null and preco_promocional >= " + novo;
+                    case "preco_promocional" -> "preco > 0 and " + novo + " >= preco";
+                    default -> null;
+                };
+        if (condicao == null) return;
+        Integer acima =
+                db.queryForObject(
+                        "select count(*) from radar_produto where tenant_id=? and id = any(?) and "
+                                + condicao,
+                        Integer.class,
+                        tenant(),
+                        ids,
+                        parametro);
+        if (acima != null && acima > 0)
+            erro(
+                    acima
+                            + " produto(s) ficariam com o preço promocional igual ou maior que o preço"
+                            + " de venda. Ajuste o promocional antes.");
     }
 
     private Map<String, Object> alterarTags(JsonNode n, List<UUID> alvo) {
@@ -1561,9 +1661,10 @@ public class RadarProdutos {
     /** Apaga de vez, da lixeira, só o que não tem histórico nenhum. */
     private Map<String, Object> excluirDeVez(List<UUID> alvo) {
         UUID[] ids = alvo.toArray(UUID[]::new);
-        List<String> presos =
+        var presos =
                 db.queryForList(
-                        "select p.sku from radar_produto p where p.tenant_id=? and p.id = any(?)"
+                        "select p.id, p.sku, p.pai_id from radar_produto p where p.tenant_id=? and"
+                                + " p.id = any(?)"
                                 + " and (exists(select 1 from radar_pedido x where"
                                 + " x.tenant_id=p.tenant_id and x.produto_id=p.id) or exists(select"
                                 + " 1 from radar_anuncio x where x.tenant_id=p.tenant_id and"
@@ -1576,16 +1677,39 @@ public class RadarProdutos {
                                 + " exists(select 1 from radar_registro x where"
                                 + " x.tenant_id=p.tenant_id and x.tipo='COMPRA' and"
                                 + " x.dados->>'produto_id'=p.id::text)) order by p.sku",
-                        String.class,
                         tenant(),
                         ids,
                         ids);
-        if (!presos.isEmpty())
+        // Quem tem histórico fica na lixeira; o produto principal de uma variação presa também.
+        Set<UUID> ficam = new HashSet<>();
+        for (var x : presos) {
+            ficam.add((UUID) x.get("id"));
+            if (x.get("pai_id") != null) ficam.add((UUID) x.get("pai_id"));
+        }
+        // Componente de um kit que fica na lixeira também fica (o kit ainda aponta para ele).
+        // Se o componente for uma variação, o produto principal dela também fica.
+        if (!ficam.isEmpty())
+            for (var c :
+                    db.queryForList(
+                            "select k.componente_id, p.pai_id from radar_kit_item k join"
+                                    + " radar_produto p on p.tenant_id=k.tenant_id and"
+                                    + " p.id=k.componente_id where k.tenant_id=? and k.kit_id ="
+                                    + " any(?)",
+                            tenant(),
+                            ficam.toArray(UUID[]::new))) {
+                ficam.add((UUID) c.get("componente_id"));
+                if (c.get("pai_id") != null) ficam.add((UUID) c.get("pai_id"));
+            }
+        List<UUID> apagar = alvo.stream().filter(id -> !ficam.contains(id)).toList();
+        String naLixeira =
+                presos.stream().map(x -> (String) x.get("sku")).collect(Collectors.joining(", "));
+        if (apagar.isEmpty())
             erro(
                     "Não dá para apagar de vez produto com histórico (pedido, anúncio, estoque,"
                             + " kit, promoção ou compra): "
-                            + String.join(", ", presos)
+                            + naLixeira
                             + ". Ele pode ficar na lixeira para sempre, sem atrapalhar.");
+        ids = apagar.toArray(UUID[]::new);
         for (String tabela : List.of("radar_produto_imagem", "radar_produto_fornecedor"))
             db.update(
                     "delete from " + tabela + " where tenant_id=? and produto_id = any(?)",
@@ -1600,7 +1724,16 @@ public class RadarProdutos {
                 tenant(),
                 ids);
         db.update("delete from radar_produto where tenant_id=? and id = any(?)", tenant(), ids);
-        return Map.of("mensagem", alvo.size() + " produto(s) apagado(s) de vez.");
+        return Map.of(
+                "mensagem",
+                apagar.size()
+                        + " produto(s) apagado(s) de vez."
+                        + (ficam.isEmpty()
+                                ? ""
+                                : " Ficaram na lixeira, por terem histórico (pedido, anúncio,"
+                                        + " estoque, kit, promoção ou compra): "
+                                        + naLixeira
+                                        + "."));
     }
 
     private Map<String, Object> linhaParaAtualizar(UUID id) {
@@ -1690,7 +1823,13 @@ public class RadarProdutos {
         for (JsonNode item : lista) {
             String s = item.asText("").trim();
             if (s.isBlank()) continue;
-            if (s.length() > maxTamanho) erro("Item muito longo em " + campo);
+            if (s.length() > maxTamanho)
+                erro(
+                        "Cada item de "
+                                + RadarEntrada.nomeDoCampo(campo)
+                                + " aceita até "
+                                + maxTamanho
+                                + " caracteres.");
             if (!out.contains(s)) out.add(s);
         }
         return paraJson(out);

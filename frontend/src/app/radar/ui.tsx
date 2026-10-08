@@ -1,6 +1,56 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
+
+/**
+ * Menu aberto fecha com clique (ou toque) em qualquer lugar fora dele e com Esc. Devolve a ref
+ * para pôr no elemento que envolve o botão e o menu.
+ */
+export function useFecharFora<T extends HTMLElement>(aberto: boolean, fechar: () => void) {
+  const ref = useRef<T>(null);
+  const fecharAtual = useRef(fechar);
+  useEffect(() => {
+    fecharAtual.current = fechar;
+  });
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: Event) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) fecharAtual.current();
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && fecharAtual.current();
+    document.addEventListener("pointerdown", fora);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("pointerdown", fora);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [aberto]);
+  return ref;
+}
 
 export type Row = Record<string, string | number | boolean | Record<string, unknown>>;
+
+// Tamanhos de roupa na ordem de quem veste; o resto em ordem alfabética (com números).
+const TAMANHOS = ["PP", "P", "M", "G", "GG", "XG", "XGG", "EG", "EGG"];
+const compararValor = (a: string, b: string) => {
+  const ta = TAMANHOS.indexOf(a.toUpperCase()),
+    tb = TAMANHOS.indexOf(b.toUpperCase());
+  if (ta >= 0 && tb >= 0) return ta - tb;
+  return a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" });
+};
+
+/** Variações sempre na mesma ordem (Azul/P, Azul/M, Verde/P…), pelos tipos de variação. */
+export function ordenarVariacoes<T extends { atributos?: unknown; atributos_variacao?: unknown }>(
+  lista: T[],
+  tipos: string[],
+): T[] {
+  const attr = (x: T) => (x.atributos ?? x.atributos_variacao ?? {}) as Record<string, string>;
+  return [...lista].sort((x, y) => {
+    for (const t of tipos) {
+      const c = compararValor(String(attr(x)[t] ?? ""), String(attr(y)[t] ?? ""));
+      if (c) return c;
+    }
+    return 0;
+  });
+}
 export type Field = {
   key: string;
   label: string;

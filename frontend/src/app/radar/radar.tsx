@@ -237,12 +237,21 @@ async function call(path: string, body?: unknown, key?: string) {
   return data;
 }
 
+// A página aberta fica no endereço (#produtos): F5 e o link copiado voltam ao mesmo lugar.
+function paginaDoEndereco() {
+  if (typeof window === "undefined") return "";
+  const p = decodeURIComponent(window.location.hash.slice(1)).split("/")[0];
+  return nav.some((x) => x[0] === p) ? p : "";
+}
+
 export default function Radar({ initialPage = "visao" }: { initialPage?: string }) {
   const [data, setData] = useState<Data | null>(null),
-    [page, setPage] = useState(initialPage),
+    [page, setPage] = useState(() => paginaDoEndereco() || initialPage),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(""),
+    // Resposta sem efeito ("nada a iniciar", "nenhum anúncio mudou"): aviso neutro, sem ✓.
+    [noticeNeutro, setNoticeNeutro] = useState(false),
     [error, setError] = useState(""),
     [modal, setModal] = useState<ModalSpec | null>(null),
     [tour, setTour] = useState(0),
@@ -262,6 +271,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [verLixeira, setVerLixeira] = useState(false),
     // Produto aberto na visualização (clique na lista); "Editar" abre o formulário por cima.
     [vendo, setVendo] = useState<{ id: string; aba?: AbaVer } | null>(null),
+    // Última aba usada na visualização: o próximo produto aberto abre nela.
+    [ultimaAbaVer, setUltimaAbaVer] = useState<AbaVer | undefined>(),
     // Painel lateral de ação rápida (preços, estoque, histórico…) do "⋯" e do "Mais ações".
     [rapido, setRapido] = useState<{ tipo: TipoRapido; ids: string[] } | null>(null),
     // Produtos abertos no passo a passo "Anunciar".
@@ -269,9 +280,41 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [filtroPedidosAtual, setFiltroPedidos] = useState<Filtro | null>(null),
     // Colunas visíveis da lista de produtos e a gaveta que escolhe.
     [colunasProdutos, setColunasProdutos] = useColunas(),
-    [verColunas, setVerColunas] = useState(false);
+    [verColunas, setVerColunas] = useState(false),
+    // Lista de produtos em partes (100 por vez), para não pesar com catálogo grande.
+    [mostrarProdutos, setMostrarProdutos] = useState(100);
   // O "mais ações" do topo usa as funções da lista (imprimir, exportar, editar em lote).
   const controleLote = useRef<ControleLote>(null);
+  // Mensagem do último comando recusado: o formulário do produto abre a aba do campo.
+  const ultimoErro = useRef("");
+  // Aviso de sucesso some sozinho depois de alguns segundos (erro fica até fechar).
+  useEffect(() => {
+    if (!notice) return;
+    const t = window.setTimeout(() => setNotice(""), 8000);
+    return () => window.clearTimeout(t);
+  }, [notice]);
+  // Cada troca de página vira um passo do histórico do navegador; "voltar" volta a página.
+  useEffect(() => {
+    if (window.location.hash !== `#${page}`) window.history.pushState(null, "", `#${page}`);
+  }, [page]);
+  // Abrir um produto (visualizar ou editar) também vira um passo: "voltar" fecha e volta à lista.
+  const produtoAberto = !!(vendo || editando);
+  useEffect(() => {
+    if (produtoAberto && !window.location.hash.endsWith("/aberto"))
+      window.history.pushState(null, "", `#${page}/aberto`);
+  }, [produtoAberto, page]);
+  useEffect(() => {
+    const voltar = () => {
+      const p = paginaDoEndereco();
+      if (p) {
+        setEditando(null);
+        setVendo(null);
+        setPage(p);
+      }
+    };
+    window.addEventListener("popstate", voltar);
+    return () => window.removeEventListener("popstate", voltar);
+  }, []);
   const refresh = useCallback(async () => {
     const d = await call("");
     setData(d);
@@ -298,9 +341,11 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     try {
       const r = await call("/comandos", body, crypto.randomUUID());
       setNotice(r.mensagem);
+      setNoticeNeutro(r.nada === true);
       await refresh();
       return true;
     } catch (e) {
+      setNotice("");
       setError((e as Error).message);
       return false;
     } finally {
@@ -309,14 +354,18 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   }
   // Como command, mas devolve a resposta (para quem precisa do id gerado).
   async function commandResult(body: Record<string, unknown>) {
+    ultimoErro.current = "";
     setError("");
     setBusy(true);
     try {
       const r = await call("/comandos", body, crypto.randomUUID());
       setNotice(r.mensagem);
+      setNoticeNeutro(r.nada === true);
       await refresh();
       return r as Record<string, unknown>;
     } catch (e) {
+      ultimoErro.current = (e as Error).message;
+      setNotice("");
       setError((e as Error).message);
       return null;
     } finally {
@@ -466,6 +515,14 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   };
   const listaProdutos =
     page === "produtos" ? filtrarProdutos(principais, filtroProdutos, contextoFiltro) : [];
+  // Ação em lote vale só para o que está na lista: marcado que o filtro escondeu não conta.
+  const marcadosNaLista = marcadosProdutos.filter((id) => listaProdutos.some((p) => p.id === id));
+  // Trocar o filtro desmarca o que saiu da lista (para não agir em produto que não aparece).
+  const filtrarLista = (f: FiltroProdutos) => {
+    setFiltroProdutos(f);
+    const ficam = new Set(filtrarProdutos(principais, f, contextoFiltro).map((p) => str(p.id)));
+    setMarcadosProdutos((m) => m.filter((id) => ficam.has(id)));
+  };
   // Colunas escolhidas em "Informações visíveis" (custo só para quem vê financeiro).
   const colunasLista = COLUNAS.filter(
     ([c]) =>
@@ -694,9 +751,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   <MaisAcoesProdutos
                     controle={controleLote}
                     ids={() =>
-                      marcadosProdutos.length
-                        ? marcadosProdutos
-                        : listaProdutos.map((p) => str(p.id))
+                      marcadosNaLista.length ? marcadosNaLista : listaProdutos.map((p) => str(p.id))
                     }
                     podeEditar={can("DONO", "GESTOR")}
                     podeAnuncios={can("DONO", "GESTOR", "MARKETING")}
@@ -713,7 +768,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                       setRapido({ tipo: "receber", ids: [] });
                     }}
                     problemasFiscais={() =>
-                      setFiltroProdutos({
+                      filtrarLista({
                         ...filtroProdutos,
                         pendencias: [...new Set([...filtroProdutos.pendencias, "FISCAL"])],
                       })
@@ -731,8 +786,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             </div>
           </div>
           {notice && (
-            <div className="rd-toast" role="status">
-              ✓ {notice}
+            <div className={`rd-toast${noticeNeutro ? " neutro" : ""}`} role="status">
+              {noticeNeutro ? "ⓘ" : "✓"} {notice}
               <button aria-label="Fechar aviso" onClick={() => setNotice("")}>
                 ×
               </button>
@@ -926,6 +981,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               podeAnunciar={can("DONO", "GESTOR", "MARKETING")}
               anunciar={(id) => setAnunciando([id])}
               executar={commandResult}
+              erroDoServidor={() => ultimoErro.current}
               recarregar={refresh}
               abrirModal={setModal}
               voltar={() => setEditando(null)}
@@ -936,7 +992,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             <ProdutoVer
               key={`${vendo.id}-${vendo.aba ?? ""}`}
               produto={prod(vendo.id)!}
-              abaInicial={vendo.aba}
+              abaInicial={vendo.aba ?? ultimaAbaVer}
+              aoTrocarAba={setUltimaAbaVer}
               produtos={products}
               imagens={data.imagens}
               anuncios={listings}
@@ -953,6 +1010,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               podeEditar={can("DONO", "GESTOR")}
               podeAnunciar={can("DONO", "GESTOR", "MARKETING")}
               podeEnviarEstoque={can("DONO", "GESTOR", "MARKETING", "ESTOQUE")}
+              podeAjustarEstoque={can("DONO", "GESTOR", "ESTOQUE")}
               disponivel={disponivel}
               editar={(aba) => setEditando({ id: vendo.id, aba, versao: Date.now() })}
               anunciar={() => setAnunciando([vendo.id])}
@@ -980,6 +1038,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                     }
                   : undefined
               }
+              executar={command}
               voltar={() => setVendo(null)}
             />
           )}
@@ -1029,7 +1088,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               </div>
               <FiltrosProdutos
                 filtro={filtroProdutos}
-                setFiltro={setFiltroProdutos}
+                setFiltro={filtrarLista}
                 contexto={contextoFiltro}
                 principais={principais}
                 total={listaProdutos.length}
@@ -1053,7 +1112,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                       role="tab"
                       aria-selected={ativa}
                       className={ativa ? "ativa" : ""}
-                      onClick={() => setFiltroProdutos({ ...filtroProdutos, tipos: t ? [t] : [] })}
+                      onClick={() => filtrarLista({ ...filtroProdutos, tipos: t ? [t] : [] })}
                     >
                       {rotulo}
                       <span>
@@ -1077,6 +1136,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                 }}
                 podeEnviarEstoque={can("DONO", "GESTOR", "MARKETING", "ESTOQUE")}
                 podeCusto={data.financeiroPermitido && can("DONO", "GESTOR")}
+                podeAjustarEstoque={can("DONO", "GESTOR", "ESTOQUE")}
                 produtos={cadastrados}
                 clonar={
                   can("DONO", "GESTOR")
@@ -1087,7 +1147,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                     : undefined
                 }
                 linhas={listaProdutos}
-                marcados={marcadosProdutos}
+                marcados={marcadosNaLista}
                 setMarcados={setMarcadosProdutos}
                 categorias={data.categorias}
                 embalagens={data.embalagens}
@@ -1104,9 +1164,12 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                       ...colunasLista.map(([, rotulo]) => rotulo),
                       "Ações",
                     ]}
-                    rows={listaProdutos.map((p) => {
+                    rows={listaProdutos.slice(0, mostrarProdutos).map((p) => {
                       const capa = data.imagens.find((i) => i.produto_id === p.id);
-                      const variacoes = products.filter((f) => f.pai_id === p.id).length;
+                      // Conta só as variações à venda (as tiradas da grade ficam fora de venda).
+                      const variacoes = products.filter(
+                        (f) => f.pai_id === p.id && f.permite_venda !== false && !f.excluido_em,
+                      ).length;
                       // Anúncios do produto e das variações dele.
                       const qtdAnuncios = listings.filter(
                         (a) => a.produto_id === p.id || prod(a.produto_id)?.pai_id === p.id,
@@ -1170,15 +1233,19 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                                   .join(", ") || "—"
                               );
                             case "fisico":
-                              return p.controla_estoque === false
-                                ? "Sem controle"
-                                : p.tipo === "KIT"
-                                  ? "—"
-                                  : p.tipo === "VARIACAO"
-                                    ? products
-                                        .filter((f) => f.pai_id === p.id)
-                                        .reduce((t, f) => t + Number(f.fisico), 0)
-                                    : Number(p.fisico);
+                              return p.controla_estoque === false ? (
+                                "Sem controle"
+                              ) : p.tipo === "KIT" ? (
+                                <span title="Kit não tem estoque próprio: ele sai dos componentes">
+                                  —
+                                </span>
+                              ) : p.tipo === "VARIACAO" ? (
+                                products
+                                  .filter((f) => f.pai_id === p.id)
+                                  .reduce((t, f) => t + Number(f.fisico), 0)
+                              ) : (
+                                Number(p.fisico)
+                              );
                             case "disponivel":
                               return p.controla_estoque === false ? "Sem controle" : disponivel(p);
                             case "anuncios":
@@ -1217,6 +1284,15 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   />
                 )}
               </ProdutosLote>
+              <div className="rd-lista-rodape">
+                Mostrando {Math.min(mostrarProdutos, listaProdutos.length)} de{" "}
+                {listaProdutos.length} produto(s)
+                {listaProdutos.length > mostrarProdutos && (
+                  <button type="button" onClick={() => setMostrarProdutos(mostrarProdutos + 100)}>
+                    mostrar mais 100
+                  </button>
+                )}
+              </div>
             </section>
           )}
           {page === "importar" && (
@@ -2271,6 +2347,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
         <Anunciar
           ids={anunciando}
           produtos={products}
+          anuncios={listings}
           lojas={data.lojas ?? []}
           categorias={data.categorias}
           categoriaCanais={data.categoriaCanais ?? []}
