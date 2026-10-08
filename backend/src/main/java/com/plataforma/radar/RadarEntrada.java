@@ -38,7 +38,7 @@ final class RadarEntrada {
                     Map.entry("motivo", "Motivo"),
                     Map.entry("titulo", "Título"),
                     Map.entry("observacoes_internas", "Observações internas"),
-                    Map.entry("tags", "tags"),
+                    Map.entry("tags", "Tags"),
                     Map.entry("valor", "valor"));
 
     static String nomeDoCampo(String campo) {

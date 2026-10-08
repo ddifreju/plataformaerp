@@ -400,9 +400,10 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     label: `${p.sku} · ${p.nome}`,
   }));
   const disponivel = (p: Row): number => {
+    // Produto com variações: soma só as variações à venda (a fora de venda não se vende).
     if (p.tipo === "VARIACAO")
       return products
-        .filter((f) => f.pai_id === p.id)
+        .filter((f) => f.pai_id === p.id && f.permite_venda !== false && !f.excluido_em)
         .reduce((s, f) => s + Number(f.fisico) - Number(f.reservado), 0);
     if (p.tipo === "KIT") {
       const itens = (data?.kitItens ?? []).filter((k) => k.kit_id === p.id);

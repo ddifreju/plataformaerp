@@ -761,7 +761,7 @@ export default function ProdutoVer(props: Props) {
   const emBreve = (rotulo: string, motivo: string) => (
     <li>
       <button role="menuitem" disabled title={motivo}>
-        {rotulo} <small>{motivo}</small>
+        {rotulo} <small>({motivo})</small>
       </button>
     </li>
   );
@@ -844,12 +844,12 @@ export default function ProdutoVer(props: Props) {
                   {item("↙ Visualizar histórico de compras", () => props.rapido("compras"))}
                   {item("↗ Visualizar histórico de vendas", () => props.rapido("vendas"))}
                   <li className="rd-menu-sep" />
-                  {props.podeEditar && item("✎ Editar dados", () => props.editar(aba))}
+                  {props.podeEditar && item("✎ Editar cadastro completo", () => props.editar(aba))}
                   {props.clonar && item("⧉ Clonar produto", props.clonar)}
                   {props.podeEditar && item("# Alterar tags", () => props.editar("descricao"))}
                   {tipo === "VARIACAO" &&
-                    emBreve("⇄ Tornar produto simples", "entra com o Bloco 2")}
-                  {emBreve("⇪ Enviar produto para empresas", "grupo de empresas")}
+                    emBreve("⇄ Tornar produto simples", "Entra com o Bloco 2")}
+                  {emBreve("⇪ Enviar produto para empresas", "Grupo de empresas")}
                   {tipo === "VARIACAO" &&
                     props.financeiro &&
                     props.podeEditar &&

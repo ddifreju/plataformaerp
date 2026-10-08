@@ -581,8 +581,8 @@ export default function ProdutosLote({
   const cabecalho = (
     <input
       type="checkbox"
-      aria-label="Marcar todos da lista"
-      title="Marcar todos da lista"
+      aria-label={`Marcar todos da lista (${linhas.length})`}
+      title={`Marcar todos da lista: ${linhas.length} produto(s), inclusive os que ainda não apareceram`}
       checked={todos}
       onChange={(e) =>
         setMarcados(() =>
@@ -643,7 +643,7 @@ export default function ProdutosLote({
             ])}
             <li className="rd-menu-sep" />
             {ativo &&
-              item("✎ Editar dados", () => abrir("EDITAR", [menuLinha.id]))}
+              item("✎ Editar um campo", () => abrir("EDITAR", [menuLinha.id]))}
             {clonar &&
               item("⧉ Clonar produto", () => {
                 const id = menuLinha.id;

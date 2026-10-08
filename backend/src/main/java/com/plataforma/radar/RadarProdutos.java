@@ -1844,7 +1844,15 @@ public class RadarProdutos {
     private String listaDeTextos(JsonNode n, String campo, int maxItens, int maxTamanho) {
         JsonNode lista = n.path(campo);
         if (lista.isMissingNode() || lista.isNull()) return "[]";
-        if (!lista.isArray() || lista.size() > maxItens) erro("Lista inválida: " + campo);
+        if (!lista.isArray()) erro("Lista inválida em " + RadarEntrada.nomeDoCampo(campo) + ".");
+        if (lista.size() > maxItens)
+            erro(
+                    RadarEntrada.nomeDoCampo(campo)
+                            + ": no máximo "
+                            + maxItens
+                            + " por produto (tem "
+                            + lista.size()
+                            + ").");
         List<String> out = new ArrayList<>();
         for (JsonNode item : lista) {
             String s = item.asText("").trim();
