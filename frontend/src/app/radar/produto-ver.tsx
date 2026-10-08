@@ -49,6 +49,7 @@ type Props = {
   financeiro: boolean;
   podeEditar: boolean;
   podeAnunciar: boolean;
+  podeEnviarEstoque: boolean;
   disponivel: (p: Row) => number;
   editar: (aba: Aba) => void;
   anunciar: () => void;
@@ -781,7 +782,7 @@ export default function ProdutoVer(props: Props) {
                   {props.podeAnunciar && item("⇪ Enviar para o e-commerce", props.anunciar)}
                   {props.podeAnunciar &&
                     item("$ Enviar preços para o e-commerce", () => props.rapido("precos"))}
-                  {props.podeAnunciar &&
+                  {props.podeEnviarEstoque &&
                     item("▦ Enviar estoque ao e-commerce", () => props.rapido("estoque"))}
                   {item("▤ Enviar dados fiscais para o e-commerce", () => props.rapido("fiscais"))}
                   <li className="rd-menu-sep" />

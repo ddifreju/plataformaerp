@@ -27,6 +27,8 @@ type Props = {
   anunciar?: (ids: string[]) => void;
   /** Abre um painel de ação rápida na lateral (preços, estoque, histórico…). */
   rapido: (tipo: TipoRapido, ids: string[]) => void;
+  /** Quem leva o estoque do cadastro para os anúncios (inclui o cargo Estoque). */
+  podeEnviarEstoque: boolean;
   /** Quem vê custo e quem pode mexer em custo. */
   podeCusto: boolean;
   ativo: boolean;
@@ -162,6 +164,7 @@ export default function ProdutosLote({
   clonar,
   anunciar,
   rapido,
+  podeEnviarEstoque,
   podeCusto,
   ativo,
   children,
@@ -517,12 +520,14 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             aria-label={`Ações de ${str(produtoLinha.nome)}`}
           >
             {item("⇪ Enviar para o e-commerce", enviarEcommerce)}
-            {rapidoItem("$ Enviar preços para o e-commerce", "precos", [
-              menuLinha.id,
-            ])}
-            {rapidoItem("▦ Enviar estoque ao e-commerce", "estoque", [
-              menuLinha.id,
-            ])}
+            {anunciar &&
+              rapidoItem("$ Enviar preços para o e-commerce", "precos", [
+                menuLinha.id,
+              ])}
+            {podeEnviarEstoque &&
+              rapidoItem("▦ Enviar estoque ao e-commerce", "estoque", [
+                menuLinha.id,
+              ])}
             {rapidoItem("▤ Enviar dados fiscais para o e-commerce", "fiscais", [
               menuLinha.id,
             ])}
@@ -628,16 +633,18 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             {menu && (
               <ul role="menu" className="rd-menu-cima rd-menu-longo">
                 {item("⇪ Enviar para o e-commerce", enviarEcommerce)}
-                {rapidoItem(
-                  "$ Enviar preços para o e-commerce",
-                  "precos",
-                  marcados,
-                )}
-                {rapidoItem(
-                  "▦ Enviar estoque ao e-commerce",
-                  "estoque",
-                  marcados,
-                )}
+                {anunciar &&
+                  rapidoItem(
+                    "$ Enviar preços para o e-commerce",
+                    "precos",
+                    marcados,
+                  )}
+                {podeEnviarEstoque &&
+                  rapidoItem(
+                    "▦ Enviar estoque ao e-commerce",
+                    "estoque",
+                    marcados,
+                  )}
                 {rapidoItem(
                   "▤ Enviar dados fiscais para o e-commerce",
                   "fiscais",
