@@ -761,7 +761,7 @@ export default function ProdutoVer(props: Props) {
   const emBreve = (rotulo: string, motivo: string) => (
     <li>
       <button role="menuitem" disabled title={motivo}>
-        {rotulo} <small>{motivo}</small>
+        {rotulo} <small>({motivo})</small>
       </button>
     </li>
   );
@@ -832,7 +832,12 @@ export default function ProdutoVer(props: Props) {
                     item("$ Enviar preços para o e-commerce", () => props.rapido("precos"))}
                   {props.podeEnviarEstoque &&
                     item("▦ Enviar estoque ao e-commerce", () => props.rapido("estoque"))}
-                  {item("▤ Enviar dados fiscais para o e-commerce", () => props.rapido("fiscais"))}
+                  {item(
+                    props.podeAnunciar
+                      ? "▤ Enviar dados fiscais para o e-commerce"
+                      : "▤ Ver dados fiscais",
+                    () => props.rapido("fiscais"),
+                  )}
                   <li className="rd-menu-sep" />
                   {tipo !== "KIT" &&
                     item(
@@ -844,12 +849,12 @@ export default function ProdutoVer(props: Props) {
                   {item("↙ Visualizar histórico de compras", () => props.rapido("compras"))}
                   {item("↗ Visualizar histórico de vendas", () => props.rapido("vendas"))}
                   <li className="rd-menu-sep" />
-                  {props.podeEditar && item("✎ Editar dados", () => props.editar(aba))}
+                  {props.podeEditar && item("✎ Editar cadastro completo", () => props.editar(aba))}
                   {props.clonar && item("⧉ Clonar produto", props.clonar)}
                   {props.podeEditar && item("# Alterar tags", () => props.editar("descricao"))}
                   {tipo === "VARIACAO" &&
-                    emBreve("⇄ Tornar produto simples", "entra com o Bloco 2")}
-                  {emBreve("⇪ Enviar produto para empresas", "grupo de empresas")}
+                    emBreve("⇄ Tornar produto simples", "Entra com o Bloco 2")}
+                  {emBreve("⇪ Enviar produto para empresas", "Grupo de empresas")}
                   {tipo === "VARIACAO" &&
                     props.financeiro &&
                     props.podeEditar &&

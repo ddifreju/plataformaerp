@@ -228,15 +228,11 @@ function slug(texto: string) {
 function abaDoErro(mensagem: string): Aba | null {
   if (/NCM|CEST|GTIN|código de barras|origem/i.test(mensagem)) return "fiscal";
   if (/variação/i.test(mensagem)) return "variacoes";
-  if (/promocional/i.test(mensagem)) return "precos";
+  if (/promocional|Preço de venda/i.test(mensagem)) return "precos";
   if (/Descrição|imagem/i.test(mensagem)) return "descricao";
   if (/^Custo|em Custo/.test(mensagem)) return "custos";
   if (/Observaç|fornecedor/i.test(mensagem)) return "outros";
-  if (
-    /Nome|SKU|Preço de venda|Peso|Largura|Altura|Comprimento|Estoque|Marca|Modelo|Medida/i.test(
-      mensagem,
-    )
-  )
+  if (/Nome|SKU|Peso|Largura|Altura|Comprimento|Estoque|Marca|Modelo|Medida/i.test(mensagem))
     return "gerais";
   return null;
 }
@@ -361,8 +357,16 @@ export default function ProdutoForm({
   const [alvoImagem, setAlvoImagem] = useState("");
 
   const tipo = str(v.tipo);
-  const set = (campo: string) => (e: { target: { value: string } }) =>
-    setV((atual) => ({ ...atual, [campo]: e.target.value }));
+  const set =
+    (campo: string) =>
+    (e: { target: { value: string; validity?: ValidityState; closest?: Element["closest"] } }) => {
+      // Campo de número com letra: o navegador apaga o valor sem avisar; aqui avisa.
+      if (e.target.validity?.badInput) {
+        const rotulo = e.target.closest?.("label")?.querySelector("span")?.textContent ?? "";
+        setErro(`Use só números${rotulo ? ` em “${rotulo.replace(" *", "")}”` : ""}.`);
+      }
+      setV((atual) => ({ ...atual, [campo]: e.target.value }));
+    };
   const marca = (campo: string) => (e: { target: { checked: boolean } }) =>
     setV((atual) => ({ ...atual, [campo]: e.target.checked }));
   const entrada = (campo: string, props: Record<string, unknown> = {}) => (
@@ -482,7 +486,8 @@ export default function ProdutoForm({
     if (!(cents(v.preco) > 0)) f.push(["Preço de venda", "precos"]);
     if (vazio("peso_bruto_kg")) f.push(["Peso bruto", "gerais"]);
     const medidas = !vazio("largura_cm") && !vazio("altura_cm") && !vazio("comprimento_cm");
-    if (!medidas && !v.embalagem_id && !embalagemNova) f.push(["Medidas ou embalagem", "gerais"]);
+    if (!medidas && !v.embalagem_id && !embalagemNova)
+      f.push(["Medidas (largura, altura e comprimento) ou embalagem", "gerais"]);
     return f;
   }
 
@@ -806,7 +811,12 @@ export default function ProdutoForm({
           </div>
           {!novo && <small className="rd-dica">O tipo não muda depois de salvo.</small>}
         </Campo>
-        <Campo rotulo="Nome do produto" obrigatorio largo>
+        <Campo
+          rotulo="Nome do produto"
+          obrigatorio
+          largo
+          dica={`${str(v.nome).length} / 250 caracteres`}
+        >
           {entrada("nome", { maxLength: 250 })}
         </Campo>
         <Campo
@@ -1483,7 +1493,11 @@ export default function ProdutoForm({
       <>
         <h3 className="rd-secao">SEO e classificação</h3>
         <div className="rd-form-grid">
-          <Campo rotulo="Keywords" dica="Palavras separadas por vírgula" largo>
+          <Campo
+            rotulo="Keywords"
+            dica={`Palavras separadas por vírgula · ${str(v.keywords).length} / 500 caracteres`}
+            largo
+          >
             {entrada("keywords", { maxLength: 500 })}
           </Campo>
           <Campo rotulo="Descrição para SEO" dica="Até 320 caracteres" largo>
@@ -1537,11 +1551,18 @@ export default function ProdutoForm({
               }
             >
               <option value="">Escolha…</option>
-              {dados.fornecedores.map((x) => (
-                <option key={str(x.id)} value={str(x.id)}>
-                  {str(x.nome)}
-                </option>
-              ))}
+              {/* Fornecedor que já está em outra linha não aparece de novo. */}
+              {dados.fornecedores
+                .filter(
+                  (x) =>
+                    str(x.id) === f.fornecedor_id ||
+                    !fornecedores.some((o, j) => j !== i && o.fornecedor_id === str(x.id)),
+                )
+                .map((x) => (
+                  <option key={str(x.id)} value={str(x.id)}>
+                    {str(x.nome)}
+                  </option>
+                ))}
             </select>,
             <input
               aria-label="Código no fornecedor"
@@ -1583,9 +1604,13 @@ export default function ProdutoForm({
         <textarea
           id="produto-observacoes_internas"
           rows={8}
+          maxLength={5000}
           value={str(v.observacoes_internas)}
           onChange={set("observacoes_internas")}
         />
+        <small className="rd-dica">
+          {str(v.observacoes_internas).length.toLocaleString("pt-BR")} / 5.000 caracteres
+        </small>
       </Campo>
     ),
     historico: id ? (

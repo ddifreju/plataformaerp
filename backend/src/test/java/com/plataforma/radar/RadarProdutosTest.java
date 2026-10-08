@@ -820,6 +820,32 @@ class RadarProdutosTest {
         assertEquals(HttpStatus.CONFLICT, conflito.getStatusCode());
     }
 
+    @Test
+    void codigoDeBarrasRepetidoAvisaSoDentroDaEmpresa() throws SQLException {
+        String gtin = "7891234567895";
+        BancoRadarDeTeste.executarComoDono(
+                "update radar_produto set gtin=? where id=?",
+                gtin,
+                BancoRadarDeTeste.novoProduto(empresaB, "GTIN-OUTRA", "1.00", "2.00"));
+        var primeiro =
+                naEmpresa(
+                        empresaA,
+                        () ->
+                                produtos.salvar(
+                                        json("{" + base("GTIN-A1") + ",\"gtin\":\"" + gtin + "\"}"),
+                                        "DONO"));
+        // O da outra empresa não aparece.
+        assertFalse(String.valueOf(primeiro.get("mensagem")).contains("GTIN-OUTRA"));
+        var segundo =
+                naEmpresa(
+                        empresaA,
+                        () ->
+                                produtos.salvar(
+                                        json("{" + base("GTIN-A2") + ",\"gtin\":\"" + gtin + "\"}"),
+                                        "DONO"));
+        assertTrue(String.valueOf(segundo.get("mensagem")).contains("GTIN-A1"));
+    }
+
     private static UUID salvar(UUID empresa, String corpo) {
         return (UUID) naEmpresa(empresa, () -> produtos.salvar(json(corpo), "DONO")).get("id");
     }

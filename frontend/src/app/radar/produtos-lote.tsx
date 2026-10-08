@@ -565,7 +565,12 @@ export default function ProdutosLote({
             const r = e.currentTarget.getBoundingClientRect();
             setMenu(false);
             // Perto do rodapé o menu abre para cima, para não sair da tela.
-            const altura = Math.min(420, window.innerHeight * 0.6);
+            // No celular o menu pode ocupar mais da tela (cabe quase inteiro sem rolar).
+            const celular = window.innerWidth < 720;
+            const altura = Math.min(
+              celular ? 720 : 420,
+              window.innerHeight * (celular ? 0.8 : 0.6),
+            );
             const y =
               r.bottom + altura > window.innerHeight
                 ? Math.max(8, r.top - altura)
@@ -581,8 +586,8 @@ export default function ProdutosLote({
   const cabecalho = (
     <input
       type="checkbox"
-      aria-label="Marcar todos da lista"
-      title="Marcar todos da lista"
+      aria-label={`Marcar todos da lista (${linhas.length})`}
+      title={`Marcar todos da lista: ${linhas.length} produto(s), inclusive os que ainda não apareceram`}
       checked={todos}
       onChange={(e) =>
         setMarcados(() =>
@@ -619,9 +624,13 @@ export default function ProdutosLote({
               rapidoItem("▦ Enviar estoque ao e-commerce", "estoque", [
                 menuLinha.id,
               ])}
-            {rapidoItem("▤ Enviar dados fiscais para o e-commerce", "fiscais", [
-              menuLinha.id,
-            ])}
+            {rapidoItem(
+              anunciar
+                ? "▤ Enviar dados fiscais para o e-commerce"
+                : "▤ Ver dados fiscais",
+              "fiscais",
+              [menuLinha.id],
+            )}
             <li className="rd-menu-sep" />
             {produtoLinha.tipo !== "KIT" &&
               rapidoItem(
@@ -643,7 +652,7 @@ export default function ProdutosLote({
             ])}
             <li className="rd-menu-sep" />
             {ativo &&
-              item("✎ Editar dados", () => abrir("EDITAR", [menuLinha.id]))}
+              item("✎ Editar um campo", () => abrir("EDITAR", [menuLinha.id]))}
             {clonar &&
               item("⧉ Clonar produto", () => {
                 const id = menuLinha.id;
@@ -690,8 +699,11 @@ export default function ProdutosLote({
         </>
       )}
       {aviso && (
-        <div className="rd-error" role="alert">
-          {aviso}
+        <div className="rd-toast neutro" role="status">
+          ⓘ {aviso}
+          <button aria-label="Fechar aviso" onClick={() => setAviso("")}>
+            ×
+          </button>
         </div>
       )}
       {podeMarcar && marcados.length > 0 && (
@@ -753,7 +765,9 @@ export default function ProdutosLote({
                     marcados,
                   )}
                 {rapidoItem(
-                  "▤ Enviar dados fiscais para o e-commerce",
+                  anunciar
+                    ? "▤ Enviar dados fiscais para o e-commerce"
+                    : "▤ Ver dados fiscais",
                   "fiscais",
                   marcados,
                 )}

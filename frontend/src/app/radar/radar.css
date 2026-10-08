@@ -4074,3 +4074,10 @@ ul.rd-menu-linha li button,
   margin-bottom: -27px;
   z-index: 2;
 }
+
+/* Celular: o "⋯" da linha usa até 80% da altura (menos rolagem dentro do menu). */
+@media (max-width: 720px) {
+  ul.rd-menu-linha {
+    max-height: 80vh;
+  }
+}

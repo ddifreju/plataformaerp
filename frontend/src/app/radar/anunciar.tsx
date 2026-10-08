@@ -53,7 +53,7 @@ export default function Anunciar(props: Props) {
   const [vinculo, setVinculo] = useState<Record<string, { codigo: string; nome: string }>>({});
 
   // Produto com variações não é vendido: as variações são, cada uma vira um anúncio.
-  const itens = props.ids
+  const candidatos = props.ids
     .flatMap((id) => {
       const p = produtos.find((x) => x.id === id);
       if (!p || p.excluido_em) return [];
@@ -62,6 +62,9 @@ export default function Anunciar(props: Props) {
         : [p];
     })
     .filter((p, i, todos) => todos.findIndex((x) => x.id === p.id) === i);
+  // Fora de venda (inativo ou variação tirada da grade) não vira anúncio.
+  const itens = candidatos.filter((p) => p.permite_venda !== false);
+  const foraDeVenda = candidatos.length - itens.length;
 
   const lojaDe = (id: string) => lojas.find((l) => str(l.id) === id)!;
   // Cada par produto × loja vira um anúncio novo, mesmo que já exista outro dele na loja (o
@@ -223,6 +226,12 @@ export default function Anunciar(props: Props) {
   if (passo === 0) {
     corpo = lojas.length ? (
       <>
+        {foraDeVenda > 0 && (
+          <p className="rd-dica">
+            {foraDeVenda} produto(s) ou variação(ões) fora de venda ficaram de fora. Para anunciar,
+            ative primeiro.
+          </p>
+        )}
         <p className="rd-note">
           {itens.length === 1
             ? `Escolha onde anunciar ${str(itens[0].nome)}.`

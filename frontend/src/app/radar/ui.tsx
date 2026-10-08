@@ -42,13 +42,18 @@ export function ordenarVariacoes<T extends { atributos?: unknown; atributos_vari
   lista: T[],
   tipos: string[],
 ): T[] {
-  const attr = (x: T) => (x.atributos ?? x.atributos_variacao ?? {}) as Record<string, string>;
+  // Produto vem com atributos_variacao (o seu "atributos" é outra coisa, uma lista); a linha da
+  // grade do formulário vem com atributos.
+  const attr = (x: T) => {
+    const a = x.atributos_variacao ?? x.atributos;
+    return (a && typeof a === "object" && !Array.isArray(a) ? a : {}) as Record<string, string>;
+  };
   return [...lista].sort((x, y) => {
     for (const t of tipos) {
       const c = compararValor(String(attr(x)[t] ?? ""), String(attr(y)[t] ?? ""));
       if (c) return c;
     }
-    return 0;
+    return 0; // empate: sort é estável, mantém a ordem recebida
   });
 }
 export type Field = {

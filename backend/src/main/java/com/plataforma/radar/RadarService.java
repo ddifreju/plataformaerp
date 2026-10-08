@@ -404,10 +404,17 @@ public class RadarService {
         // Sem o limite de 1.000 das outras listas: a lista de produtos precisa estar inteira.
         var produtos =
                 db.queryForList(
-                        "select * from radar_produto where tenant_id=? order by criado_em desc"
-                                + " limit 50000",
+                        "select p.*, exists(select 1 from radar_custo_historico h where"
+                                + " h.tenant_id=p.tenant_id and h.produto_id=p.id)"
+                                + " tem_historico_custo from radar_produto p where p.tenant_id=?"
+                                + " order by p.criado_em desc limit 50000",
                         tenant());
-        if (!f) produtos.forEach(x -> x.remove("custo"));
+        if (!f)
+            produtos.forEach(
+                    x -> {
+                        x.remove("custo");
+                        x.remove("tem_historico_custo");
+                    });
         // O que falta no cadastro vai pronto para a coluna "Cadastro" da lista (mesma regra da nota).
         produtos.forEach(x -> x.put("pendencias", RadarProdutos.pendencias(x)));
         out.put("produtos", produtos);
