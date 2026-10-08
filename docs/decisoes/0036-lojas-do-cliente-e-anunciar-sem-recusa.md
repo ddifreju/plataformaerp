@@ -61,6 +61,7 @@ Ao construir cada integração, é obrigatório:
 - O "Enviar para o e-commerce" da edição em massa abre o mesmo passo a passo.
 - Anúncios antigos (sem loja, inclusive SHEIN) continuam aparecendo; só não se
   cria anúncio novo na SHEIN.
-- Um produto tem no máximo um anúncio por loja pelo passo a passo. Dois
-  anúncios na mesma loja (ex.: clássico e premium no Mercado Livre) ficam para
-  quando a integração existir.
+- **Sem limite de anúncios por produto e loja** (decisão da Jéssica): o
+  lojista pode ter vários anúncios do mesmo produto na mesma loja, para testar
+  título, estratégia de ads ou ter mais catálogo. Nem o banco nem a tela
+  impedem; o passo a passo só avisa que já existe anúncio ali.

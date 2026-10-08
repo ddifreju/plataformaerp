@@ -64,11 +64,10 @@ export default function Anunciar(props: Props) {
   const lojaDe = (id: string) => lojas.find((l) => str(l.id) === id)!;
   const jaTem = (produto: Row, loja: string) =>
     anuncios.some((a) => a.produto_id === produto.id && str(a.loja_id) === loja);
-  // Um par produto × loja é um anúncio novo. O que já tem anúncio na loja fica de fora.
+  // Cada par produto × loja vira um anúncio novo, mesmo que já exista outro dele na loja (o
+  // lojista pode ter quantos quiser: teste de título, ads, mais catálogo).
   const pares = itens.flatMap((p) =>
-    escolhidas
-      .filter((l) => !jaTem(p, l))
-      .map((l) => ({ p, loja: lojaDe(l), chave: `${str(p.id)}|${l}` })),
+    escolhidas.map((l) => ({ p, loja: lojaDe(l), chave: `${str(p.id)}|${l}` })),
   );
   const marketplaces = [...new Set(escolhidas.map((l) => str(lojaDe(l).marketplace)))];
   const ajusteDe = (p: Row, chave: string): Ajuste =>
@@ -229,12 +228,10 @@ export default function Anunciar(props: Props) {
           {lojas.map((l) => {
             const id = str(l.id);
             const ja = itens.filter((p) => jaTem(p, id)).length;
-            const todos = ja === itens.length;
             return (
               <label key={id} className={escolhidas.includes(id) ? "ativo" : ""}>
                 <input
                   type="checkbox"
-                  disabled={todos}
                   checked={escolhidas.includes(id)}
                   onChange={(e) =>
                     setEscolhidas((s) =>
@@ -246,7 +243,8 @@ export default function Anunciar(props: Props) {
                   <strong>{str(l.nome)}</strong>
                   <small>
                     {str(l.marketplace)}
-                    {ja > 0 && ` · já anunciado: ${ja} de ${itens.length}`}
+                    {ja > 0 &&
+                      ` · já tem anúncio aqui: ${ja} de ${itens.length} (este será mais um)`}
                   </small>
                 </span>
                 {l.conectada_em ? (
@@ -262,11 +260,7 @@ export default function Anunciar(props: Props) {
           <button
             type="button"
             className="text"
-            onClick={() =>
-              setEscolhidas(
-                lojas.map((l) => str(l.id)).filter((id) => !itens.every((p) => jaTem(p, id))),
-              )
-            }
+            onClick={() => setEscolhidas(lojas.map((l) => str(l.id)))}
           >
             Marcar todas
           </button>

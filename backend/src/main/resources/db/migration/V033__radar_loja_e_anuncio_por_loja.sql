@@ -43,9 +43,7 @@ ALTER TABLE radar_anuncio
  ADD CONSTRAINT fk_radar_anuncio_loja FOREIGN KEY (tenant_id, loja_id)
   REFERENCES radar_loja (tenant_id, id);
 CREATE INDEX ON radar_anuncio (tenant_id, loja_id);
--- Um anúncio por produto e loja (anúncios antigos, sem loja, ficam de fora).
-CREATE UNIQUE INDEX uq_radar_anuncio_produto_loja ON radar_anuncio (tenant_id, produto_id, loja_id)
- WHERE loja_id IS NOT NULL;
+-- Sem limite de anúncios por produto e loja: o lojista pode ter vários do mesmo produto.
 
 ALTER TABLE radar_anuncio DROP CONSTRAINT radar_anuncio_estado_check;
 ALTER TABLE radar_anuncio ADD CONSTRAINT radar_anuncio_estado_check

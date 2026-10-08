@@ -554,11 +554,17 @@ class RadarAnunciosTest {
         assertEquals(loja, a.get("loja_id"));
         assertEquals(50000, a.get("estoque"));
         assertEquals("NAO_PUBLICADO", a.get("situacao_ecommerce"));
-        var repetido =
-                assertThrows(
-                        ResponseStatusException.class,
-                        () -> anunciar(empresa, produto, loja, "Outro título", "1"));
-        assertTrue(repetido.getReason().contains("já tem anúncio"));
+        // Outro anúncio do mesmo produto na mesma loja é permitido (teste de título, ads).
+        anunciar(empresa, produto, loja, "Outro título", "1");
+        assertEquals(
+                2,
+                naEmpresa(
+                        empresa,
+                        () ->
+                                db.queryForObject(
+                                        "select count(*) from radar_anuncio where loja_id=?",
+                                        Integer.class,
+                                        loja)));
     }
 
     @Test

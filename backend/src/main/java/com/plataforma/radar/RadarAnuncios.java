@@ -725,16 +725,8 @@ public class RadarAnuncios {
                             p.get("categoria_id"));
             if (ligada == null || ligada == 0)
                 erro(sku + ": ligue a categoria do produto a uma categoria do " + marketplace + ".");
-            Integer ja =
-                    db.queryForObject(
-                            "select count(*) from radar_anuncio where tenant_id=? and produto_id=?"
-                                    + " and loja_id=?",
-                            Integer.class,
-                            tenant(),
-                            pid,
-                            loja.get("id"));
-            if (ja != null && ja > 0)
-                erro(sku + ": já tem anúncio na loja " + loja.get("nome") + ".");
+            // Quantos anúncios o lojista quiser do mesmo produto na mesma loja (decisão dela:
+            // teste de título, estratégia de ads, mais catálogo).
             db.update(
                     "insert into radar_anuncio(id,tenant_id,produto_id,canal,loja_id,titulo,preco,"
                             + "estoque,estado) values(?,?,?,?,?,?,?,?,'PRONTO')",
