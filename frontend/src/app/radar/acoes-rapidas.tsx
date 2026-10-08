@@ -477,7 +477,10 @@ function GerenciarEstoque(props: Props & { vendidos: Row[] }) {
     }
   }
   return (
-    <Gaveta titulo="Gerenciar estoque" fechar={props.fechar}>
+    <Gaveta
+      titulo={props.podeAjustarEstoque ? "Gerenciar estoque" : "Consultar estoque"}
+      fechar={props.fechar}
+    >
       {kit ? (
         <Aviso titulo="Kit">
           O estoque do kit vem dos componentes. Ajuste o estoque de cada componente.

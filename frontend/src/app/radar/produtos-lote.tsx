@@ -565,7 +565,12 @@ export default function ProdutosLote({
             const r = e.currentTarget.getBoundingClientRect();
             setMenu(false);
             // Perto do rodapé o menu abre para cima, para não sair da tela.
-            const altura = Math.min(420, window.innerHeight * 0.6);
+            // No celular o menu pode ocupar mais da tela (cabe quase inteiro sem rolar).
+            const celular = window.innerWidth < 720;
+            const altura = Math.min(
+              celular ? 720 : 420,
+              window.innerHeight * (celular ? 0.8 : 0.6),
+            );
             const y =
               r.bottom + altura > window.innerHeight
                 ? Math.max(8, r.top - altura)
@@ -619,9 +624,13 @@ export default function ProdutosLote({
               rapidoItem("▦ Enviar estoque ao e-commerce", "estoque", [
                 menuLinha.id,
               ])}
-            {rapidoItem("▤ Enviar dados fiscais para o e-commerce", "fiscais", [
-              menuLinha.id,
-            ])}
+            {rapidoItem(
+              anunciar
+                ? "▤ Enviar dados fiscais para o e-commerce"
+                : "▤ Ver dados fiscais",
+              "fiscais",
+              [menuLinha.id],
+            )}
             <li className="rd-menu-sep" />
             {produtoLinha.tipo !== "KIT" &&
               rapidoItem(
@@ -756,7 +765,9 @@ export default function ProdutosLote({
                     marcados,
                   )}
                 {rapidoItem(
-                  "▤ Enviar dados fiscais para o e-commerce",
+                  anunciar
+                    ? "▤ Enviar dados fiscais para o e-commerce"
+                    : "▤ Ver dados fiscais",
                   "fiscais",
                   marcados,
                 )}

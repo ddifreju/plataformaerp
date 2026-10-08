@@ -832,7 +832,12 @@ export default function ProdutoVer(props: Props) {
                     item("$ Enviar preços para o e-commerce", () => props.rapido("precos"))}
                   {props.podeEnviarEstoque &&
                     item("▦ Enviar estoque ao e-commerce", () => props.rapido("estoque"))}
-                  {item("▤ Enviar dados fiscais para o e-commerce", () => props.rapido("fiscais"))}
+                  {item(
+                    props.podeAnunciar
+                      ? "▤ Enviar dados fiscais para o e-commerce"
+                      : "▤ Ver dados fiscais",
+                    () => props.rapido("fiscais"),
+                  )}
                   <li className="rd-menu-sep" />
                   {tipo !== "KIT" &&
                     item(

@@ -811,7 +811,12 @@ export default function ProdutoForm({
           </div>
           {!novo && <small className="rd-dica">O tipo não muda depois de salvo.</small>}
         </Campo>
-        <Campo rotulo="Nome do produto" obrigatorio largo>
+        <Campo
+          rotulo="Nome do produto"
+          obrigatorio
+          largo
+          dica={`${str(v.nome).length} / 250 caracteres`}
+        >
           {entrada("nome", { maxLength: 250 })}
         </Campo>
         <Campo

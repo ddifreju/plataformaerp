@@ -806,6 +806,8 @@ public class RadarAnuncios {
             // Todos os problemas do anúncio de uma vez: corrigir um e descobrir o próximo só no
             // envio seguinte é o retrabalho que o passo a passo quer evitar (decisão 0036).
             List<String> problemas = new ArrayList<>();
+            if (Boolean.FALSE.equals(p.get("permite_venda")))
+                erro(sku + ": está fora de venda. Ative o produto antes de anunciar.");
             List<String> faltando = RadarProdutos.pendencias(p);
             if (!faltando.isEmpty())
                 problemas.add("complete o cadastro (falta " + String.join(", ", faltando) + ")");
