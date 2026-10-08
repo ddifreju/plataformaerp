@@ -7,8 +7,19 @@
 // organiza o preenchimento e mostra o que falta para anunciar.
 
 import { CANAIS, canaisCom, letras, palavras, regraDe } from "./canais";
-import { useEffect, useState, type ReactNode } from "react";
-import { Badge, Empty, Table, cents, centMoney, money, str, type ModalSpec, type Row } from "./ui";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Badge,
+  Empty,
+  Table,
+  cents,
+  centMoney,
+  money,
+  ordenarVariacoes,
+  str,
+  type ModalSpec,
+  type Row,
+} from "./ui";
 import { NO_RADAR, verNaCentral } from "./anuncios";
 
 type Valores = Record<string, string | boolean>;
@@ -114,6 +125,8 @@ type Props = {
   recarregar: () => Promise<void>;
   abrirModal: (m: ModalSpec) => void;
   voltar: () => void;
+  /** Mensagem do último comando recusado (para abrir a aba do campo com problema). */
+  erroDoServidor?: () => string;
   // Chamado após salvar: o pai recarrega a tela com o produto atualizado.
   aoSalvar: (id: string, aba: Aba) => void;
   abaInicial?: Aba;
@@ -211,29 +224,56 @@ function slug(texto: string) {
     .slice(0, 12);
 }
 
+/** Aba onde fica o campo citado na mensagem de erro do servidor (para abrir direto nela). */
+function abaDoErro(mensagem: string): Aba | null {
+  if (/NCM|CEST|GTIN|código de barras|origem/i.test(mensagem)) return "fiscal";
+  if (/variação/i.test(mensagem)) return "variacoes";
+  if (/promocional/i.test(mensagem)) return "precos";
+  if (/Descrição|imagem/i.test(mensagem)) return "descricao";
+  if (/^Custo|em Custo/.test(mensagem)) return "custos";
+  if (/Observaç|fornecedor/i.test(mensagem)) return "outros";
+  if (
+    /Nome|SKU|Preço de venda|Peso|Largura|Altura|Comprimento|Estoque|Marca|Modelo|Medida/i.test(
+      mensagem,
+    )
+  )
+    return "gerais";
+  return null;
+}
+
 function Campo({
   rotulo,
   dica,
   largo,
   obrigatorio,
+  grupo,
   children,
 }: {
   rotulo: string;
   dica?: string;
   largo?: boolean;
+  /** Vários controles (rádios, select + número): grupo nomeado, não um rótulo só do primeiro. */
+  grupo?: boolean;
   // Exigido pela nota fiscal ou pelos marketplaces: sem ele o produto fica como rascunho.
   obrigatorio?: boolean;
   children: ReactNode;
 }) {
-  return (
-    <label className={largo ? "wide" : ""}>
+  const conteudo = (
+    <>
       <span>
         {rotulo}
         {obrigatorio && <b className="rd-obrigatorio"> *</b>}
       </span>
       {children}
       {dica && <small className="rd-dica">{dica}</small>}
-    </label>
+    </>
+  );
+  return grupo ? (
+    <div role="group" aria-label={rotulo} className={`rd-campo-grupo${largo ? " wide" : ""}`}>
+      {conteudo}
+    </div>
+  ) : (
+    <label className={largo ? "wide" : ""}>{conteudo}</label>
   );
 }
 
@@ -247,6 +287,7 @@ export default function ProdutoForm({
   recarregar,
   abrirModal,
   voltar,
+  erroDoServidor,
   aoSalvar,
   abaInicial = "gerais",
   config = {},
@@ -282,7 +323,7 @@ export default function ProdutoForm({
     return out;
   });
   const [grade, setGrade] = useState<LinhaGrade[]>(() =>
-    filhas.map((f) => ({
+    ordenarVariacoes(filhas, lista<string>(produto?.tipos_variacao)).map((f) => ({
       id: str(f.id),
       atributos: (f.atributos_variacao ?? {}) as Record<string, string>,
       sku: str(f.sku),
@@ -312,6 +353,9 @@ export default function ProdutoForm({
         : [],
   );
   const [salvando, setSalvando] = useState(false);
+  // Foto do formulário ao abrir, para saber se há alteração não salva.
+  const inicial = useRef<string | null>(null);
+  const salvo = useRef(false);
   const [erro, setErro] = useState("");
   const [alvoImagem, setAlvoImagem] = useState("");
 
@@ -456,7 +500,13 @@ export default function ProdutoForm({
     setSalvando(true);
     try {
       const r = await executar(corpo());
-      if (r) aoSalvar(str(r.id), aba);
+      if (r) {
+        salvo.current = true;
+        aoSalvar(str(r.id), aba);
+      } else {
+        const destino = abaDoErro(erroDoServidor?.() ?? "");
+        if (destino) setAba(destino);
+      }
     } finally {
       setSalvando(false);
     }
@@ -468,7 +518,11 @@ export default function ProdutoForm({
     setErro("");
     for (const arquivo of Array.from(arquivos)) {
       if (arquivo.size > 2 * 1024 * 1024) {
-        setErro(`${arquivo.name} tem mais de 2 MB. Reduza a imagem e tente de novo.`);
+        setErro(
+          `${arquivo.name} tem ${(arquivo.size / 1048576).toLocaleString("pt-BR", {
+            maximumFractionDigits: 1,
+          })} MB (o limite é 2 MB). Reduza a imagem e tente de novo.`,
+        );
         continue;
       }
       const form = new FormData();
@@ -572,9 +626,13 @@ export default function ProdutoForm({
         <textarea
           id="produto-descricao"
           rows={6}
+          maxLength={20000}
           value={str(v.descricao)}
           onChange={set("descricao")}
         />
+        <small className="rd-dica">
+          {str(v.descricao).length.toLocaleString("pt-BR")} / 20.000 caracteres
+        </small>
       </Campo>
     </div>
   );
@@ -599,7 +657,7 @@ export default function ProdutoForm({
       <Campo rotulo="Unidades por caixa (itens por embalagem)">
         {entrada("unidades_por_caixa", { type: "number", min: "1", step: "1" })}
       </Campo>
-      <Campo rotulo="Garantia">
+      <Campo rotulo="Garantia" grupo>
         <div className="rd-inline">
           <select
             id="produto-garantia_tipo"
@@ -723,7 +781,7 @@ export default function ProdutoForm({
   const blocos: Record<string, ReactNode> = {
     geral: (
       <div className="rd-form-grid">
-        <Campo rotulo="Tipo do produto" largo>
+        <Campo rotulo="Tipo do produto" largo grupo>
           <div className="rd-opcoes">
             {[
               ["SIMPLES", "Simples"],
@@ -830,7 +888,7 @@ export default function ProdutoForm({
             {entrada("preco_promocional", { type: "number", step: "0.01", min: "0" })}
           </Campo>
           {veCusto && (
-            <Campo rotulo="Markup" dica="Preço de venda ÷ custo">
+            <Campo rotulo="Markup" dica="Preço de venda ÷ custo" grupo>
               <div className="rd-inline">
                 <input value={markup ? markup.toFixed(2).replace(".", ",") + "×" : "—"} disabled />
                 <input
@@ -1083,8 +1141,9 @@ export default function ProdutoForm({
             <Empty text="A grade aparece aqui depois de gerada." />
           )}
           <p className="rd-note">
-            Variações sem imagem própria usam as imagens do produto principal ao ir para o
-            e-commerce.
+            Para tirar uma variação de venda, desmarque “À venda” (ou tire o valor da lista e gere a
+            grade de novo). Ela não é apagada, porque pode ter pedidos e estoque. Variações sem
+            imagem própria usam as imagens do produto principal ao ir para o e-commerce.
           </p>
         </>
       ) : tipo === "KIT" ? (
@@ -1588,6 +1647,24 @@ export default function ProdutoForm({
   };
   const pendentes = faltando();
 
+  // Sair com alteração não salva pergunta antes (voltar e fechar/recarregar a aba).
+  const naoSalvo = () =>
+    !salvo.current && inicial.current !== null && JSON.stringify(corpo()) !== inicial.current;
+  function sair() {
+    if (naoSalvo() && !window.confirm("Há alterações não salvas. Sair sem salvar?")) return;
+    voltar();
+  }
+  useEffect(() => {
+    if (inicial.current === null) inicial.current = JSON.stringify(corpo());
+  });
+  useEffect(() => {
+    const aviso = (e: BeforeUnloadEvent) => {
+      if (naoSalvo()) e.preventDefault();
+    };
+    window.addEventListener("beforeunload", aviso);
+    return () => window.removeEventListener("beforeunload", aviso);
+  });
+
   async function clonar() {
     if (!id || !clonando) return;
     const r = await executar({ op: "produto_clonar", id, imagens: clonando.imagens });
@@ -1598,7 +1675,7 @@ export default function ProdutoForm({
   return (
     <div className="rd-produto-form">
       <div className="rd-toolbar">
-        <button type="button" onClick={voltar}>
+        <button type="button" onClick={sair}>
           ← Voltar para produtos
         </button>
         <span className="rd-produto-titulo">
@@ -1611,7 +1688,7 @@ export default function ProdutoForm({
           </button>
         )}
         <button type="button" className="primary" disabled={salvando} onClick={salvar}>
-          {salvando ? "Salvando…" : "Salvar produto"}
+          {salvando ? "Salvando…" : pendentes.length ? "Salvar como rascunho" : "Salvar produto"}
         </button>
       </div>
       {erro && (
@@ -1691,11 +1768,11 @@ export default function ProdutoForm({
       </div>
       <section className="rd-card">{conteudo[aba]}</section>
       <div className="rd-actions rd-produto-rodape">
-        <button type="button" onClick={voltar}>
+        <button type="button" onClick={sair}>
           Voltar
         </button>
         <button type="button" className="primary" disabled={salvando} onClick={salvar}>
-          {salvando ? "Salvando…" : "Salvar produto"}
+          {salvando ? "Salvando…" : pendentes.length ? "Salvar como rascunho" : "Salvar produto"}
         </button>
       </div>
     </div>

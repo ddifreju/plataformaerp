@@ -269,6 +269,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [verLixeira, setVerLixeira] = useState(false),
     // Produto aberto na visualização (clique na lista); "Editar" abre o formulário por cima.
     [vendo, setVendo] = useState<{ id: string; aba?: AbaVer } | null>(null),
+    // Última aba usada na visualização: o próximo produto aberto abre nela.
+    [ultimaAbaVer, setUltimaAbaVer] = useState<AbaVer | undefined>(),
     // Painel lateral de ação rápida (preços, estoque, histórico…) do "⋯" e do "Mais ações".
     [rapido, setRapido] = useState<{ tipo: TipoRapido; ids: string[] } | null>(null),
     // Produtos abertos no passo a passo "Anunciar".
@@ -281,6 +283,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [mostrarProdutos, setMostrarProdutos] = useState(100);
   // O "mais ações" do topo usa as funções da lista (imprimir, exportar, editar em lote).
   const controleLote = useRef<ControleLote>(null);
+  // Mensagem do último comando recusado: o formulário do produto abre a aba do campo.
+  const ultimoErro = useRef("");
   // Cada troca de página vira um passo do histórico do navegador; "voltar" volta a página.
   useEffect(() => {
     if (window.location.hash !== `#${page}`) window.history.pushState(null, "", `#${page}`);
@@ -334,6 +338,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
   }
   // Como command, mas devolve a resposta (para quem precisa do id gerado).
   async function commandResult(body: Record<string, unknown>) {
+    ultimoErro.current = "";
     setError("");
     setBusy(true);
     try {
@@ -342,6 +347,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       await refresh();
       return r as Record<string, unknown>;
     } catch (e) {
+      ultimoErro.current = (e as Error).message;
       setError((e as Error).message);
       return null;
     } finally {
@@ -951,6 +957,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
               podeAnunciar={can("DONO", "GESTOR", "MARKETING")}
               anunciar={(id) => setAnunciando([id])}
               executar={commandResult}
+              erroDoServidor={() => ultimoErro.current}
               recarregar={refresh}
               abrirModal={setModal}
               voltar={() => setEditando(null)}
@@ -961,7 +968,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
             <ProdutoVer
               key={`${vendo.id}-${vendo.aba ?? ""}`}
               produto={prod(vendo.id)!}
-              abaInicial={vendo.aba}
+              abaInicial={vendo.aba ?? ultimaAbaVer}
+              aoTrocarAba={setUltimaAbaVer}
               produtos={products}
               imagens={data.imagens}
               anuncios={listings}
@@ -1132,7 +1140,10 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                     ]}
                     rows={listaProdutos.slice(0, mostrarProdutos).map((p) => {
                       const capa = data.imagens.find((i) => i.produto_id === p.id);
-                      const variacoes = products.filter((f) => f.pai_id === p.id).length;
+                      // Conta só as variações à venda (as tiradas da grade ficam fora de venda).
+                      const variacoes = products.filter(
+                        (f) => f.pai_id === p.id && f.permite_venda !== false && !f.excluido_em,
+                      ).length;
                       // Anúncios do produto e das variações dele.
                       const qtdAnuncios = listings.filter(
                         (a) => a.produto_id === p.id || prod(a.produto_id)?.pai_id === p.id,

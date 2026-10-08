@@ -274,7 +274,9 @@ public class RadarService {
 
     private String texto(JsonNode n, String k, int max) {
         String s = n.path(k).asText("").trim();
-        if (s.isBlank() || s.length() > max) erro("Confira o campo " + k + ".");
+        if (s.isBlank()) erro("Preencha o campo " + RadarEntrada.nomeDoCampo(k) + ".");
+        if (s.length() > max)
+            erro(RadarEntrada.nomeDoCampo(k) + " aceita até " + max + " caracteres.");
         return s;
     }
 
@@ -302,10 +304,10 @@ public class RadarService {
         try {
             BigDecimal v = new BigDecimal(n.path(k).asText("0"));
             if (v.signum() < 0 || v.compareTo(new BigDecimal("999999999")) > 0 || v.scale() > 2)
-                erro("Valor inválido: " + k);
+                erro("Valor inválido em " + RadarEntrada.nomeDoCampo(k) + ".");
             return v.setScale(2);
         } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido: " + k);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido em " + RadarEntrada.nomeDoCampo(k) + ".");
         }
     }
 

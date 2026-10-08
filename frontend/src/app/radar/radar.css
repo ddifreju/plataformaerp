@@ -3996,3 +3996,12 @@ ul.rd-menu-linha li button:disabled {
   font-size: 13px;
   color: var(--rd-muted);
 }
+
+/* Campo com vários controles (rádios, select + número): mesmo visual do rótulo comum */
+.radar-app .rd-campo-grupo {
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}

@@ -27,6 +27,30 @@ export function useFecharFora<T extends HTMLElement>(aberto: boolean, fechar: ()
 }
 
 export type Row = Record<string, string | number | boolean | Record<string, unknown>>;
+
+// Tamanhos de roupa na ordem de quem veste; o resto em ordem alfabética (com números).
+const TAMANHOS = ["PP", "P", "M", "G", "GG", "XG", "XGG", "EG", "EGG"];
+const compararValor = (a: string, b: string) => {
+  const ta = TAMANHOS.indexOf(a.toUpperCase()),
+    tb = TAMANHOS.indexOf(b.toUpperCase());
+  if (ta >= 0 && tb >= 0) return ta - tb;
+  return a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" });
+};
+
+/** Variações sempre na mesma ordem (Azul/P, Azul/M, Verde/P…), pelos tipos de variação. */
+export function ordenarVariacoes<T extends { atributos?: unknown; atributos_variacao?: unknown }>(
+  lista: T[],
+  tipos: string[],
+): T[] {
+  const attr = (x: T) => (x.atributos ?? x.atributos_variacao ?? {}) as Record<string, string>;
+  return [...lista].sort((x, y) => {
+    for (const t of tipos) {
+      const c = compararValor(String(attr(x)[t] ?? ""), String(attr(y)[t] ?? ""));
+      if (c) return c;
+    }
+    return 0;
+  });
+}
 export type Field = {
   key: string;
   label: string;

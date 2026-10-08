@@ -432,6 +432,11 @@ public class RadarProdutos {
         c.put("descricao", textoOuVazio(n, "descricao", 20000));
         BigDecimal promocional = valorOpcional(n, "preco_promocional");
         if (promocional != null && promocional.signum() == 0) promocional = null;
+        BigDecimal precoVenda = valorOuZero(n, "preco");
+        if (promocional != null
+                && precoVenda.signum() > 0
+                && promocional.compareTo(precoVenda) >= 0)
+            erro("Preço promocional deve ser menor que o preço de venda.");
         c.put("preco_promocional", promocional);
         c.put("peso_liquido_kg", decimalOpcional(n, "peso_liquido_kg", 3));
         c.put("peso_bruto_kg", decimalOpcional(n, "peso_bruto_kg", 3));
@@ -624,6 +629,14 @@ public class RadarProdutos {
                     v.has("preco_promocional")
                             ? valorOpcional(v, "preco_promocional")
                             : pai.get("preco_promocional"));
+            if (c.get("preco_promocional") instanceof BigDecimal promo
+                    && c.get("preco") instanceof BigDecimal precoVar
+                    && precoVar.signum() > 0
+                    && promo.compareTo(precoVar) >= 0)
+                erro(
+                        "Na variação "
+                                + c.get("sku")
+                                + ", o preço promocional deve ser menor que o preço de venda.");
             String gtin = opcional(v, "gtin", 14);
             if (gtin != null && !gtinValido(gtin))
                 erro("GTIN inválido na variação " + c.get("sku") + ".");
@@ -1395,6 +1408,22 @@ public class RadarProdutos {
                             valor,
                             tenant(),
                             ids);
+        }
+        // Promoção acima do preço confunde o cliente e o marketplace recusa: desfaz o lote.
+        if (campo.equals("preco") || campo.equals("preco_promocional")) {
+            Integer acima =
+                    db.queryForObject(
+                            "select count(*) from radar_produto where tenant_id=? and id = any(?)"
+                                    + " and preco_promocional is not null and preco_promocional"
+                                    + " >= preco",
+                            Integer.class,
+                            tenant(),
+                            ids);
+            if (acima != null && acima > 0)
+                erro(
+                        acima
+                                + " produto(s) ficariam com o preço promocional igual ou maior que o"
+                                + " preço de venda. Ajuste o promocional antes.");
         }
         return Map.of(
                 "mensagem",

@@ -12,7 +12,18 @@ import type { TipoRapido } from "./acoes-rapidas";
 import { arquivosDeProdutos } from "./produtos-lote";
 import { faltasDoCadastro } from "./pendencias";
 import { Historico, ORIGENS, UNIDADES, type Aba } from "./produto";
-import { Badge, Empty, cents, centMoney, date, money, str, useFecharFora, type Row } from "./ui";
+import {
+  Badge,
+  Empty,
+  cents,
+  centMoney,
+  date,
+  money,
+  ordenarVariacoes,
+  str,
+  useFecharFora,
+  type Row,
+} from "./ui";
 
 const MOTIVOS: Record<string, string> = {
   PRODUTO_ARTESANAL: "Produto artesanal ou feito sob medida",
@@ -61,6 +72,8 @@ type Props = {
   /** Executa um comando (inativar, excluir anexos) e diz se deu certo. */
   executar: (corpo: Record<string, unknown>) => Promise<boolean>;
   voltar: () => void;
+  /** Avisa a aba escolhida: o próximo produto aberto abre nela. */
+  aoTrocarAba?: (aba: Aba) => void;
 };
 
 const vazio = (v: unknown) => v == null || str(v).trim() === "";
@@ -144,7 +157,11 @@ export default function ProdutoVer(props: Props) {
   const [aviso, setAviso] = useState("");
   const [erroArquivo, setErroArquivo] = useState("");
 
-  const filhas = props.produtos.filter((f) => f.pai_id === p.id && !f.excluido_em);
+  const filhas = ordenarVariacoes(
+    props.produtos.filter((f) => f.pai_id === p.id && !f.excluido_em),
+    lista<string>(p.tipos_variacao),
+  );
+  const foraDeVenda = filhas.filter((f) => f.permite_venda === false).length;
   const fotos = props.imagens.filter((i) => i.produto_id === p.id);
   const capa = fotos[0];
   const anunciosDoProduto = props.anuncios.filter(
@@ -256,7 +273,12 @@ export default function ProdutoVer(props: Props) {
             <Info rotulo="Estoque máximo">{texto(p.maximo)}</Info>
             <Info rotulo="Dias para preparação">{texto(p.dias_preparacao)}</Info>
           </div>
-          {tipo === "VARIACAO" && <p className="rd-dica">Somando as {filhas.length} variações.</p>}
+          {tipo === "VARIACAO" && (
+            <p className="rd-dica">
+              Somando as {filhas.length} variações
+              {foraDeVenda > 0 && ` (${foraDeVenda} fora de venda)`}.
+            </p>
+          )}
           {tipo === "KIT" && <p className="rd-dica">O estoque do kit vem dos componentes.</p>}
         </Secao>
       </>
@@ -483,6 +505,7 @@ export default function ProdutoVer(props: Props) {
                     <th>Disponível</th>
                     <th>Imagens</th>
                     <th>Cadastro</th>
+                    <th>À venda</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -503,6 +526,7 @@ export default function ProdutoVer(props: Props) {
                       <td>
                         {faltasDoCadastro(f).length ? `Falta ${faltasDoCadastro(f).length}` : "✓"}
                       </td>
+                      <td>{f.permite_venda === false ? <Badge>fora de venda</Badge> : "Sim"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -517,7 +541,13 @@ export default function ProdutoVer(props: Props) {
           <div className="rd-ver-grade">
             <Info rotulo="Preço de venda">{money(p.preco)}</Info>
             <Info rotulo="Preço promocional">
-              {vazio(p.preco_promocional) ? "—" : money(p.preco_promocional)}
+              {vazio(p.preco_promocional)
+                ? "—"
+                : `${money(p.preco_promocional)}${
+                    preco > 0
+                      ? ` · −${Math.round((1 - cents(p.preco_promocional) / preco) * 100)}%`
+                      : ""
+                  }`}
             </Info>
             {props.financeiro && (
               <Info rotulo="Markup (preço ÷ custo)">
@@ -877,7 +907,10 @@ export default function ProdutoVer(props: Props) {
             role="tab"
             aria-selected={aba === chave}
             className={aba === chave ? "ativa" : ""}
-            onClick={() => setAba(chave)}
+            onClick={() => {
+              setAba(chave);
+              props.aoTrocarAba?.(chave);
+            }}
           >
             {rotulo}
           </button>

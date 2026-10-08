@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -13,6 +14,34 @@ import java.util.UUID;
 final class RadarEntrada {
 
     private RadarEntrada() {}
+
+    /** Nome do campo como aparece na tela, para a mensagem de erro não usar o nome interno. */
+    private static final Map<String, String> NOMES =
+            Map.ofEntries(
+                    Map.entry("nome", "Nome"),
+                    Map.entry("descricao", "Descrição"),
+                    Map.entry("preco", "Preço de venda"),
+                    Map.entry("preco_promocional", "Preço promocional"),
+                    Map.entry("custo", "Custo"),
+                    Map.entry("peso_bruto_kg", "Peso bruto (kg)"),
+                    Map.entry("peso_liquido_kg", "Peso líquido (kg)"),
+                    Map.entry("largura_cm", "Largura (cm)"),
+                    Map.entry("altura_cm", "Altura (cm)"),
+                    Map.entry("comprimento_cm", "Comprimento (cm)"),
+                    Map.entry("estoque_minimo", "Estoque mínimo"),
+                    Map.entry("estoque_maximo", "Estoque máximo"),
+                    Map.entry("marca", "Marca"),
+                    Map.entry("modelo", "Modelo"),
+                    Map.entry("sku", "SKU"),
+                    Map.entry("quantidade", "Quantidade"),
+                    Map.entry("custo_unitario", "Custo unitário"),
+                    Map.entry("motivo", "Motivo"),
+                    Map.entry("titulo", "Título"),
+                    Map.entry("observacoes_internas", "Observações internas"));
+
+    static String nomeDoCampo(String campo) {
+        return NOMES.getOrDefault(campo, campo.replace('_', ' '));
+    }
 
     static void permitir(String papel, String... papeis) {
         if (!Set.of(papeis).contains(papel))
@@ -39,13 +68,14 @@ final class RadarEntrada {
 
     static String texto(JsonNode n, String campo, int max) {
         String s = n.path(campo).asText("").trim();
-        if (s.isBlank() || s.length() > max) erro("Confira o campo " + campo + ".");
+        if (s.isBlank()) erro("Preencha o campo " + nomeDoCampo(campo) + ".");
+        if (s.length() > max) erro(nomeDoCampo(campo) + " aceita até " + max + " caracteres.");
         return s;
     }
 
     static String opcional(JsonNode n, String campo, int max) {
         String s = n.path(campo).asText("").trim();
-        if (s.length() > max) erro("Confira o campo " + campo + ".");
+        if (s.length() > max) erro(nomeDoCampo(campo) + " aceita até " + max + " caracteres.");
         return s.isBlank() ? null : s;
     }
 
@@ -60,10 +90,10 @@ final class RadarEntrada {
         if (s.isBlank()) return null;
         try {
             int v = Integer.parseInt(s);
-            if (v < min || v > max) erro("Valor fora do limite: " + campo);
+            if (v < min || v > max) erro("Valor fora do limite em " + nomeDoCampo(campo) + ".");
             return v;
         } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Número inválido: " + campo);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Número inválido em " + nomeDoCampo(campo) + ".");
         }
     }
 
@@ -71,17 +101,17 @@ final class RadarEntrada {
     static BigDecimal valor(JsonNode n, String campo) {
         JsonNode bruto = n.path(campo);
         // Lista ou objeto no lugar de um valor é pedido malformado: recusa, não vira zero.
-        if (bruto.isContainerNode()) erro("Valor inválido: " + campo);
+        if (bruto.isContainerNode()) erro("Valor inválido em " + nomeDoCampo(campo) + ".");
         String s = bruto.asText("0").trim();
         // "59,90" (como se digita no Brasil) vale o mesmo que "59.90".
         if (s.contains(",") && !s.contains(".")) s = s.replace(",", ".");
         try {
             BigDecimal v = new BigDecimal(s);
             if (v.signum() < 0 || v.scale() > 2 || v.compareTo(new BigDecimal("999999999")) > 0)
-                erro("Valor inválido: " + campo);
+                erro("Valor inválido em " + nomeDoCampo(campo) + ".");
             return v.setScale(2);
         } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido: " + campo);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido em " + nomeDoCampo(campo) + ".");
         }
     }
 
@@ -91,10 +121,10 @@ final class RadarEntrada {
         try {
             BigDecimal v = new BigDecimal(s);
             if (v.signum() <= 0 || v.scale() > 1 || v.compareTo(new BigDecimal("9999999")) > 0)
-                erro("Medida inválida: " + campo);
+                erro("Medida inválida em " + nomeDoCampo(campo) + " (maior que zero, uma casa decimal).");
             return v;
         } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Medida inválida: " + campo);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Medida inválida em " + nomeDoCampo(campo) + " (maior que zero, uma casa decimal).");
         }
     }
 
@@ -107,16 +137,16 @@ final class RadarEntrada {
             if (v.signum() < 0
                     || v.scale() > escala
                     || v.compareTo(new BigDecimal("999999999")) > 0)
-                erro("Valor inválido: " + campo);
+                erro("Valor inválido em " + nomeDoCampo(campo) + ".");
             return v;
         } catch (NumberFormatException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido: " + campo);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Valor inválido em " + nomeDoCampo(campo) + ".");
         }
     }
 
     /** Dinheiro opcional: vazio vira null; preenchido segue as regras de {@link #valor}. */
     static BigDecimal valorOpcional(JsonNode n, String campo) {
-        if (n.path(campo).isContainerNode()) erro("Valor inválido: " + campo);
+        if (n.path(campo).isContainerNode()) erro("Valor inválido em " + nomeDoCampo(campo) + ".");
         return n.path(campo).asText("").isBlank() ? null : valor(n, campo);
     }
 
