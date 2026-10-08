@@ -42,7 +42,8 @@ public class RadarAnuncios {
                     "anuncios_acao_lote",
                     "loja_salvar",
                     "loja_remover",
-                    "anunciar");
+                    "anunciar",
+                    "anuncios_sincronizar");
 
     /** Marketplaces em que o Radar sabe anunciar. Lista única: as outras classes usam esta. */
     static final Set<String> CANAIS = Set.of("Mercado Livre", "Shopee", "TikTok Shop", "AliExpress");
@@ -119,6 +120,7 @@ public class RadarAnuncios {
                 yield removerLoja(n);
             }
             case "anunciar" -> anunciar(n);
+            case "anuncios_sincronizar" -> sincronizar(n, papel);
             case "anuncio_relacionar" -> relacionar(n);
             case "anuncios_precos" -> proporPrecos(n);
             case "anuncios_acao_lote" -> lote(n);
@@ -245,6 +247,130 @@ public class RadarAnuncios {
                 linhas.size()
                         + " produto(s) criado(s) com cadastro incompleto e vinculado(s) aos"
                         + " anúncios. Complete o cadastro em Produtos.");
+    }
+
+    /**
+     * "Enviar preços" e "Enviar estoque" do menu do produto: leva o preço (ou o promocional) e a
+     * quantidade disponível do cadastro para os anúncios dos produtos nas lojas escolhidas. Nada
+     * sai do Radar: vale para quando a loja for conectada. Preço segue a regra de sempre: dono e
+     * gestor aplicam (nunca abaixo do custo); os outros cargos geram proposta para aprovação.
+     */
+    private Map<String, Object> sincronizar(JsonNode n, String papel) {
+        String campo = n.path("campo").asText("");
+        if (!Set.of("PRECO", "ESTOQUE").contains(campo)) erro("Escolha preço ou estoque.");
+        List<UUID> produtos = ids(n.path("produto_ids"));
+        JsonNode lojasJson = n.path("loja_ids");
+        if (!lojasJson.isArray() || lojasJson.isEmpty()) erro("Escolha uma ou mais lojas.");
+        List<UUID> lojas = new ArrayList<>();
+        for (UUID l : ids(lojasJson)) lojas.add((UUID) loja(l).get("id"));
+        boolean promocional = n.path("usar_promocional").asBoolean(false);
+        boolean aprova = Set.of("DONO", "GESTOR").contains(papel);
+        // Os anúncios dos produtos escolhidos (e das variações deles) nas lojas escolhidas, com o
+        // preço, o custo e o disponível do produto vendido. Kit: o que os componentes permitem.
+        var linhas =
+                db.queryForList(
+                        "select a.id, a.preco, a.estoque, a.versao, p.preco preco_produto,"
+                                + " p.preco_promocional, p.custo, case when p.tipo='KIT' then"
+                                + " coalesce((select min(floor((c.fisico-c.reservado)/k.quantidade))"
+                                + " from radar_kit_item k join radar_produto c on"
+                                + " c.tenant_id=k.tenant_id and c.id=k.componente_id where"
+                                + " k.tenant_id=p.tenant_id and k.kit_id=p.id),0) else"
+                                + " p.fisico-p.reservado end disponivel from radar_anuncio a join"
+                                + " radar_produto p on p.tenant_id=a.tenant_id and p.id=a.produto_id"
+                                + " where a.tenant_id=? and (p.id = any(?) or p.pai_id = any(?))"
+                                + " and a.loja_id = any(?)",
+                        tenant(),
+                        produtos.toArray(new UUID[0]),
+                        produtos.toArray(new UUID[0]),
+                        lojas.toArray(new UUID[0]));
+        if (linhas.size() > MAX_IMPORTACAO)
+            erro("São mais de " + MAX_IMPORTACAO + " anúncios: escolha menos produtos ou lojas.");
+        int alterados = 0, propostas = 0, abaixoDoCusto = 0;
+        for (var a : linhas) {
+            if (campo.equals("ESTOQUE")) {
+                int disponivel = Math.max(0, ((Number) a.get("disponivel")).intValue());
+                alterados +=
+                        db.update(
+                                "update radar_anuncio set estoque=?,versao=versao+1,"
+                                        + "atualizado_em=now() where tenant_id=? and id=?",
+                                disponivel,
+                                tenant(),
+                                a.get("id"));
+                continue;
+            }
+            BigDecimal promo = (BigDecimal) a.get("preco_promocional");
+            BigDecimal novo =
+                    promocional && promo != null && promo.signum() > 0
+                            ? promo
+                            : (BigDecimal) a.get("preco_produto");
+            if (novo == null || novo.signum() <= 0) continue;
+            if (novo.compareTo((BigDecimal) a.get("preco")) == 0) continue;
+            if (novo.compareTo((BigDecimal) a.get("custo")) < 0) {
+                abaixoDoCusto++;
+                continue;
+            }
+            // Toda mudança fica na Central de ações: já executada (dono e gestor) ou como proposta,
+            // sem repetir a proposta pendente do mesmo preço para o mesmo anúncio.
+            UUID usuario = RadarService.usuarioAtual();
+            int gravadas =
+                    db.update(
+                            "insert into radar_acao(id,tenant_id,anuncio_id,tipo,antes,depois,versao,"
+                                    + "motivo,estado,proposto_por,aprovado_por) select"
+                                    + " ?,?,?,'PRECO',?,?,?,?,?,?,? where ? or not exists (select 1 from"
+                                    + " radar_acao x where x.tenant_id=? and x.anuncio_id=? and"
+                                    + " x.tipo='PRECO' and x.estado='PENDENTE' and x.depois=?)",
+                            UUID.randomUUID(),
+                            tenant(),
+                            a.get("id"),
+                            a.get("preco"),
+                            novo,
+                            a.get("versao"),
+                            "Enviar preços do cadastro para as lojas",
+                            aprova ? "EXECUTADA" : "PENDENTE",
+                            usuario,
+                            aprova ? usuario : null,
+                            aprova,
+                            tenant(),
+                            a.get("id"),
+                            novo);
+            if (aprova) {
+                alterados +=
+                        db.update(
+                                "update radar_anuncio set preco=?,versao=versao+1,"
+                                        + "atualizado_em=now() where tenant_id=? and id=?",
+                                novo,
+                                tenant(),
+                                a.get("id"));
+            } else propostas += gravadas;
+        }
+        StringBuilder msg = new StringBuilder();
+        if (linhas.isEmpty()) msg.append("Nenhum anúncio destes produtos nas lojas escolhidas.");
+        else if (campo.equals("ESTOQUE"))
+            msg.append(alterados).append(" anúncio(s) com a quantidade disponível atualizada.");
+        else {
+            msg.append(alterados).append(" anúncio(s) com o preço atualizado.");
+            if (propostas > 0)
+                msg.append(" ")
+                        .append(propostas)
+                        .append(" proposta(s) de preço foram para aprovação na Central de ações.");
+            // Só quem vê custo fica sabendo o motivo.
+            if (abaixoDoCusto > 0)
+                msg.append(" ")
+                        .append(abaixoDoCusto)
+                        .append(
+                                aprova
+                                        ? " mantido(s): o preço ficaria abaixo do custo."
+                                        : " mantido(s) pela política de preço.");
+        }
+        if (!linhas.isEmpty())
+            msg.append(" Vale no Radar agora e vai para o marketplace quando a loja for conectada.");
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("anuncios", linhas.size());
+        r.put("alterados", alterados);
+        r.put("propostas", propostas);
+        r.put("mantidos", abaixoDoCusto);
+        r.put("mensagem", msg.toString());
+        return r;
     }
 
     /**

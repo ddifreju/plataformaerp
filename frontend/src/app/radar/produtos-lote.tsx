@@ -8,6 +8,7 @@
 
 import { useState, type ReactNode } from "react";
 import { money, str, type Row } from "./ui";
+import type { TipoRapido } from "./acoes-rapidas";
 
 type Props = {
   produtos: Row[];
@@ -24,6 +25,10 @@ type Props = {
   clonar?: (id: string) => void;
   /** Abre o passo a passo "Anunciar" (sem a função, o cargo não anuncia). */
   anunciar?: (ids: string[]) => void;
+  /** Abre um painel de ação rápida na lateral (preços, estoque, histórico…). */
+  rapido: (tipo: TipoRapido, ids: string[]) => void;
+  /** Quem vê custo e quem pode mexer em custo. */
+  podeCusto: boolean;
   ativo: boolean;
   children: (k: {
     cabecalho: ReactNode;
@@ -31,16 +36,8 @@ type Props = {
   }) => ReactNode;
 };
 
-const SEM_LOJA =
-  "Enviar ao e-commerce precisa de uma loja conectada. As conexões entram depois do CNPJ, em Integrações.";
-
 type Acao =
-  | "EDITAR"
-  | "TAGS"
-  | "INATIVAR"
-  | "ATIVAR"
-  | "EXCLUIR_ANEXOS"
-  | "EXCLUIR";
+  "EDITAR" | "TAGS" | "INATIVAR" | "ATIVAR" | "EXCLUIR_ANEXOS" | "EXCLUIR";
 
 const CAMPOS: [string, string, string][] = [
   ["preco", "Preço de venda", "DINHEIRO"],
@@ -164,6 +161,8 @@ export default function ProdutosLote({
   executar,
   clonar,
   anunciar,
+  rapido,
+  podeCusto,
   ativo,
   children,
 }: Props) {
@@ -374,10 +373,16 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
   const emBreve = (rotulo: string, motivo: string) => (
     <li>
       <button role="menuitem" disabled title={motivo}>
-        {rotulo} <small>(em breve)</small>
+        {rotulo} <small>({motivo.toLowerCase()})</small>
       </button>
     </li>
   );
+  // Ação rápida: fecha o menu e abre o painel lateral com os produtos da linha ou os marcados.
+  const rapidoItem = (rotulo: string, tipo: TipoRapido, ids: string[]) =>
+    item(rotulo, () => {
+      fecharMenus();
+      rapido(tipo, ids);
+    });
   const item = (rotulo: string, onClick: () => void) => (
     <li>
       <button role="menuitem" onClick={onClick}>
@@ -512,14 +517,30 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             aria-label={`Ações de ${str(produtoLinha.nome)}`}
           >
             {item("⇪ Enviar para o e-commerce", enviarEcommerce)}
-            {item("🖨 Imprimir relatório", () => relatorio([menuLinha.id]))}
-            {item("⇩ Exportar para planilha", () =>
-              exportarProdutos([menuLinha.id]),
-            )}
-            {produtoLinha.tipo === "KIT" &&
-              item("⇩ Exportar composição do kit", () =>
-                exportarKits([menuLinha.id]),
-              )}
+            {rapidoItem("$ Enviar preços para o e-commerce", "precos", [
+              menuLinha.id,
+            ])}
+            {rapidoItem("▦ Enviar estoque ao e-commerce", "estoque", [
+              menuLinha.id,
+            ])}
+            {rapidoItem("▤ Enviar dados fiscais para o e-commerce", "fiscais", [
+              menuLinha.id,
+            ])}
+            <li className="rd-menu-sep" />
+            {produtoLinha.tipo !== "KIT" &&
+              rapidoItem("▦ Gerenciar estoque", "gerenciar-estoque", [
+                menuLinha.id,
+              ])}
+            {rapidoItem("⌕ Consultar estoque multiempresa", "multiempresa", [
+              menuLinha.id,
+            ])}
+            {item("🏷 Imprimir etiqueta", () => etiquetas([menuLinha.id]))}
+            {rapidoItem("↙ Visualizar histórico de compras", "compras", [
+              menuLinha.id,
+            ])}
+            {rapidoItem("↗ Visualizar histórico de vendas", "vendas", [
+              menuLinha.id,
+            ])}
             <li className="rd-menu-sep" />
             {item("✎ Editar dados", () => abrir("EDITAR", [menuLinha.id]))}
             {clonar &&
@@ -528,8 +549,24 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
                 setMenuLinha(null);
                 clonar(id);
               })}
-            {item("🏷 Imprimir etiqueta", () => etiquetas([menuLinha.id]))}
             {item("# Alterar tags", () => abrir("TAGS", [menuLinha.id]))}
+            {produtoLinha.tipo === "VARIACAO" &&
+              emBreve("⇄ Tornar produto simples", "Entra com o Bloco 2")}
+            {emBreve("⇪ Enviar produto para empresas", "Grupo de empresas")}
+            {produtoLinha.tipo === "VARIACAO" &&
+              podeCusto &&
+              rapidoItem("$ Atualizar custo das variações", "custo-variacoes", [
+                menuLinha.id,
+              ])}
+            <li className="rd-menu-sep" />
+            {item("🖨 Imprimir relatório", () => relatorio([menuLinha.id]))}
+            {item("⇩ Exportar para planilha", () =>
+              exportarProdutos([menuLinha.id]),
+            )}
+            {produtoLinha.tipo === "KIT" &&
+              item("⇩ Exportar composição do kit", () =>
+                exportarKits([menuLinha.id]),
+              )}
             <li className="rd-menu-sep" />
             {produtoLinha.permite_venda === false
               ? item("✓ Ativar produto", () => abrir("ATIVAR", [menuLinha.id]))
@@ -591,9 +628,26 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
             {menu && (
               <ul role="menu" className="rd-menu-cima rd-menu-longo">
                 {item("⇪ Enviar para o e-commerce", enviarEcommerce)}
-                {emBreve("$ Enviar preços para o e-commerce", SEM_LOJA)}
-                {emBreve("▦ Enviar estoque ao e-commerce", SEM_LOJA)}
-                {emBreve("▤ Enviar dados fiscais para o e-commerce", SEM_LOJA)}
+                {rapidoItem(
+                  "$ Enviar preços para o e-commerce",
+                  "precos",
+                  marcados,
+                )}
+                {rapidoItem(
+                  "▦ Enviar estoque ao e-commerce",
+                  "estoque",
+                  marcados,
+                )}
+                {rapidoItem(
+                  "▤ Enviar dados fiscais para o e-commerce",
+                  "fiscais",
+                  marcados,
+                )}
+                {rapidoItem(
+                  "↗ Visualizar histórico de vendas",
+                  "vendas",
+                  marcados,
+                )}
                 <li className="rd-menu-sep" />
                 {item("🖨 Imprimir relatório", () => relatorio())}
                 {item("⇩ Exportar produtos para planilha", () =>
@@ -643,9 +697,12 @@ ${p.gtin ? `<span class="gtin">${esc(p.gtin)}</span>` : ""}<span class="preco">$
         </div>
       )}
       {acao && (
-        <div className="rd-modal-backdrop" onClick={() => setAcao(null)}>
+        <div
+          className="rd-modal-backdrop lateral"
+          onClick={() => setAcao(null)}
+        >
           <section
-            className="rd-modal"
+            className="rd-modal lateral"
             role="dialog"
             aria-modal="true"
             aria-label={titulos[acao]}

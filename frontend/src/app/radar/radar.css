@@ -3713,3 +3713,161 @@ ul.rd-menu-linha li button:disabled {
     width: min(290px, calc(100vw - 48px));
   }
 }
+
+/* Painel lateral de edição rápida (ações do "⋯" e "Mais ações") */
+.rd-modal-backdrop.lateral,
+.rd-gaveta-fundo {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+  align-items: stretch;
+  padding: 0;
+  background: rgba(17, 24, 39, 0.28);
+}
+.rd-modal.lateral,
+.rd-gaveta {
+  width: min(720px, 100vw);
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
+  margin: 0;
+  overflow-y: auto;
+  box-shadow: -12px 0 40px rgba(17, 24, 39, 0.18);
+  animation: rd-entrar-lateral 0.18s ease-out;
+}
+.rd-gaveta {
+  background: white;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+@keyframes rd-entrar-lateral {
+  from {
+    transform: translateX(24px);
+    opacity: 0.6;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.rd-gaveta > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 26px 8px;
+}
+.rd-gaveta > header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.rd-gaveta-fechar {
+  background: none;
+  border: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+  font: inherit;
+}
+.rd-gaveta-fechar span {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #f3f4f6;
+}
+.rd-gaveta-corpo {
+  padding: 12px 26px 20px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.rd-gaveta > footer {
+  display: flex;
+  gap: 10px;
+  padding: 14px 26px 22px;
+  border-top: 1px solid #e5e7eb;
+}
+.rd-gaveta-aviso {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.rd-gaveta-aviso > span {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #6d8fe0;
+  color: white;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.rd-gaveta-aviso > div {
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+.rd-gaveta-aviso p {
+  margin: 4px 0 0;
+  color: #4b5563;
+}
+.rd-gaveta-lojas {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+}
+.rd-gaveta-lojas legend {
+  color: #6b7280;
+  font-size: 0.85rem;
+  padding: 0 4px;
+}
+.rd-gaveta-lojas label {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+}
+.rd-gaveta input[type="checkbox"],
+.rd-gaveta input[type="radio"] {
+  width: auto;
+}
+.rd-gaveta-lojas label small {
+  margin-left: auto;
+  color: #6b7280;
+}
+.rd-gaveta-campo {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+.rd-gaveta-campo select,
+.rd-gaveta-campo input {
+  color: #111827;
+}
+.rd-gaveta-ajuste {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: end;
+}
+.rd-gaveta-ajuste .largo {
+  grid-column: 1 / -1;
+}
+.rd-gaveta .rd-table {
+  font-size: 0.88rem;
+}

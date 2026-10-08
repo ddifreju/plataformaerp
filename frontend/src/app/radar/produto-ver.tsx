@@ -8,6 +8,7 @@
 import { useState, type ReactNode } from "react";
 import { NO_RADAR, verNaCentral } from "./anuncios";
 import { SIGLA } from "./canais";
+import type { TipoRapido } from "./acoes-rapidas";
 import { faltasDoCadastro } from "./pendencias";
 import { ORIGENS, UNIDADES, type Aba } from "./produto";
 import { Badge, Empty, cents, centMoney, date, money, str, type Row } from "./ui";
@@ -51,6 +52,8 @@ type Props = {
   disponivel: (p: Row) => number;
   editar: (aba: Aba) => void;
   anunciar: () => void;
+  /** Abre um painel de ação rápida (o mesmo do "⋯" da lista). */
+  rapido: (tipo: TipoRapido) => void;
   clonar?: () => void;
   paraLixeira?: () => void;
   voltar: () => void;
@@ -776,16 +779,28 @@ export default function ProdutoVer(props: Props) {
                 <div className="rd-menu-fundo" onClick={() => setMenu(false)} />
                 <ul role="menu" className="rd-menu-linha rd-ver-menu">
                   {props.podeAnunciar && item("⇪ Enviar para o e-commerce", props.anunciar)}
-                  {emBreve("$ Enviar preços para o e-commerce", "depende da conexão")}
-                  {emBreve("▦ Enviar estoque ao e-commerce", "depende da conexão")}
-                  {emBreve("▤ Enviar dados fiscais", "depende da conexão")}
+                  {props.podeAnunciar &&
+                    item("$ Enviar preços para o e-commerce", () => props.rapido("precos"))}
+                  {props.podeAnunciar &&
+                    item("▦ Enviar estoque ao e-commerce", () => props.rapido("estoque"))}
+                  {item("▤ Enviar dados fiscais para o e-commerce", () => props.rapido("fiscais"))}
                   <li className="rd-menu-sep" />
-                  {props.financeiro && item("↙ Ver histórico de compras", () => setAba("custos"))}
-                  {item("↗ Ver últimas vendas", () => setAba("outros"))}
+                  {tipo !== "KIT" &&
+                    item("▦ Gerenciar estoque", () => props.rapido("gerenciar-estoque"))}
+                  {item("⌕ Consultar estoque multiempresa", () => props.rapido("multiempresa"))}
+                  {item("↙ Visualizar histórico de compras", () => props.rapido("compras"))}
+                  {item("↗ Visualizar histórico de vendas", () => props.rapido("vendas"))}
                   <li className="rd-menu-sep" />
                   {props.clonar && item("⧉ Clonar produto", props.clonar)}
                   {props.podeEditar && item("# Editar tags", () => props.editar("descricao"))}
-                  {tipo === "VARIACAO" && emBreve("⇄ Tornar produto simples", "em breve")}
+                  {tipo === "VARIACAO" &&
+                    emBreve("⇄ Tornar produto simples", "entra com o Bloco 2")}
+                  {emBreve("⇪ Enviar produto para empresas", "grupo de empresas")}
+                  {tipo === "VARIACAO" &&
+                    props.financeiro &&
+                    props.podeEditar &&
+                    item("$ Atualizar custo das variações", () => props.rapido("custo-variacoes"))}
+                  {props.paraLixeira && <li className="rd-menu-sep" />}
                   {props.paraLixeira && item("🗑 Mover para a lixeira", props.paraLixeira)}
                 </ul>
               </>

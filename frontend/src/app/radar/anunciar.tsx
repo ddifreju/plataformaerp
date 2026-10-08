@@ -491,9 +491,9 @@ export default function Anunciar(props: Props) {
   }
 
   return (
-    <div className="rd-modal-backdrop" onClick={() => !props.busy && props.fechar()}>
+    <div className="rd-modal-backdrop lateral" onClick={() => !props.busy && props.fechar()}>
       <section
-        className="rd-modal rd-modal-largo"
+        className="rd-modal rd-modal-largo lateral"
         role="dialog"
         aria-modal="true"
         aria-label="Anunciar"
