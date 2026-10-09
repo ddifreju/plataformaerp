@@ -858,6 +858,68 @@ class RadarProdutosTest {
         assertTrue(String.valueOf(segundo.get("mensagem")).contains("GTIN-A1"));
     }
 
+    @Test
+    void desfazerOUltimoLoteVoltaOsValoresDeAntes() throws SQLException {
+        UUID a = BancoRadarDeTeste.novoProduto(empresaA, "DESF-A", "10.00", "100.00");
+        UUID b = BancoRadarDeTeste.novoProduto(empresaA, "DESF-B", "10.00", "200.00");
+        String ids = "\"ids\":[\"" + a + "\",\"" + b + "\"]";
+        var r =
+                naEmpresa(
+                        empresaA,
+                        () ->
+                                produtos.lote(
+                                        json(
+                                                "{\"acao\":\"EDITAR\",\"campo\":\"preco\",\"modo\":"
+                                                        + "\"AUMENTAR_PCT\",\"valor\":\"10\","
+                                                        + ids
+                                                        + "}"),
+                                        "DONO"));
+        Object lote = r.get("lote_id");
+        assertNotNull(lote);
+        // Alguém mexeu no B depois do lote: o desfazer não passa por cima.
+        BancoRadarDeTeste.executarComoDono(
+                "update radar_produto set preco=999, atualizado_em=now() + interval '1 second' where id=?",
+                b);
+        var d =
+                naEmpresa(
+                        empresaA,
+                        () -> produtos.desfazerLote(json("{\"id\":\"" + lote + "\"}"), "GESTOR"));
+        assertTrue(String.valueOf(d.get("mensagem")).contains("1 produto(s) voltaram"));
+        assertEquals(
+                0,
+                new BigDecimal("100.00")
+                        .compareTo(
+                                (BigDecimal)
+                                        linha(empresaA, "select preco from radar_produto where id=?", a)
+                                                .get("preco")));
+        assertEquals(
+                0,
+                new BigDecimal("999.00")
+                        .compareTo(
+                                (BigDecimal)
+                                        linha(empresaA, "select preco from radar_produto where id=?", b)
+                                                .get("preco")));
+        // Não desfaz duas vezes; outra empresa e outro cargo não desfazem.
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                empresaA,
+                                () -> produtos.desfazerLote(json("{\"id\":\"" + lote + "\"}"), "DONO")));
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                empresaB,
+                                () -> produtos.desfazerLote(json("{\"id\":\"" + lote + "\"}"), "DONO")));
+        assertThrows(
+                ResponseStatusException.class,
+                () ->
+                        naEmpresa(
+                                empresaA,
+                                () -> produtos.desfazerLote(json("{\"id\":\"" + lote + "\"}"), "MARKETING")));
+    }
+
     private static UUID salvar(UUID empresa, String corpo) {
         var comV = comVersao(empresa, corpo);
         return (UUID) naEmpresa(empresa, () -> produtos.salvar(comV, "DONO")).get("id");

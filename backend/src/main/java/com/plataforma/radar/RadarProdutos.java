@@ -1281,7 +1281,9 @@ public class RadarProdutos {
                             : "Os produtos escolhidos estão na lixeira. Restaure antes.");
         return switch (acao) {
             case "EDITAR" -> {
-                var r = editarEmMassa(n, alvo);
+                String campo = n.path("campo").asText("");
+                if (!CAMPOS_LOTE.containsKey(campo)) erro("Campo não pode ser editado em massa.");
+                var r = comDesfazer(campo, alvo, () -> editarEmMassa(n, alvo));
                 recalcularPendencias(alvo);
                 yield r;
             }
@@ -1291,7 +1293,7 @@ public class RadarProdutos {
                 recalcularPendencias(alvo);
                 yield r;
             }
-            case "TAGS" -> alterarTags(n, alvo);
+            case "TAGS" -> comDesfazer("tags", alvo, () -> alterarTags(n, alvo));
             case "INATIVAR", "ATIVAR" -> {
                 int k =
                         db.update(
@@ -1620,6 +1622,117 @@ public class RadarProdutos {
                     acima
                             + " produto(s) ficariam com o preço promocional igual ou maior que o preço"
                             + " de venda. Ajuste o promocional antes.");
+    }
+
+    /**
+     * "Desfazer o último lote": guarda o valor de antes da coluna mudada (em radar_registro, tipo
+     * LOTE) e devolve o id para a tela oferecer o desfazer. {@code coluna} vem de CAMPOS_LOTE ou
+     * é "tags" (nunca do texto da requisição).
+     */
+    private Map<String, Object> comDesfazer(
+            String coluna, List<UUID> alvo, java.util.function.Supplier<Map<String, Object>> acao) {
+        UUID[] ids = alvo.toArray(UUID[]::new);
+        String antes =
+                db.queryForObject(
+                        "select coalesce(jsonb_agg(jsonb_build_object('id', id, '"
+                                + coluna
+                                + "', "
+                                + coluna
+                                + ")), '[]'::jsonb)::text from radar_produto where tenant_id=? and"
+                                + " id = any(?)",
+                        String.class,
+                        tenant(),
+                        ids);
+        Map<String, Object> r = new LinkedHashMap<>(acao.get());
+        if (Boolean.TRUE.equals(r.get("nada"))) return r;
+        // Hora da gravação do lote: só volta o produto que ninguém mexeu depois.
+        String em =
+                db.queryForObject(
+                        "select max(atualizado_em)::text from radar_produto where tenant_id=? and"
+                                + " id = any(?)",
+                        String.class,
+                        tenant(),
+                        ids);
+        UUID lote = UUID.randomUUID();
+        db.update(
+                "insert into radar_registro(id,tenant_id,tipo,dados) values(?,?,'LOTE',"
+                        + "jsonb_build_object('coluna',?::text,'antes',?::jsonb,'em',?::text,"
+                        + "'mensagem',?::text))",
+                lote,
+                tenant(),
+                coluna,
+                antes,
+                em,
+                String.valueOf(r.get("mensagem")));
+        r.put("lote_id", lote);
+        return r;
+    }
+
+    /** Volta a coluna do último lote ao valor de antes, nos produtos que não mudaram depois. */
+    Map<String, Object> desfazerLote(JsonNode n, String papel) {
+        permitir(papel, "DONO", "GESTOR");
+        UUID lote = id(n, "id");
+        var linhas =
+                db.queryForList(
+                        "select dados::text dados from radar_registro where tenant_id=? and id=?"
+                                + " and tipo='LOTE'",
+                        tenant(),
+                        lote);
+        if (linhas.isEmpty())
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Lote não encontrado.");
+        JsonNode d;
+        try {
+            d = json.readTree((String) linhas.getFirst().get("dados"));
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        if (d.hasNonNull("desfeito_em")) erro("Esse lote já foi desfeito.");
+        Integer depois =
+                db.queryForObject(
+                        "select count(*) from radar_registro where tenant_id=? and tipo='LOTE' and"
+                                + " criado_em > (select criado_em from radar_registro where"
+                                + " tenant_id=? and id=?)",
+                        Integer.class,
+                        tenant(),
+                        tenant(),
+                        lote);
+        if (depois != null && depois > 0) erro("Só dá para desfazer o último lote.");
+        String coluna = d.path("coluna").asText("");
+        if (!coluna.equals("tags") && !CAMPOS_LOTE.containsKey(coluna))
+            erro("Esse lote não pode ser desfeito.");
+        List<UUID> voltaram =
+                db.queryForList(
+                        "update radar_produto p set "
+                                + coluna
+                                + " = r."
+                                + coluna
+                                + ", atualizado_em=now() from"
+                                + " jsonb_populate_recordset(null::radar_produto, ?::jsonb) r"
+                                + " where p.tenant_id=? and p.id=r.id and p.atualizado_em ="
+                                + " ?::timestamptz returning p.id",
+                        UUID.class,
+                        d.path("antes").toString(),
+                        tenant(),
+                        d.path("em").asText());
+        db.update(
+                "update radar_registro set dados = dados || jsonb_build_object('desfeito_em',"
+                        + " now()) where tenant_id=? and id=?",
+                tenant(),
+                lote);
+        recalcularPendencias(voltaram);
+        int total = d.path("antes").size();
+        int ficaram = Math.max(0, total - voltaram.size());
+        return Map.of(
+                "mensagem",
+                "Lote desfeito: "
+                        + voltaram.size()
+                        + " produto(s) voltaram ao valor anterior."
+                        + (ficaram > 0
+                                ? " "
+                                        + ficaram
+                                        + " não mudaram no lote ou foram alterados depois, e ficaram"
+                                        + " como estão."
+                                : ""));
     }
 
     private Map<String, Object> alterarTags(JsonNode n, List<UUID> alvo) {

@@ -27,7 +27,7 @@ conexão existir, esses limites vêm do marketplace (ver decisão 0036).
 
 | Regra | Valor | Fonte |
 |---|---|---|
-| Título | Sem número oficial para o BR: o limite é por loja e categoria (`item_name_length_limit`) | https://open.shopee.com/documents/v2/v2.product.get_item_limit?module=89&type=1 |
+| Título | Máx. 120 (Shopee Brasil). Mínimo sem número oficial. A API ainda devolve o limite da loja/categoria (`item_name_length_limit`), que vale quando a loja for conectada | https://ads.shopee.com.br/learn/faq/363/1795 e https://open.shopee.com/documents/v2/v2.product.get_item_limit?module=89&type=1 |
 | Imagens | Mín. 1. Máximo por loja. Recomendado 5 fotos de 500x500 px | https://open.shopee.com/documents/v2/v2.product.add_item?module=89&type=1 |
 | Código de barras | Obrigatório em eletrônicos, eletrodomésticos e suplementos; nas outras, conforme a categoria (`gtin_validation_rule`) | https://seller.shopee.com.br/edu/article/16213/aumente-sua-exposicao-com-o-GTIN-EAN |
 | Peso | Obrigatório (kg, produto embalado) | add_item |
@@ -65,7 +65,7 @@ conexão existir, esses limites vêm do marketplace (ver decisão 0036).
 
 - Cadastro completo (`RadarProdutos.pendencias`): origem, NCM, código de
   barras ou motivo, preço, marca, categoria, descrição, peso e medidas.
-- Por marketplace: título (ML 60; TikTok 25–200; AliExpress 128), pelo menos
+- Por marketplace: título (ML 60; Shopee 120; TikTok 25–200; AliExpress 128; sem mínimo oficial no ML, na Shopee e no AliExpress), pelo menos
   1 imagem, tamanho da foto (ML 500 px no maior lado; TikTok 300 px nos dois
   lados), descrição (TikTok 30 palavras e 10.000 letras; ML 50.000), preço
   (TikTok R$ 0,50 a R$ 10.000), quantidade (ML e TikTok pelo menos 1; TikTok

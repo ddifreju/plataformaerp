@@ -1076,8 +1076,9 @@ public class RadarService {
                                 .add(custo.multiply(BigDecimal.valueOf(q)))
                                 .divide(BigDecimal.valueOf(fisico + q), 2, RoundingMode.HALF_UP);
                 db.update(
-                        "update radar_produto set fisico=fisico+?,custo=? where tenant_id=? and"
-                                + " id=?",
+                        // atualizado_em: o "desfazer lote" não passa por cima do custo médio novo.
+                        "update radar_produto set fisico=fisico+?,custo=?,atualizado_em=now()"
+                                + " where tenant_id=? and id=?",
                         q,
                         medio,
                         tenant(),
@@ -1117,6 +1118,8 @@ public class RadarService {
                     result.putAll(clientes.salvar(n, papel()));
                 else if (op.equals("produtos_lote")) result.putAll(produtos.lote(n, papel()));
                 else if (op.equals("produto_clonar")) result.putAll(produtos.clonar(n, papel()));
+                else if (op.equals("lote_desfazer"))
+                    result.putAll(produtos.desfazerLote(n, papel()));
                 else if (op.equals("custos_iniciar"))
                     result.putAll(produtos.iniciarCustos(n, papel()));
                 else if (RadarProdutos.OPERACOES.contains(op))
