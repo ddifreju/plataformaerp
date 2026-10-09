@@ -803,6 +803,21 @@ public class RadarAnuncios {
         // sabendo antes (com a mensagem genérica, sem revelar o custo).
         boolean conferir = n.path("conferir").asBoolean(false);
         List<String> encontrados = new ArrayList<>();
+        db.execute("set local statement_timeout = '30s'");
+        // Quem não vê o custo recebe um veredito só por produto (o menor preço pedido para ele),
+        // e não um por preço: mandar vários preços do mesmo produto não revela o custo.
+        Map<UUID, BigDecimal> menorPreco = new java.util.HashMap<>();
+        if (!veCusto)
+            for (JsonNode item : itens)
+                try {
+                    UUID pid = UUID.fromString(item.path("produto_id").asText());
+                    BigDecimal v = valor(item, "preco");
+                    menorPreco.merge(pid, v, BigDecimal::min);
+                } catch (RuntimeException e) {
+                    // id ou preço inválido: a checagem do item diz o problema
+                }
+        // Fotos lidas uma vez por produto e marketplace (o mesmo produto pode ir para várias lojas).
+        Map<String, int[]> fotosConferidas = new java.util.HashMap<>();
         for (JsonNode item : itens) {
           try {
             var loja = loja(id(item, "loja_id"));
@@ -875,7 +890,8 @@ public class RadarAnuncios {
                                 + " a "
                                 + reais(regra.precoMax()));
             // Mesma política da aprovação de preço: anúncio pronto não sobe abaixo do custo.
-            if (preco != null && preco.compareTo((BigDecimal) p.get("custo")) < 0)
+            BigDecimal precoParaCusto = veCusto ? preco : menorPreco.getOrDefault(pid, preco);
+            if (precoParaCusto != null && precoParaCusto.compareTo((BigDecimal) p.get("custo")) < 0)
                 problemas.add(
                         veCusto
                                 ? "preço abaixo do custo do produto (política local: bloqueado)"
@@ -916,18 +932,25 @@ public class RadarAnuncios {
 
             // A variação mostra também as fotos do produto pai.
             UUID pai = p.get("pai_id") == null ? pid : (UUID) p.get("pai_id");
-            List<byte[]> fotos =
-                    db.queryForList(
-                            "select dados from radar_produto_imagem where tenant_id=? and"
-                                    + " produto_id in (?,?)",
-                            byte[].class,
-                            tenant(),
-                            pid,
-                            pai);
-            if (fotos.size() < regra.imagensMin())
+            int[] fotosInfo =
+                    fotosConferidas.computeIfAbsent(
+                            pid + "|" + marketplace,
+                            k -> {
+                                List<byte[]> fotos =
+                                        db.queryForList(
+                                                "select dados from radar_produto_imagem where"
+                                                        + " tenant_id=? and produto_id in (?,?)",
+                                                byte[].class,
+                                                tenant(),
+                                                pid,
+                                                pai);
+                                int peq = 0;
+                                for (byte[] foto : fotos) if (fotoPequena(foto, regra)) peq++;
+                                return new int[] {fotos.size(), peq};
+                            });
+            if (fotosInfo[0] < regra.imagensMin())
                 problemas.add(oMarketplace(marketplace) + " pede pelo menos " + regra.imagensMin() + " imagem(ns)");
-            int pequenas = 0;
-            for (byte[] foto : fotos) if (fotoPequena(foto, regra)) pequenas++;
+            int pequenas = fotosInfo[1];
             if (pequenas > 0)
                 problemas.add(
                         pequenas
@@ -968,7 +991,9 @@ public class RadarAnuncios {
             encontrados.add(e.getReason());
           }
         }
-        if (conferir) return Map.of("problemas", encontrados, "conferidos", itens.size());
+        // Conferir não grava nada: a tela não mostra aviso de "salvo".
+        if (conferir)
+            return Map.of("problemas", encontrados, "conferidos", itens.size(), "mensagem", "");
         return Map.of(
                 "criados",
                 itens.size(),
@@ -984,11 +1009,23 @@ public class RadarAnuncios {
      */
     private static boolean fotoPequena(byte[] foto, Regra regra) {
         if (regra.fotoMaiorLadoMin() == null && regra.fotoMenorLadoMin() == null) return false;
-        try {
-            var imagem = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(foto));
-            if (imagem == null) return false;
-            int maior = Math.max(imagem.getWidth(), imagem.getHeight());
-            int menor = Math.min(imagem.getWidth(), imagem.getHeight());
+        // Lê só o tamanho no cabeçalho da imagem, sem descompactar (rápido e sem estourar memória).
+        try (var in =
+                javax.imageio.ImageIO.createImageInputStream(
+                        new java.io.ByteArrayInputStream(foto))) {
+            var leitores = javax.imageio.ImageIO.getImageReaders(in);
+            if (!leitores.hasNext()) return false;
+            var leitor = leitores.next();
+            int largura, altura;
+            try {
+                leitor.setInput(in);
+                largura = leitor.getWidth(0);
+                altura = leitor.getHeight(0);
+            } finally {
+                leitor.dispose();
+            }
+            int maior = Math.max(largura, altura);
+            int menor = Math.min(largura, altura);
             return (regra.fotoMaiorLadoMin() != null && maior < regra.fotoMaiorLadoMin())
                     || (regra.fotoMenorLadoMin() != null && menor < regra.fotoMenorLadoMin());
         } catch (java.io.IOException e) {
