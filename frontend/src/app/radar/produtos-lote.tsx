@@ -363,8 +363,9 @@ export default function ProdutosLote({
   const variacoesDoAlvo = produtos.filter((p) =>
     alvo.includes(str(p.pai_id)),
   ).length;
-  // Marcar vários: quem edita, quem anuncia (marketing) e quem envia estoque (estoque).
-  const podeMarcar = ativo || !!anunciar || podeEnviarEstoque;
+  // Todo cargo marca vários: quem só consulta usa a barra para imprimir, exportar e ver
+  // histórico de uma seleção; editar, anunciar e enviar continuam só para quem pode.
+  const podeMarcar = true;
   const temKitMarcado = produtos.some(
     (p) => p.tipo === "KIT" && marcados.includes(str(p.id)),
   );

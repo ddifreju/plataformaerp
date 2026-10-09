@@ -252,6 +252,8 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     [notice, setNotice] = useState(""),
     // Resposta sem efeito ("nada a iniciar", "nenhum anúncio mudou"): aviso neutro, sem ✓.
     [noticeNeutro, setNoticeNeutro] = useState(false),
+    // Último lote de produtos (editar em massa ou tags): dá para desfazer.
+    [ultimoLote, setUltimoLote] = useState<{ id: string; mensagem: string } | null>(null),
     [error, setError] = useState(""),
     [modal, setModal] = useState<ModalSpec | null>(null),
     [tour, setTour] = useState(0),
@@ -342,6 +344,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       const r = await call("/comandos", body, crypto.randomUUID());
       setNotice(r.mensagem);
       setNoticeNeutro(r.nada === true);
+      if (r.lote_id) setUltimoLote({ id: String(r.lote_id), mensagem: String(r.mensagem) });
       await refresh();
       return true;
     } catch (e) {
@@ -361,6 +364,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
       const r = await call("/comandos", body, crypto.randomUUID());
       setNotice(r.mensagem);
       setNoticeNeutro(r.nada === true);
+      if (r.lote_id) setUltimoLote({ id: String(r.lote_id), mensagem: String(r.mensagem) });
       await refresh();
       return r as Record<string, unknown>;
     } catch (e) {
@@ -373,6 +377,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
     }
   }
   function go(p: string) {
+    setUltimoLote(null);
     setEditando(null);
     setVendo(null);
     setPage(p);
@@ -1100,6 +1105,25 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                   </button>
                 </div>
               </div>
+              {ultimoLote && can("DONO", "GESTOR") && (
+                <div className="rd-toast neutro rd-desfazer" role="status">
+                  <span>Último lote: {ultimoLote.mensagem}</span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={async () => {
+                      const id = ultimoLote.id;
+                      setUltimoLote(null);
+                      await command({ op: "lote_desfazer", id });
+                    }}
+                  >
+                    ↶ Desfazer
+                  </button>
+                  <button aria-label="Fechar" onClick={() => setUltimoLote(null)}>
+                    ×
+                  </button>
+                </div>
+              )}
               <FiltrosProdutos
                 filtro={filtroProdutos}
                 setFiltro={filtrarLista}

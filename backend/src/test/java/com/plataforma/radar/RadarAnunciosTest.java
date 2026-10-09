@@ -692,12 +692,12 @@ class RadarAnunciosTest {
                         ResponseStatusException.class,
                         () -> anunciar(empresa, completo, shopee, "Cortina", "0"));
         assertTrue(zero.getReason().contains("pelo menos 1"));
-        // Título acima de 250 na Shopee: o limite é do Radar, não da Shopee.
+        // Shopee Brasil: título até 120.
         var longo =
                 assertThrows(
                         ResponseStatusException.class,
-                        () -> anunciar(empresa, completo, shopee, "x".repeat(251), "1"));
-        assertTrue(longo.getReason().contains("o Radar guarda títulos de até 250"));
+                        () -> anunciar(empresa, completo, shopee, "x".repeat(121), "1"));
+        assertTrue(longo.getReason().contains("o título na Shopee vai até 120"));
     }
 
     @Test

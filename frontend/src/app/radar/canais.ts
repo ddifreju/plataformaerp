@@ -47,8 +47,9 @@ export const REGRAS: Record<string, Regra> = {
     estoqueMin: 1,
     fotoMaiorLadoMin: 500,
   },
-  // Título, descrição, preço e estoque da Shopee têm limite por loja: sem número público.
-  Shopee: LIVRE,
+  // Shopee Brasil: título até 120 (ads.shopee.com.br, FAQ 363/1795). Descrição, preço e
+  // estoque têm limite por loja, sem número público.
+  Shopee: { ...LIVRE, tituloMax: 120 },
   // Política BR diz 25 a 200 letras (a API aceita até 300): vale a mais restrita.
   "TikTok Shop": {
     ...LIVRE,

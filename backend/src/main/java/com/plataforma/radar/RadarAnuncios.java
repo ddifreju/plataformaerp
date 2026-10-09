@@ -80,8 +80,9 @@ public class RadarAnuncios {
                     // Estoque 0 só é aceito no Fulfillment: anúncio comum precisa de pelo menos 1.
                     "Mercado Livre",
                             new Regra(1, 60, 1, null, 50000, null, null, 1, null, 500, null),
-                    // Os limites da Shopee são por loja: sem número público.
-                    "Shopee", LIVRE,
+                    // Shopee Brasil: título até 120 (ads.shopee.com.br, FAQ 363/1795). Os outros
+                    // limites são por loja, sem número público.
+                    "Shopee", new Regra(1, 120, 1, null, null, null, null, null, null, null, null),
                     // Política BR: 25 a 200 letras (a API aceita 300); vale a mais restrita.
                     "TikTok Shop",
                             new Regra(

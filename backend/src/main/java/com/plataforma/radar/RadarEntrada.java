@@ -30,6 +30,8 @@ final class RadarEntrada {
                     Map.entry("comprimento_cm", "Comprimento (cm)"),
                     Map.entry("estoque_minimo", "Estoque mínimo"),
                     Map.entry("dias_preparacao", "Dias de preparação"),
+                    Map.entry("minimo", "Estoque mínimo"),
+                    Map.entry("maximo", "Estoque máximo"),
                     Map.entry("garantia_meses", "Garantia (meses)"),
                     Map.entry("cest", "CEST"),
                     Map.entry("ncm", "NCM"),

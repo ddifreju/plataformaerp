@@ -4081,3 +4081,20 @@ ul.rd-menu-linha li button,
     max-height: 80vh;
   }
 }
+
+/* Faixa "Último lote · Desfazer" acima da lista de produtos */
+.rd-desfazer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.rd-desfazer span {
+  flex: 1;
+}
+.rd-desfazer button:not([aria-label]) {
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-weight: 600;
+}
