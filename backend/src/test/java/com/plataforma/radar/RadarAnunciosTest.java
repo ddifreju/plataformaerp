@@ -889,6 +889,35 @@ class RadarAnunciosTest {
         return (UUID) r.get("id");
     }
 
+    @Test
+    void conferirAntesDeSalvarAvisaSemGravarNemRevelarOCusto() throws SQLException {
+        UUID empresa = BancoRadarDeTeste.novaEmpresa();
+        UUID loja = novaLoja(empresa, "Shopee", "Shopee");
+        UUID produto = produtoCompleto(empresa, "Shopee");
+        BancoRadarDeTeste.executarComoDono("update radar_produto set custo=100 where id=?", produto);
+        String corpo =
+                "{\"conferir\":true,\"itens\":[{\"produto_id\":\""
+                        + produto
+                        + "\",\"loja_id\":\""
+                        + loja
+                        + "\",\"titulo\":\"Cortina\",\"preco\":\"89.90\",\"estoque\":\"1\"}]}";
+        var r = naEmpresa(empresa, () -> anuncios.executar("anunciar", json(corpo), "MARKETING"));
+        @SuppressWarnings("unchecked")
+        var problemas = (List<String>) r.get("problemas");
+        assertEquals(1, problemas.size());
+        assertTrue(problemas.getFirst().contains("política de preço"));
+        assertFalse(problemas.getFirst().contains("custo"));
+        assertEquals(
+                0,
+                naEmpresa(
+                        empresa,
+                        () ->
+                                db.queryForObject(
+                                        "select count(*) from radar_anuncio where produto_id=?",
+                                        Integer.class,
+                                        produto)));
+    }
+
     private static Map<String, Object> anunciar(
             UUID empresa, UUID produto, UUID loja, String titulo, String estoque) {
         String corpo =

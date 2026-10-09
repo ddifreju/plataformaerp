@@ -29,6 +29,10 @@ final class RadarEntrada {
                     Map.entry("altura_cm", "Altura (cm)"),
                     Map.entry("comprimento_cm", "Comprimento (cm)"),
                     Map.entry("estoque_minimo", "Estoque mínimo"),
+                    Map.entry("dias_preparacao", "Dias de preparação"),
+                    Map.entry("garantia_meses", "Garantia (meses)"),
+                    Map.entry("cest", "CEST"),
+                    Map.entry("ncm", "NCM"),
                     Map.entry("estoque_maximo", "Estoque máximo"),
                     Map.entry("marca", "Marca"),
                     Map.entry("modelo", "Modelo"),
@@ -92,7 +96,15 @@ final class RadarEntrada {
         if (s.isBlank()) return null;
         try {
             int v = Integer.parseInt(s);
-            if (v < min || v > max) erro("Valor fora do limite em " + nomeDoCampo(campo) + ".");
+            if (v < min || v > max)
+                erro(
+                        "Valor fora do limite em "
+                                + nomeDoCampo(campo)
+                                + ": de "
+                                + String.format(java.util.Locale.forLanguageTag("pt-BR"), "%,d", min)
+                                + " a "
+                                + String.format(java.util.Locale.forLanguageTag("pt-BR"), "%,d", max)
+                                + ".");
             return v;
         } catch (NumberFormatException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Número inválido em " + nomeDoCampo(campo) + ".");

@@ -7,7 +7,7 @@
 // cabeçalho e a de cada linha.
 
 import { useImperativeHandle, useState, type ReactNode, type Ref } from "react";
-import { money, str, useFecharFora, type Row } from "./ui";
+import { money, numeroBR, str, useFecharFora, type Row } from "./ui";
 import type { TipoRapido } from "./acoes-rapidas";
 
 type Props = {
@@ -31,6 +31,8 @@ type Props = {
   podeEnviarEstoque: boolean;
   /** Quem vê custo e quem pode mexer em custo. */
   podeCusto: boolean;
+  /** Tira da tela o aviso verde da ação anterior (quando a janela mostra um erro). */
+  limparAviso?: () => void;
   /** Quem lança entrada e saída de estoque (os outros só consultam). */
   podeAjustarEstoque: boolean;
   ativo: boolean;
@@ -325,6 +327,7 @@ export default function ProdutosLote({
   podeEnviarEstoque,
   podeCusto,
   podeAjustarEstoque,
+  limparAviso,
   ativo,
   controle,
   children,
@@ -354,7 +357,12 @@ export default function ProdutosLote({
   const todos =
     linhas.length > 0 && linhas.every((p) => marcados.includes(str(p.id)));
   // Lixeira em 20 ou mais produtos pede para digitar a quantidade (evita o clique por engano).
-  const loteGrande = acao === "EXCLUIR" && alvo.length >= 20;
+  const loteGrande =
+    (acao === "EXCLUIR" || acao === "EXCLUIR_ANEXOS") && alvo.length >= 20;
+  // Variações dos escolhidos também são atingidas: o número aparece antes de confirmar.
+  const variacoesDoAlvo = produtos.filter((p) =>
+    alvo.includes(str(p.pai_id)),
+  ).length;
   // Marcar vários: quem edita, quem anuncia (marketing) e quem envia estoque (estoque).
   const podeMarcar = ativo || !!anunciar || podeEnviarEstoque;
   const temKitMarcado = produtos.some(
@@ -431,7 +439,10 @@ export default function ProdutosLote({
     };
     if (acao === "EDITAR") {
       corpo.campo = campo;
-      corpo.valor = valor.trim().replace(",", ".");
+      // Número como se digita no Brasil (1.234,56); texto vai como está.
+      corpo.valor = ["DINHEIRO", "NUMERO"].includes(tipoCampo)
+        ? numeroBR(valor)
+        : valor.trim();
       if (tipoCampo === "DINHEIRO") corpo.modo = modo;
       if (tipoCampo === "TEXTO" && (campo === "ncm" || campo === "cest")) {
         // Pontos, traços e espaços saem; letra é erro (antes virava "" e apagava o campo).
@@ -442,6 +453,7 @@ export default function ProdutosLote({
           setErroModal(
             `${nome} deve ter ${digitos} números. Para apagar o ${nome}, deixe em branco.`,
           );
+          limparAviso?.();
           return;
         }
         corpo.valor = limpo;
@@ -863,7 +875,11 @@ export default function ProdutosLote({
             <p className="rd-note">
               {alvo.length === 1
                 ? `Produto: ${str(produtos.find((p) => str(p.id) === alvo[0])?.nome)}.`
-                : `${alvo.length} produtos.`}{" "}
+                : `${alvo.length} produtos${
+                    variacoesDoAlvo
+                      ? ` e ${variacoesDoAlvo} variações (${alvo.length + variacoesDoAlvo} ao todo)`
+                      : ""
+                  }.`}{" "}
               Vale também para as variações.
             </p>
             {acao === "EDITAR" && (

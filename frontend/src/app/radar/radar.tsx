@@ -1151,6 +1151,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
                 podeEnviarEstoque={can("DONO", "GESTOR", "MARKETING", "ESTOQUE")}
                 podeCusto={data.financeiroPermitido && can("DONO", "GESTOR")}
                 podeAjustarEstoque={can("DONO", "GESTOR", "ESTOQUE")}
+                limparAviso={() => setNotice("")}
                 produtos={cadastrados}
                 clonar={
                   can("DONO", "GESTOR")
@@ -2373,6 +2374,7 @@ export default function Radar({ initialPage = "visao" }: { initialPage?: string 
           erro={error}
           busy={busy}
           executar={command}
+          conferir={commandResult}
           recarregar={refresh}
           irParaLojas={() => {
             setAnunciando(null);

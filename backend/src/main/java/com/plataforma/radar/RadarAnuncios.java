@@ -261,6 +261,16 @@ public class RadarAnuncios {
      * sai do Radar: vale para quando a loja for conectada. Preço segue a regra de sempre: dono e
      * gestor aplicam (nunca abaixo do custo); os outros cargos geram proposta para aprovação.
      */
+    /** "a Shopee" / "o Mercado Livre": artigo certo em português. */
+    private static String oMarketplace(String m) {
+        return ("Shopee".equals(m) ? "a " : "o ") + m;
+    }
+
+    /** "o título na Shopee" / "o título no Mercado Livre". */
+    private static String noMarketplace(String coisa, String m) {
+        return coisa + ("Shopee".equals(m) ? " na " : " no ") + m;
+    }
+
     /** R$ no formato brasileiro (R$ 10.000,00). */
     private static String reais(BigDecimal v) {
         return v == null ? "—" : String.format(Locale.forLanguageTag("pt-BR"), "R$ %,.2f", v);
@@ -784,8 +794,32 @@ public class RadarAnuncios {
         boolean veCusto = Set.of("DONO", "GESTOR", "FINANCEIRO").contains(papel);
         JsonNode itens = n.path("itens");
         if (!itens.isArray() || itens.isEmpty() || itens.size() > MAX_LOTE)
-            erro("Escolha entre 1 e " + MAX_LOTE + " anúncios.");
+            erro(
+                    "Dá para até "
+                            + MAX_LOTE
+                            + " anúncios por vez. Escolha menos lojas ou menos produtos.");
+        // "conferir": a tela pergunta antes de liberar o Salvar. Faz todas as checagens, devolve
+        // os problemas de cada anúncio e não grava nada. Assim quem não vê o custo também fica
+        // sabendo antes (com a mensagem genérica, sem revelar o custo).
+        boolean conferir = n.path("conferir").asBoolean(false);
+        List<String> encontrados = new ArrayList<>();
+        db.execute("set local statement_timeout = '30s'");
+        // Quem não vê o custo recebe um veredito só por produto (o menor preço pedido para ele),
+        // e não um por preço: mandar vários preços do mesmo produto não revela o custo.
+        Map<UUID, BigDecimal> menorPreco = new java.util.HashMap<>();
+        if (!veCusto)
+            for (JsonNode item : itens)
+                try {
+                    UUID pid = UUID.fromString(item.path("produto_id").asText());
+                    BigDecimal v = valor(item, "preco");
+                    menorPreco.merge(pid, v, BigDecimal::min);
+                } catch (RuntimeException e) {
+                    // id ou preço inválido: a checagem do item diz o problema
+                }
+        // Fotos lidas uma vez por produto e marketplace (o mesmo produto pode ir para várias lojas).
+        Map<String, int[]> fotosConferidas = new java.util.HashMap<>();
         for (JsonNode item : itens) {
+          try {
             var loja = loja(id(item, "loja_id"));
             String marketplace = (String) loja.get("marketplace");
             Regra regra = REGRAS.get(marketplace);
@@ -818,8 +852,8 @@ public class RadarAnuncios {
             int maximo = regra.tituloMax() == null ? TITULO_MAX_RADAR : regra.tituloMax();
             if (letras < regra.tituloMin())
                 problemas.add(
-                        "o título no "
-                                + marketplace
+                        noMarketplace("o título", marketplace)
+                                + ""
                                 + " precisa ter pelo menos "
                                 + regra.tituloMin()
                                 + (regra.tituloMin() == 1 ? " letra (tem " : " letras (tem ")
@@ -829,7 +863,7 @@ public class RadarAnuncios {
                 problemas.add(
                         (regra.tituloMax() == null
                                         ? "o Radar guarda títulos de até "
-                                        : "o título no " + marketplace + " vai até ")
+                                        : noMarketplace("o título", marketplace) + " vai até ")
                                 + maximo
                                 + " letras (tem "
                                 + letras
@@ -849,14 +883,15 @@ public class RadarAnuncios {
                     && ((regra.precoMin() != null && preco.compareTo(regra.precoMin()) < 0)
                             || (regra.precoMax() != null && preco.compareTo(regra.precoMax()) > 0)))
                 problemas.add(
-                        "o preço no "
-                                + marketplace
+                        noMarketplace("o preço", marketplace)
+                                + ""
                                 + " vai de "
                                 + reais(regra.precoMin())
                                 + " a "
                                 + reais(regra.precoMax()));
             // Mesma política da aprovação de preço: anúncio pronto não sobe abaixo do custo.
-            if (preco != null && preco.compareTo((BigDecimal) p.get("custo")) < 0)
+            BigDecimal precoParaCusto = veCusto ? preco : menorPreco.getOrDefault(pid, preco);
+            if (precoParaCusto != null && precoParaCusto.compareTo((BigDecimal) p.get("custo")) < 0)
                 problemas.add(
                         veCusto
                                 ? "preço abaixo do custo do produto (política local: bloqueado)"
@@ -877,8 +912,7 @@ public class RadarAnuncios {
                 problemas.add("a quantidade precisa ser pelo menos " + minimo);
             if (estoque != null && regra.estoqueMax() != null && estoque > regra.estoqueMax())
                 problemas.add(
-                        "o "
-                                + marketplace
+                        oMarketplace(marketplace)
                                 + " aceita quantidade de no máximo "
                                 + String.format(Locale.forLanguageTag("pt-BR"), "%,d", regra.estoqueMax()));
 
@@ -894,22 +928,29 @@ public class RadarAnuncios {
                                 + " palavras");
             if (regra.descricaoMax() != null && descricao.length() > regra.descricaoMax())
                 problemas.add(
-                        "o " + marketplace + " aceita descrição com até " + regra.descricaoMax() + " letras");
+                        oMarketplace(marketplace) + " aceita descrição com até " + regra.descricaoMax() + " letras");
 
             // A variação mostra também as fotos do produto pai.
             UUID pai = p.get("pai_id") == null ? pid : (UUID) p.get("pai_id");
-            List<byte[]> fotos =
-                    db.queryForList(
-                            "select dados from radar_produto_imagem where tenant_id=? and"
-                                    + " produto_id in (?,?)",
-                            byte[].class,
-                            tenant(),
-                            pid,
-                            pai);
-            if (fotos.size() < regra.imagensMin())
-                problemas.add("o " + marketplace + " pede pelo menos " + regra.imagensMin() + " imagem(ns)");
-            int pequenas = 0;
-            for (byte[] foto : fotos) if (fotoPequena(foto, regra)) pequenas++;
+            int[] fotosInfo =
+                    fotosConferidas.computeIfAbsent(
+                            pid + "|" + marketplace,
+                            k -> {
+                                List<byte[]> fotos =
+                                        db.queryForList(
+                                                "select dados from radar_produto_imagem where"
+                                                        + " tenant_id=? and produto_id in (?,?)",
+                                                byte[].class,
+                                                tenant(),
+                                                pid,
+                                                pai);
+                                int peq = 0;
+                                for (byte[] foto : fotos) if (fotoPequena(foto, regra)) peq++;
+                                return new int[] {fotos.size(), peq};
+                            });
+            if (fotosInfo[0] < regra.imagensMin())
+                problemas.add(oMarketplace(marketplace) + " pede pelo menos " + regra.imagensMin() + " imagem(ns)");
+            int pequenas = fotosInfo[1];
             if (pequenas > 0)
                 problemas.add(
                         pequenas
@@ -933,18 +974,26 @@ public class RadarAnuncios {
                 erro(sku + " em " + loja.get("nome") + ": " + String.join("; ", problemas) + ".");
             // Quantos anúncios o lojista quiser do mesmo produto na mesma loja (decisão dela:
             // teste de título, estratégia de ads, mais catálogo).
-            db.update(
-                    "insert into radar_anuncio(id,tenant_id,produto_id,canal,loja_id,titulo,preco,"
-                            + "estoque,estado) values(?,?,?,?,?,?,?,?,'PRONTO')",
-                    UUID.randomUUID(),
-                    tenant(),
-                    pid,
-                    marketplace,
-                    loja.get("id"),
-                    titulo,
-                    preco,
-                    estoque);
+            if (!conferir)
+                db.update(
+                        "insert into radar_anuncio(id,tenant_id,produto_id,canal,loja_id,titulo,"
+                                + "preco,estoque,estado) values(?,?,?,?,?,?,?,?,'PRONTO')",
+                        UUID.randomUUID(),
+                        tenant(),
+                        pid,
+                        marketplace,
+                        loja.get("id"),
+                        titulo,
+                        preco,
+                        estoque);
+          } catch (ResponseStatusException e) {
+            if (!conferir) throw e;
+            encontrados.add(e.getReason());
+          }
         }
+        // Conferir não grava nada: a tela não mostra aviso de "salvo".
+        if (conferir)
+            return Map.of("problemas", encontrados, "conferidos", itens.size(), "mensagem", "");
         return Map.of(
                 "criados",
                 itens.size(),
@@ -960,11 +1009,23 @@ public class RadarAnuncios {
      */
     private static boolean fotoPequena(byte[] foto, Regra regra) {
         if (regra.fotoMaiorLadoMin() == null && regra.fotoMenorLadoMin() == null) return false;
-        try {
-            var imagem = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(foto));
-            if (imagem == null) return false;
-            int maior = Math.max(imagem.getWidth(), imagem.getHeight());
-            int menor = Math.min(imagem.getWidth(), imagem.getHeight());
+        // Lê só o tamanho no cabeçalho da imagem, sem descompactar (rápido e sem estourar memória).
+        try (var in =
+                javax.imageio.ImageIO.createImageInputStream(
+                        new java.io.ByteArrayInputStream(foto))) {
+            var leitores = javax.imageio.ImageIO.getImageReaders(in);
+            if (!leitores.hasNext()) return false;
+            var leitor = leitores.next();
+            int largura, altura;
+            try {
+                leitor.setInput(in);
+                largura = leitor.getWidth(0);
+                altura = leitor.getHeight(0);
+            } finally {
+                leitor.dispose();
+            }
+            int maior = Math.max(largura, altura);
+            int menor = Math.min(largura, altura);
             return (regra.fotoMaiorLadoMin() != null && maior < regra.fotoMaiorLadoMin())
                     || (regra.fotoMenorLadoMin() != null && menor < regra.fotoMenorLadoMin());
         } catch (java.io.IOException e) {
