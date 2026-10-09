@@ -818,6 +818,18 @@ class RadarProdutosTest {
                                                 + base("CONC-1")
                                                 + "}"));
         assertEquals(HttpStatus.CONFLICT, conflito.getStatusCode());
+        // Edição sem a versão lida também é recusada (não grava às cegas).
+        var semVersao =
+                assertThrows(
+                        ResponseStatusException.class,
+                        () ->
+                                naEmpresa(
+                                        empresaA,
+                                        () ->
+                                                produtos.salvar(
+                                                        json("{\"id\":\"" + id + "\"," + base("CONC-1") + "}"),
+                                                        "DONO")));
+        assertEquals(HttpStatus.BAD_REQUEST, semVersao.getStatusCode());
     }
 
     @Test
@@ -847,7 +859,32 @@ class RadarProdutosTest {
     }
 
     private static UUID salvar(UUID empresa, String corpo) {
-        return (UUID) naEmpresa(empresa, () -> produtos.salvar(json(corpo), "DONO")).get("id");
+        var comV = comVersao(empresa, corpo);
+        return (UUID) naEmpresa(empresa, () -> produtos.salvar(comV, "DONO")).get("id");
+    }
+
+    /** Edição como a tela faz: manda a versão que leu (quem não manda é recusado). */
+    private static com.fasterxml.jackson.databind.JsonNode comVersao(UUID empresa, String corpo) {
+        var n = (com.fasterxml.jackson.databind.node.ObjectNode) json(corpo);
+        if (n.hasNonNull("id") && !n.has("versao_lida")) {
+            var lidos =
+                    naEmpresa(
+                            empresa,
+                            () ->
+                                    db.queryForList(
+                                            "select atualizado_em from radar_produto where id=?::uuid",
+                                            Object.class,
+                                            n.get("id").asText()));
+            // Produto de outra empresa não aparece: vai sem versão e o servidor responde 404.
+            if (lidos.isEmpty()) return n;
+            Object v = lidos.getFirst();
+            n.put(
+                    "versao_lida",
+                    v instanceof java.sql.Timestamp t
+                            ? t.toInstant().toString()
+                            : ((java.time.OffsetDateTime) v).toInstant().toString());
+        }
+        return n;
     }
 
     @Test

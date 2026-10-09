@@ -139,6 +139,14 @@ class RadarAnunciosTest {
         logar(empresa);
         importar(empresa, "[{\"id_externo\":\"S1\",\"titulo\":\"Persiana\",\"preco\":\"80.00\"}]");
         UUID produto = (UUID) anuncio(empresa, "S1").get("produto_id");
+        // A tela manda a versão que leu (sem ela, o servidor não grava).
+        Object lido =
+                linha(empresa, "select atualizado_em from radar_produto where id=?", produto)
+                        .get("atualizado_em");
+        String versao =
+                lido instanceof java.sql.Timestamp t
+                        ? t.toInstant().toString()
+                        : ((java.time.OffsetDateTime) lido).toInstant().toString();
         naEmpresa(
                 empresa,
                 () ->
@@ -146,6 +154,8 @@ class RadarAnunciosTest {
                                 json(
                                         "{\"id\":\""
                                                 + produto
+                                                + "\",\"versao_lida\":\""
+                                                + versao
                                                 + "\",\"tipo\":\"SIMPLES\",\"sku\":\"ML-S1\",\"nome\":\"Persiana"
                                                 + " rolô\",\"preco\":\"80.00\","
                                                 + "\"custo\":\"30.00\",\"origem\":\"0\",\"ncm\":\"63031200\","

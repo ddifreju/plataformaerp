@@ -177,6 +177,9 @@ public class RadarProdutos {
                 erro("O tipo do produto não muda depois de criado. Cadastre um novo produto.");
             // Outra pessoa salvou depois que este formulário abriu: não sobrescreve sem avisar.
             java.time.Instant lido = instante(n.path("versao_lida").asText(""));
+            // Sem a versão lida não dá para saber se outra pessoa salvou no meio: não grava às cegas.
+            if (lido == null)
+                erro("Abra o produto de novo antes de salvar (falta a versão que você leu).");
             java.time.Instant atual = instante(antes.get("atualizado_em"));
             // Compara em milissegundos: o texto que a tela recebeu pode vir com menos casas.
             var ms = java.time.temporal.ChronoUnit.MILLIS;
