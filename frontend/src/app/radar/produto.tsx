@@ -353,6 +353,7 @@ export default function ProdutoForm({
   const inicial = useRef<string | null>(null);
   const lidoEm = useRef(str(produto?.atualizado_em));
   const salvo = useRef(false);
+  const gravando = useRef(false);
   const [erro, setErro] = useState("");
   const [alvoImagem, setAlvoImagem] = useState("");
 
@@ -492,6 +493,8 @@ export default function ProdutoForm({
   }
 
   async function salvar() {
+    // Duplo clique: o segundo não sai enquanto o primeiro está gravando.
+    if (gravando.current) return;
     setErro("");
     if (!str(v.nome).trim()) {
       setErro("Dê um nome ao produto para salvar.");
@@ -506,6 +509,7 @@ export default function ProdutoForm({
       return;
     }
     setSalvando(true);
+    gravando.current = true;
     try {
       const r = await executar(corpo());
       if (r) {
@@ -517,6 +521,7 @@ export default function ProdutoForm({
       }
     } finally {
       setSalvando(false);
+      gravando.current = false;
     }
   }
 
